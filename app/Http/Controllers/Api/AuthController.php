@@ -36,20 +36,24 @@ class AuthController extends Controller
         return response()->json([
             'token' => $user->createToken($tokenName)->plainTextToken,
             'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
+                'id'    => $user->id,
+                'name'  => $user->name,
                 'email' => $user->email,
+                'role'  => $user->role,
             ],
         ]);
     }
 
     public function me(Request $request)
     {
+        $user = $request->user();
+
         return response()->json([
             'user' => [
-                'id' => $request->user()->id,
-                'name' => $request->user()->name,
-                'email' => $request->user()->email,
+                'id'    => $user->id,
+                'name'  => $user->name,
+                'email' => $user->email,
+                'role'  => $user->role,
             ],
         ]);
     }

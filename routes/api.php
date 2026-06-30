@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\SupportController;
+use App\Http\Controllers\Api\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,4 +42,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/payments', [ProjectController::class, 'pay']);
     Route::post('/projects/{project}/report-finished', [ProjectController::class, 'reportFinished']);
     Route::post('/projects/{project}/verify-completion', [ProjectController::class, 'verifyCompletion']);
+
+    Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {
+        Route::get('/users', [UserController::class, 'index']);
+        Route::post('/users', [UserController::class, 'store']);
+    });
 });

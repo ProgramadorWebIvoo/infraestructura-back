@@ -39,6 +39,20 @@ class SupportController extends Controller
         return response()->json(Contractor::create($data), 201);
     }
 
+    public function updateContractorRating(Request $request, Contractor $contractor)
+    {
+        $data = $request->validate([
+            'rating' => ['required', 'numeric', 'min:0', 'max:5'],
+        ]);
+
+        $contractor->update(['rating' => round($data['rating'], 1)]);
+
+        return response()->json([
+            'code'   => $contractor->code,
+            'rating' => $contractor->rating,
+        ]);
+    }
+
     public function materials()
     {
         return MaterialCatalog::where('is_active', true)

@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/modules', [SupportController::class, 'modules']);
     Route::get('/contractors', [SupportController::class, 'contractors']);
+    Route::patch('/contractors/{contractor}/rating', [SupportController::class, 'updateContractorRating']);
     Route::get('/materials', [SupportController::class, 'materials']);
     Route::get('/audit-logs', [SupportController::class, 'auditLogs']);
 

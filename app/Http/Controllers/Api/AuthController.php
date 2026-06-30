@@ -15,6 +15,7 @@ class AuthController extends Controller
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
+            'device_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         $user = User::where('email', $credentials['email'])->first();
@@ -25,10 +26,15 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->tokens()->delete();
+        // Allow max 2 active sessions; remove oldest if limit reached
+        if ($user->tokens()->count() >= 2) {
+            $user->tokens()->oldest('created_at')->first()->delete();
+        }
+
+        $tokenName = $credentials['device_name'] ?? 'ivoo-infraestructura';
 
         return response()->json([
-            'token' => $user->createToken('ivoo-infraestructura')->plainTextToken,
+            'token' => $user->createToken($tokenName)->plainTextToken,
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,

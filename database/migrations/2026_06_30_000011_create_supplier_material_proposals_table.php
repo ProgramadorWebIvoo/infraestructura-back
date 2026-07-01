@@ -15,11 +15,15 @@ return new class extends Migration
             $table->string('supplier_name', 180);
             $table->string('supplier_company', 180)->nullable();
             $table->string('supplier_contact', 180);
+            $table->char('invitation_token', 36)->nullable();
             $table->json('items');
             $table->text('general_notes')->nullable();
+            $table->unsignedSmallInteger('estimated_days')->nullable();
+            $table->string('duration_unit', 20)->nullable();
             $table->timestamp('submitted_at')->useCurrent();
 
             $table->index('project_id');
+            $table->index('invitation_token');
             $table->index('submitted_at');
 
             $table->foreign('project_id')

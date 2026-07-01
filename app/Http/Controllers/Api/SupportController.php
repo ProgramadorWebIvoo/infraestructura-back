@@ -7,9 +7,11 @@ use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\MaterialCatalog;
 use App\Models\Project;
+use App\Models\SupplierInvitation;
 use App\Models\SupplierMaterialProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class SupportController extends Controller
 {
@@ -75,46 +77,81 @@ class SupportController extends Controller
             'projectId' => $log->project_id,
             'projectTitle' => $log->project_title_snapshot,
             'role' => $log->role,
+            'userName' => $log->user_name_snapshot,
             'action' => $log->action,
             'timestamp' => optional($log->logged_at)->format('Y-m-d H:i'),
             'details' => $log->details,
         ]);
     }
 
-    public function getProjectPublicInfo(string $projectId)
+    public function createSupplierInvitation(Request $request)
     {
-        $project = Project::with('materials')->find($projectId);
-        if (!$project) {
-            return response()->json(['message' => 'Obra no encontrada.'], 404);
-        }
+        $data = $request->validate([
+            'project_id'      => ['required', 'string', 'exists:projects,id'],
+            'supplierName'    => ['required', 'string', 'max:180'],
+            'supplierCompany' => ['nullable', 'string', 'max:180'],
+            'supplierContact' => ['required', 'email', 'max:180'],
+        ]);
+
+        $project = Project::find($data['project_id']);
+
+        $invitation = SupplierInvitation::create([
+            'id'               => Str::uuid()->toString(),
+            'project_id'       => $data['project_id'],
+            'supplier_name'    => $data['supplierName'],
+            'supplier_company' => $data['supplierCompany'] ?? null,
+            'supplier_contact' => $data['supplierContact'],
+        ]);
 
         return response()->json([
-            'id'          => $project->id,
-            'title'       => $project->title,
-            'location'    => $project->location,
-            'type'        => $project->type,
-            'description' => $project->description,
-            'materials'   => $project->materials->map(fn ($m) => [
-                'id'                 => $m->id,
-                'name'               => $m->name,
-                'quantity'           => $m->quantity,
-                'unit'               => $m->unit,
-                'estimatedUnitPrice' => $m->estimated_unit_price,
-            ]),
+            'token'          => $invitation->id,
+            'projectTitle'   => $project->title,
+            'supplierName'   => $invitation->supplier_name,
+            'supplierContact'=> $invitation->supplier_contact,
+            'createdAt'      => $invitation->created_at?->format('Y-m-d H:i'),
+        ], 201);
+    }
+
+    public function getInvitationPublicInfo(string $token)
+    {
+        $invitation = SupplierInvitation::with('project.materials')->find($token);
+        if (!$invitation) {
+            return response()->json(['message' => 'Enlace no valido o expirado.'], 404);
+        }
+
+        $project = $invitation->project;
+
+        return response()->json([
+            'supplierName'    => $invitation->supplier_name,
+            'supplierCompany' => $invitation->supplier_company,
+            'supplierContact' => $invitation->supplier_contact,
+            'project'         => [
+                'id'          => $project->id,
+                'title'       => $project->title,
+                'location'    => $project->location,
+                'type'        => $project->type,
+                'description' => $project->description,
+                'materials'   => $project->materials->map(fn ($m) => [
+                    'id'                 => $m->id,
+                    'name'               => $m->name,
+                    'quantity'           => $m->quantity,
+                    'unit'               => $m->unit,
+                    'estimatedUnitPrice' => $m->estimated_unit_price,
+                ]),
+            ],
         ]);
     }
 
-    public function storeSupplierMaterialProposal(Request $request, string $projectId)
+    public function storeSupplierMaterialProposal(Request $request, string $token)
     {
-        $project = Project::find($projectId);
-        if (!$project) {
-            return response()->json(['message' => 'Obra no encontrada.'], 404);
+        $invitation = SupplierInvitation::with('project')->find($token);
+        if (!$invitation) {
+            return response()->json(['message' => 'Enlace no valido o expirado.'], 404);
         }
 
         $data = $request->validate([
-            'supplierName'          => ['required', 'string', 'max:180'],
-            'supplierCompany'       => ['nullable', 'string', 'max:180'],
-            'supplierContact'       => ['required', 'email', 'max:180'],
+            'estimatedDays'         => ['nullable', 'integer', 'min:1'],
+            'durationUnit'          => ['nullable', 'string', 'in:dias,semanas,meses'],
             'items'                 => ['required', 'array', 'min:1'],
             'items.*.materialName'  => ['required', 'string', 'max:220'],
             'items.*.quantity'      => ['required', 'numeric', 'min:0'],
@@ -127,13 +164,16 @@ class SupportController extends Controller
 
         $proposal = SupplierMaterialProposal::create([
             'id'                     => $this->nextProposalId(),
-            'project_id'             => $projectId,
-            'project_title_snapshot' => $project->title,
-            'supplier_name'          => $data['supplierName'],
-            'supplier_company'       => $data['supplierCompany'] ?? null,
-            'supplier_contact'       => $data['supplierContact'],
+            'invitation_token'       => $token,
+            'project_id'             => $invitation->project_id,
+            'project_title_snapshot' => $invitation->project->title,
+            'supplier_name'          => $invitation->supplier_name,
+            'supplier_company'       => $invitation->supplier_company,
+            'supplier_contact'       => $invitation->supplier_contact,
             'items'                  => $data['items'],
             'general_notes'          => $data['generalNotes'] ?? null,
+            'estimated_days'         => $data['estimatedDays'] ?? null,
+            'duration_unit'          => $data['durationUnit'] ?? null,
         ]);
 
         return response()->json($this->formatProposal($proposal), 201);
@@ -161,6 +201,8 @@ class SupportController extends Controller
             'supplierContact'        => $p->supplier_contact,
             'items'                  => $p->items,
             'generalNotes'           => $p->general_notes,
+            'estimatedDays'          => $p->estimated_days,
+            'durationUnit'           => $p->duration_unit,
             'submittedAt'            => optional($p->submitted_at)->format('Y-m-d H:i'),
         ];
     }

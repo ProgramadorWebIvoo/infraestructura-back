@@ -51,6 +51,17 @@ class ProjectResource extends JsonResource
             'finalPaidDate' => optional($final?->paid_date)->format('Y-m-d'),
             'qualityVerified' => $this->quality_verified,
             'completionVerifiedDate' => optional($this->completion_verified_date)->format('Y-m-d'),
+            'documents' => $this->whenLoaded('documents', fn () =>
+                $this->documents->map(fn ($d) => [
+                    'id'           => $d->id,
+                    'documentType' => $d->document_type,
+                    'originalName' => $d->original_name,
+                    'mimeType'     => $d->mime_type,
+                    'sizeBytes'    => $d->size_bytes,
+                    'uploadedBy'   => $d->uploaded_by,
+                    'uploadedAt'   => $d->created_at?->toIso8601String(),
+                ])->values()
+            ),
         ];
     }
 }

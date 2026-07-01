@@ -20,6 +20,8 @@ use App\Http\Controllers\Api\UserController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/contractors', [SupportController::class, 'storeContractor']);
+Route::get('/public/projects/{projectId}', [SupportController::class, 'getProjectPublicInfo']);
+Route::post('/public/projects/{projectId}/supplier-proposals', [SupportController::class, 'storeSupplierMaterialProposal']);
 
     
 Route::middleware('auth:sanctum')->group(function () {
@@ -28,9 +30,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/modules', [SupportController::class, 'modules']);
     Route::get('/contractors', [SupportController::class, 'contractors']);
-    Route::patch('/contractors/{contractor}/rating', [SupportController::class, 'updateContractorRating']);
+    Route::post('/contractors/{contractor}/rating', [SupportController::class, 'updateContractorRating']);
     Route::get('/materials', [SupportController::class, 'materials']);
     Route::get('/audit-logs', [SupportController::class, 'auditLogs']);
+    Route::get('/supplier-material-proposals', [SupportController::class, 'supplierMaterialProposals']);
 
     Route::apiResource('projects', ProjectController::class)->only(['index', 'store', 'show']);
     Route::post('/projects/{project}/review', [ProjectController::class, 'review']);

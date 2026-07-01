@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\MaterialCatalog;
+use App\Models\Project;
+use App\Models\SupplierMaterialProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -79,6 +81,90 @@ class SupportController extends Controller
         ]);
     }
 
+    public function getProjectPublicInfo(string $projectId)
+    {
+        $project = Project::with('materials')->find($projectId);
+        if (!$project) {
+            return response()->json(['message' => 'Obra no encontrada.'], 404);
+        }
+
+        return response()->json([
+            'id'          => $project->id,
+            'title'       => $project->title,
+            'location'    => $project->location,
+            'type'        => $project->type,
+            'description' => $project->description,
+            'materials'   => $project->materials->map(fn ($m) => [
+                'id'                 => $m->id,
+                'name'               => $m->name,
+                'quantity'           => $m->quantity,
+                'unit'               => $m->unit,
+                'estimatedUnitPrice' => $m->estimated_unit_price,
+            ]),
+        ]);
+    }
+
+    public function storeSupplierMaterialProposal(Request $request, string $projectId)
+    {
+        $project = Project::find($projectId);
+        if (!$project) {
+            return response()->json(['message' => 'Obra no encontrada.'], 404);
+        }
+
+        $data = $request->validate([
+            'supplierName'          => ['required', 'string', 'max:180'],
+            'supplierCompany'       => ['nullable', 'string', 'max:180'],
+            'supplierContact'       => ['required', 'email', 'max:180'],
+            'items'                 => ['required', 'array', 'min:1'],
+            'items.*.materialName'  => ['required', 'string', 'max:220'],
+            'items.*.quantity'      => ['required', 'numeric', 'min:0'],
+            'items.*.unit'          => ['required', 'string', 'max:60'],
+            'items.*.unitPrice'     => ['required', 'numeric', 'min:0'],
+            'items.*.totalPrice'    => ['required', 'numeric', 'min:0'],
+            'items.*.notes'         => ['nullable', 'string', 'max:500'],
+            'generalNotes'          => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $proposal = SupplierMaterialProposal::create([
+            'id'                     => $this->nextProposalId(),
+            'project_id'             => $projectId,
+            'project_title_snapshot' => $project->title,
+            'supplier_name'          => $data['supplierName'],
+            'supplier_company'       => $data['supplierCompany'] ?? null,
+            'supplier_contact'       => $data['supplierContact'],
+            'items'                  => $data['items'],
+            'general_notes'          => $data['generalNotes'] ?? null,
+        ]);
+
+        return response()->json($this->formatProposal($proposal), 201);
+    }
+
+    public function supplierMaterialProposals(Request $request)
+    {
+        $query = SupplierMaterialProposal::latest('submitted_at');
+
+        if ($request->filled('project_id')) {
+            $query->where('project_id', $request->project_id);
+        }
+
+        return response()->json($query->get()->map(fn ($p) => $this->formatProposal($p)));
+    }
+
+    private function formatProposal(SupplierMaterialProposal $p): array
+    {
+        return [
+            'id'                     => $p->id,
+            'projectId'              => $p->project_id,
+            'projectTitleSnapshot'   => $p->project_title_snapshot,
+            'supplierName'           => $p->supplier_name,
+            'supplierCompany'        => $p->supplier_company,
+            'supplierContact'        => $p->supplier_contact,
+            'items'                  => $p->items,
+            'generalNotes'           => $p->general_notes,
+            'submittedAt'            => optional($p->submitted_at)->format('Y-m-d H:i'),
+        ];
+    }
+
     private function nextContractorCode(): string
     {
         $last = Contractor::query()
@@ -89,5 +175,17 @@ class SupportController extends Controller
         $number = $last ? ((int) substr($last->code, 4)) + 1 : 301;
 
         return 'CON-' . $number;
+    }
+
+    private function nextProposalId(): string
+    {
+        $last = SupplierMaterialProposal::query()
+            ->where('id', 'like', 'SMP-%')
+            ->orderByRaw('CAST(SUBSTRING(id, 5) AS UNSIGNED) DESC')
+            ->first();
+
+        $number = $last ? ((int) substr($last->id, 4)) + 1 : 1;
+
+        return 'SMP-' . str_pad($number, 3, '0', STR_PAD_LEFT);
     }
 }

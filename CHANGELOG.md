@@ -73,7 +73,23 @@ Se implementó el backend Laravel que orquesta llamadas a OpenAI (ChatGPT), Goog
 
 ---
 
-## [2026-07-16] — Feature Completa: Selección de Proveedor IA
+## [2026-07-16] — Eliminada columna `observations` (redundante)
+
+**Causa:** La columna `observations` en `project_proposals` era redundante ya que `description` cubre el mismo propósito. Los datos contextuales para la evaluación IA (tasa dólar, garantías, etc.) se incluirán en `description`.
+
+**Cambios:**
+- Rollback y eliminación de migration `2026_07_16_150117_add_observations_to_project_proposals.php`
+- `app/Models/ProjectProposal.php` — eliminado `observations` de `$fillable`
+- `app/Http/Resources/ProjectResource.php` — eliminado `observations` de serialización
+- `app/Http/Controllers/Api/ProjectController.php` — eliminado `observations` de validación y creación
+- `app/Services/AI/Providers/OpenAIProvider.php` — eliminado bloque `observations` del prompt builder
+
+**Archivos:**
+- `database/migrations/2026_07_16_150117_add_observations_to_project_proposals.php` — [ELIMINADO]
+- `app/Models/ProjectProposal.php`
+- `app/Http/Resources/ProjectResource.php`
+- `app/Http/Controllers/Api/ProjectController.php`
+- `app/Services/AI/Providers/OpenAIProvider.php`
 
 ### Backend (Laravel)
 

@@ -22,7 +22,6 @@ class ProjectProposal extends Model
         'delivery_weeks',
         'negotiated_advance_percent',
         'description',
-        'observations',
     ];
 
     protected $casts = [

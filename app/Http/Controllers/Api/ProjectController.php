@@ -144,7 +144,6 @@ class ProjectController extends Controller
             'deliveryWeeks' => ['required', 'integer', 'min:0'],
             'negotiatedAdvancePercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'description' => ['required', 'string'],
-            'observations' => ['nullable', 'string'],
         ]);
 
         $contractor = Contractor::findOrFail($data['contractorCode']);
@@ -159,7 +158,6 @@ class ProjectController extends Controller
             'delivery_weeks' => $data['deliveryWeeks'],
             'negotiated_advance_percent' => $data['negotiatedAdvancePercent'],
             'description' => $data['description'],
-            'observations' => $data['observations'] ?? null,
         ]);
 
         $this->log($project, 'ANALISTA', 'Carga de propuesta', "Oferta {$proposal->id} cargada por {$contractor->name}.");

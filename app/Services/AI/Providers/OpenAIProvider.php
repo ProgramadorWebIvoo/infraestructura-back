@@ -123,10 +123,6 @@ PROMPT;
             $text .= "Anticipo Pactado: {$prop['negotiatedAdvancePercent']}%\n";
             $text .= "Descripción: {$prop['description']}\n";
 
-            if (!empty($prop['observations'])) {
-                $text .= "Observaciones: {$prop['observations']}\n";
-            }
-
             $text .= "\n";
         }
 

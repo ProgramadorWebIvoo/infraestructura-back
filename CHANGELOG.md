@@ -105,6 +105,28 @@ Se implementó el backend Laravel que orquesta llamadas a OpenAI (ChatGPT), Goog
 
 ---
 
+---
+
+## [2026-07-16] — Feature: Rating del contratista como criterio en evaluación IA
+
+**Tipo:** feature
+
+**Qué:** La IA ahora recibe y evalúa el `rating` del contratista (1.0–5.0) como parte de los datos de cada propuesta, considerándolo como un factor en el análisis para asignar el `confidenceScore`.
+
+**Cambios:**
+- `app/Http/Controllers/Api/AIEvaluationController.php`:
+  - Enriquecimiento automático de cada propuesta con el `rating` actual del contratista desde la tabla `contractors` (lookup por `contractorCode`)
+  - Se eliminó `contractorRating` de validación (ya no depende del frontend, se obtiene desde la BD)
+- `app/Services/AI/Providers/OpenAIProvider.php`:
+  - `buildSystemPrompt()` — criterio #5: "RATING del contratista (puntuación 1.0–5.0 basada en desempeño histórico, calidad y cumplimiento)"
+  - `buildUserPrompt()` — cada propuesta incluye "Rating del Contratista: X/5.0"
+
+**Archivos:**
+- `app/Http/Controllers/Api/AIEvaluationController.php`
+- `app/Services/AI/Providers/OpenAIProvider.php`
+
+---
+
 ### Estado Final: Feature Completa ✅
 
 **Para producción solo falta configurar API keys en `.env`:**

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\Contractor;
 use App\Models\Project;
 use App\Services\AI\AIEvaluationService;
 use Illuminate\Http\Request;
@@ -50,6 +51,18 @@ class AIEvaluationController extends Controller
 
         $project = Project::findOrFail($data['projectId']);
 
+        // Enriquecer cada propuesta con el rating actual del contratista desde la BD
+        $enrichedProposals = [];
+        $contractorCodes = array_unique(array_column($data['proposals'], 'contractorCode'));
+        $contractorsByCode = Contractor::whereIn('code', $contractorCodes)
+            ->get()
+            ->keyBy('code');
+
+        foreach ($data['proposals'] as $prop) {
+            $rating = $contractorsByCode->get($prop['contractorCode'])?->rating ?? 4.0;
+            $enrichedProposals[] = array_merge($prop, ['contractorRating' => (float) $rating]);
+        }
+
         // Construir payload para el servicio AI
         $payload = [
             'project'   => [
@@ -60,7 +73,7 @@ class AIEvaluationController extends Controller
                 'projectType'              => $data['projectType'],
                 'approvedInvestmentAmount' => $data['approvedInvestmentAmount'],
             ],
-            'proposals' => $data['proposals'],
+            'proposals' => $enrichedProposals,
         ];
 
         try {

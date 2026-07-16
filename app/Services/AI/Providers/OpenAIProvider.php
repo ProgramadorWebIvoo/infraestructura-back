@@ -75,13 +75,14 @@ Tu tarea es evaluar propuestas de contratistas para una obra específica
 y recomendar la mejor opción de contratación.
 
 Evalúa CRÍTICAMENTE:
-
-1. COSTO TOTAL vs inversión aprobada
-2. RELACIÓN costo-beneficio (material + mano de obra)
-3. PLAZO DE ENTREGA vs complejidad de la obra
-4. % ANTICIPO y riesgo financiero que representa
-5. CAPACIDAD del contratista (experiencia, especialidad)
-6. OBSERVACIONES (tasa de cambio, garantías, disponibilidad de material, divisa)
+ 
+ 1. COSTO TOTAL vs inversión aprobada
+ 2. RELACIÓN costo-beneficio (material + mano de obra)
+ 3. PLAZO DE ENTREGA vs complejidad de la obra
+ 4. % ANTICIPO y riesgo financiero que representa
+ 5. RATING del contratista (puntuación 1.0–5.0 basada en desempeño histórico, calidad y cumplimiento)
+ 6. CAPACIDAD del contratista (experiencia, especialidad)
+ 7. OBSERVACIONES (tasa de cambio, garantías, disponibilidad de material, divisa)
 
 Debes responder exclusivamente en JSON, sin markdown ni texto adicional.
 El JSON debe tener esta estructura exacta:
@@ -116,6 +117,7 @@ PROMPT;
         foreach ($proposals as $i => $prop) {
             $text .= "--- Propuesta " . ($i + 1) . " ---\n";
             $text .= "Contratista: {$prop['contractorName']} ({$prop['contractorCode']})\n";
+            $text .= "Rating del Contratista: {$prop['contractorRating']}/5.0\n";
             $text .= "Costo Materiales: \${$prop['materialCost']}\n";
             $text .= "Costo Mano de Obra: \${$prop['laborCost']}\n";
             $text .= "Costo Total: \${$prop['totalCost']}\n";

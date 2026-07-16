@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectDocumentController;
 use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\AIEvaluationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -47,6 +48,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/select-contractor', [ProjectController::class, 'selectContractor']);
     Route::post('/projects/{project}/payments', [ProjectController::class, 'pay']);
     Route::post('/projects/{project}/report-finished', [ProjectController::class, 'reportFinished']);
+
+    // AI Evaluation
+    Route::post('/ai/evaluate-proposals', [AIEvaluationController::class, 'evaluate']);
 
     
     Route::post('/projects/{project}/verify-completion', [ProjectController::class, 'verifyCompletion']);

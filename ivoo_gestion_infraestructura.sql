@@ -104,7 +104,7 @@ CREATE TABLE `contractors` (
   `status` enum('PENDING_REVIEW','ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `contractors`
@@ -206,7 +206,7 @@ CREATE TABLE `password_resets` (
 --
 
 CREATE TABLE `personal_access_tokens` (
-  `id` bigint(20) UNSIGNED NOT NULL,
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   `tokenable_type` varchar(255) NOT NULL,
   `tokenable_id` bigint(20) UNSIGNED NOT NULL,
   `name` varchar(255) NOT NULL,
@@ -215,7 +215,10 @@ CREATE TABLE `personal_access_tokens` (
   `last_used_at` timestamp NULL DEFAULT NULL,
   `expires_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
-  `updated_at` timestamp NULL DEFAULT NULL
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
+  KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -423,7 +426,7 @@ CREATE TABLE `vw_registered_contractors` (
 --
 DROP TABLE IF EXISTS `vw_project_summary`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vw_project_summary`  AS SELECT `p`.`id` AS `id`, `p`.`title` AS `title`, `p`.`type` AS `type`, `p`.`location` AS `location`, `p`.`created_date` AS `created_date`, `p`.`status` AS `status`, `p`.`estimated_total` AS `estimated_total`, `p`.`approved_investment_amount` AS `approved_investment_amount`, `p`.`selected_contractor_code` AS `selected_contractor_code`, `c`.`name` AS `selected_contractor_name`, `p`.`selected_proposal_id` AS `selected_proposal_id`, `pp`.`total_cost` AS `selected_total_cost`, coalesce(sum(`pay`.`amount`),0) AS `paid_total`, `p`.`quality_verified` AS `quality_verified`, `p`.`completion_verified_date` AS `completion_verified_date` FROM (((`projects` `p` left join `contractors` `c` on(`c`.`code` = `p`.`selected_contractor_code`)) left join `project_proposals` `pp` on(`pp`.`id` = `p`.`selected_proposal_id`)) left join `project_payments` `pay` on(`pay`.`project_id` = `p`.`id`)) GROUP BY `p`.`id`, `p`.`title`, `p`.`type`, `p`.`location`, `p`.`created_date`, `p`.`status`, `p`.`estimated_total`, `p`.`approved_investment_amount`, `p`.`selected_contractor_code`, `c`.`name`, `p`.`selected_proposal_id`, `pp`.`total_cost`, `p`.`quality_verified`, `p`.`completion_verified_date` ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `vw_project_summary`  AS SELECT `p`.`id` AS `id`, `p`.`title` AS `title`, `p`.`type` AS `type`, `p`.`location` AS `location`, `p`.`created_date` AS `created_date`, `p`.`status` AS `status`, `p`.`estimated_total` AS `estimated_total`, `p`.`approved_investment_amount` AS `approved_investment_amount`, `p`.`selected_contractor_code` AS `selected_contractor_code`, `c`.`name` AS `selected_contractor_name`, `p`.`selected_proposal_id` AS `selected_proposal_id`, `pp`.`total_cost` AS `selected_total_cost`, coalesce(sum(`pay`.`amount`),0) AS `paid_total`, `p`.`quality_verified` AS `quality_verified`, `p`.`completion_verified_date` AS `completion_verified_date` FROM (((`projects` `p` left join `contractors` `c` on(`c`.`code` = `p`.`selected_contractor_code` collate utf8mb4_unicode_ci)) left join `project_proposals` `pp` on(`pp`.`id` = `p`.`selected_proposal_id`)) left join `project_payments` `pay` on(`pay`.`project_id` = `p`.`id`)) GROUP BY `p`.`id`, `p`.`title`, `p`.`type`, `p`.`location`, `p`.`created_date`, `p`.`status`, `p`.`estimated_total`, `p`.`approved_investment_amount`, `p`.`selected_contractor_code`, `c`.`name`, `p`.`selected_proposal_id`, `pp`.`total_cost`, `p`.`quality_verified`, `p`.`completion_verified_date` ;
 
 -- --------------------------------------------------------
 
@@ -490,14 +493,6 @@ ALTER TABLE `migrations`
 --
 ALTER TABLE `password_resets`
   ADD PRIMARY KEY (`email`);
-
---
--- Indexes for table `personal_access_tokens`
---
-ALTER TABLE `personal_access_tokens`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
-  ADD KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`);
 
 --
 -- Indexes for table `projects`
@@ -568,12 +563,6 @@ ALTER TABLE `material_catalog`
 --
 ALTER TABLE `migrations`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
-
---
--- AUTO_INCREMENT for table `personal_access_tokens`
---
-ALTER TABLE `personal_access_tokens`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `project_payments`

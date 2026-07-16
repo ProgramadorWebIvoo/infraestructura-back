@@ -42,6 +42,7 @@ class ProjectResource extends JsonResource
                 'deliveryWeeks' => $proposal->delivery_weeks,
                 'negotiatedAdvancePercent' => $proposal->negotiated_advance_percent,
                 'description' => $proposal->description,
+                'observations' => $proposal->observations,
             ])->values(),
             'selectedContractorCode' => $this->selected_contractor_code,
             'selectedProposalId' => $this->selected_proposal_id,

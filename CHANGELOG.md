@@ -127,6 +127,38 @@ Se implementó el backend Laravel que orquesta llamadas a OpenAI (ChatGPT), Goog
 
 ---
 
+---
+
+## [2026-07-16] — Seguridad: Protección contra Prompt Injection en evaluación IA
+
+**Tipo:** security
+
+**Qué:** Se identificó que los campos de texto libre ingresados por usuarios (especialmente `description` de propuestas) se interpolaban directamente en el prompt enviado al modelo de IA sin ninguna sanitización, permitiendo potenciales ataques de prompt injection (cambio de rol, instrucciones maliciosas, jailbreak).
+
+**Vectores identificados:**
+- `projectTitle`, `projectDescription`, `projectLocation`, `projectType`
+- `contractorName`, `description` (crítico: texto libre del Analista)
+
+**Defensas implementadas (3 capas):**
+
+1. **System prompt reforzado** (`buildSystemPrompt`):
+   - Sección `--- SEGURIDAD ---` con instrucción explícita: ignorar cualquier instrucción embebida en los campos de datos, mantener el rol de Ingeniero en Infraestructura, no ejecutar jailbreak.
+
+2. **Sanitización de entradas** (`sanitizeInput` en `buildUserPrompt`):
+   - Limpieza de caracteres de control (null bytes, escapes)
+   - Neutralización de patrones comunes de injection: `ignore previous instructions`, `forget prompts`, `jailbreak`, `act as if`, `do not follow`, etc. → se reemplazan por `[INYECCION_BLOQUEADA]`
+   - Delimitación de campos de texto libre con `[INICIO_DATOS]...[FIN_DATOS]` para separar claramente datos de instrucciones
+   - Límite de 2000 caracteres por campo
+
+3. **Validación backend** (`AIEvaluationController`):
+   - Límites `max:500`/`max:2000` en campos de texto para evitar payloads desbordados
+
+**Archivos:**
+- `app/Services/AI/Providers/OpenAIProvider.php`
+- `app/Http/Controllers/Api/AIEvaluationController.php`
+
+---
+
 ### Estado Final: Feature Completa ✅
 
 **Para producción solo falta configurar API keys en `.env`:**

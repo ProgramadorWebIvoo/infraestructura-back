@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Services\AI\AIEvaluationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class AIEvaluationController extends Controller
 {
@@ -44,6 +45,7 @@ class AIEvaluationController extends Controller
             'proposals.*.negotiatedAdvancePercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'proposals.*.description'              => ['required', 'string'],
             'proposals.*.observations'             => ['nullable', 'string'],
+            'provider' => ['nullable', 'string', Rule::in('chatgpt', 'gemini', 'claude')],
         ]);
 
         $project = Project::findOrFail($data['projectId']);
@@ -62,7 +64,7 @@ class AIEvaluationController extends Controller
         ];
 
         try {
-            $result = $this->aiService->evaluate($payload);
+            $result = $this->aiService->evaluateWithProvider($payload, $data['provider'] ?? null);
 
             // Log de auditoría
             $this->logEvaluation($project, $result);

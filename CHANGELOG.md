@@ -70,3 +70,30 @@ Se implementó el backend Laravel que orquesta llamadas a OpenAI (ChatGPT), Goog
 - `app/Http/Resources/ProjectResource.php` — + observations en serialización
 - `app/Http/Controllers/Api/ProjectController.php` — + observations en addProposal
 - `.env` — + variables OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY
+
+---
+
+## [2026-07-16] — Feature Completa: Selección de Proveedor IA
+
+### Backend (Laravel)
+
+**Endpoint mejorado:**
+- `POST /api/ai/evaluate-proposals` acepta parámetro opcional `provider` (`chatgpt` | `gemini` | `claude`)
+- Si se envía `provider`: usa **solo** ese proveedor (modo forzado, sin failover)
+- Si no se envía: failover automático ChatGPT → Gemini → Claude
+- Validación con `Rule::in(['chatgpt','gemini','claude'])`
+
+**Archivos actualizados:**
+- `app/Http/Controllers/Api/AIEvaluationController.php` — Parámetro `provider` opcional + validación
+- `app/Services/AI/AIEvaluationService.php` — Método `evaluateWithProvider()` para modo forzado
+
+---
+
+### Estado Final: Feature Completa ✅
+
+**Para producción solo falta configurar API keys en `.env`:**
+```env
+OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
+ANTHROPIC_API_KEY=sk-ant-...
+```

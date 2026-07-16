@@ -107,6 +107,28 @@ class AIEvaluationService
         throw new RuntimeException($errorMsg);
     }
 
+
+    /**
+     * Metodo que permite aceptar proveedores de IA de manera Forzada/ 
+    */
+    public function evaluateWithProvider(array $payload, ?string $forcedprovider = null): array
+    {
+        if($forcedprovider) {
+            $provider = $this->providers[$forcedprovider] ?? null;
+            if (!$provider) {
+                throw new RuntimeException("Proveedor '$forcedprovider' no configurado");
+            }
+            $this->attempLog = [];
+            $this->logAttempt("Forzando evaluación con {$provider->name()}...");
+            $result = $provider->evaluate($payload);
+            $result['attemptLog'] = $this->attempLog;
+            return $result;
+        }
+
+        //FAILOVER (Vuelve a usar metodo regular principal)
+        return $this->evaluate($payload);
+    }
+
     /**
      * Devuelve la bitácora de intentos (para diagnóstico).
      */

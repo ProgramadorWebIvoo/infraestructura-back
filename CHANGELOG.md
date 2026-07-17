@@ -167,3 +167,71 @@ OPENAI_API_KEY=sk-...
 GEMINI_API_KEY=...
 ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+---
+
+## [2026-07-17] — Auditoría completa de seguridad y calidad
+
+**Tipo:** docs
+
+**Qué:** Auditoría integral del backend Laravel: seguridad, autenticación, BD, código, tests, configuración. 31 hallazgos encontrados.
+
+**Resumen por gravedad:**
+- 🔴 CRÍTICO: 5
+- 🟠 ALTA: 7
+- 🟡 MEDIA: 11
+- 🟡 BAJA: 8
+
+**Hallazgos críticos (acción inmediata):**
+
+| ID | Hallazgo | Archivo |
+|---|---|---|
+| S-01 | GEMINI_API_KEY expuesta en .env commitado | `.env` |
+| C-01 | Typo `attempLog` en AIEvaluationService (attemptLog siempre vacío en modo forzado) | `app/Services/AI/AIEvaluationService.php` |
+| BD-01 | Type mismatch en FK project_documents.project_id (20 vs 40 chars) | `database/migrations/2026_07_01_200000_create_project_documents_table.php` |
+| T-01 | 0 pruebas de aplicación (solo 2 boilerplate) | `tests/` |
+| A-01 | Rutas sensibles sin restricción de rol (review, approveInvestment, pay, etc.) | `routes/api.php` |
+
+**Hallazgos de seguridad altos:**
+- S-02: CORS permite cualquier origen (`*`)
+- S-03: APP_DEBUG=true en .env
+- S-04: Sin rate limiting en endpoints públicos
+- S-05: APP_KEY expuesta en .env
+- S-06: MIME type de archivos subidos no se valida realmente
+- S-07: Password policy débil (solo min:8)
+
+**Otros hallazgos notables:**
+- GeminiProvider y AnthropicProvider extienden OpenAIProvider (acoplamiento fuerte, causó error en production por método private)
+- Form Requests vacío — validación inline en controllers
+- Sin soft deletes, sin eventos, sin jobs, sin paginación
+- Sin API versioning
+- Seeders sin role asignado
+
+**Archivos afectados:** Ver reporte completo en la conversación con el agente.
+
+**Acciones recomendadas:**
+1. Rotar GEMINI_API_KEY (está en git history)
+2. Restringir CORS y añadir rate limiting a endpoints públicos
+3. Implementar MIME validation real en upload de documentos
+4. Añadir middleware `role` a rutas sensibles
+5. Implementar test suite base
+6. Refactorizar providers IA a clase abstracta base
+
+---
+
+## [2026-07-17] — Carga de 20 propuestas de materiales a BD
+
+**Tipo:** feature
+
+**Qué:** Se crearon las tablas faltantes `supplier_invitations` y `supplier_material_proposals` (existían en migraciones pero no en la BD física) y se insertaron 20 propuestas de materiales realistas distribuidas entre proyectos activos.
+
+**Detalle:**
+- Creadas tablas vía SQL directo (migraciones ya estaban marcadas como ejecutadas)
+- 12 invitaciones a proveedores vinculadas a proyectos en estados de procura
+- 20 propuestas SMP-001 a SMP-020 con 3-6 materiales cada una (items en JSON)
+- Proveedores: Materiales del Centro, Aceros Nacionales, Ferremundo, Construmarket, Proveedora Industrial, MetalMecánica, Eléctricos Global, Tuberías del Norte
+- Proyectos target: PRJ-001, PRJ-002, PRJ-OVF-001, PRJ-OVF-003, PRJ-OVF-005, PRJ-OVF-008, PRJ-OVF-010, PRJ-OVF-013, PRJ-OVF-015, PRJ-OVF-018, PRJ-OVF-020, PRJ-OVF-025, PRJ-OVF-038, PRJ-OVF-040, PRJ-OVF-043, PRJ-OVF-044, PRJ-OVF-045, PRJ-OVF-046, PRJ-OVF-047, PRJ-OVF-048
+- Plazos: 15-120 días con unidades variadas (días, semanas, meses)
+
+**Archivos:**
+- `_seed_supplier_proposals.php` [ELIMINADO] — script temporal

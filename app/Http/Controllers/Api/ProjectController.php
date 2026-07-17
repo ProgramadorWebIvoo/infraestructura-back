@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\ProjectMaterial;
 use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
+use App\Models\SupplierMaterialProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -173,6 +174,86 @@ class ProjectController extends Controller
         $this->log($project, 'ANALISTA', 'Carga de cuadro comparativo', 'Comparativa enviada a Procura para adjudicacion.');
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+    }
+
+    public function importSupplierProposals(Project $project)
+    {
+        $supplierProposals = SupplierMaterialProposal::where('project_id', $project->id)->get();
+
+        if ($supplierProposals->isEmpty()) {
+            return response()->json([
+                'message' => 'No hay propuestas de materiales recibidas de proveedores para este proyecto.',
+                'imported' => 0,
+                'skipped' => 0,
+                'errors' => [],
+                'project' => new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents'])),
+            ]);
+        }
+
+        $existingCodes = $project->proposals()->pluck('contractor_code')->toArray();
+        $imported = 0;
+        $skipped = 0;
+        $errors = [];
+
+        foreach ($supplierProposals as $supplierProposal) {
+            // Find matching contractor by email or name
+            $contractor = Contractor::where('contact', $supplierProposal->supplier_contact)
+                ->orWhere('name', $supplierProposal->supplier_name)
+                ->first();
+
+            if (!$contractor) {
+                $skipped++;
+                $errors[] = "No se encontró contratista registrado para: {$supplierProposal->supplier_name} ({$supplierProposal->supplier_contact})";
+                continue;
+            }
+
+            // Skip if already has a proposal from this contractor
+            if (in_array($contractor->code, $existingCodes)) {
+                $skipped++;
+                continue;
+            }
+
+            // Calculate values from supplier material proposal
+            $materialCost = collect($supplierProposal->items)->sum('totalPrice');
+            $laborCost = 0;
+            $totalCost = $materialCost + $laborCost;
+
+            // Convert estimated duration to weeks
+            $deliveryWeeks = match ($supplierProposal->duration_unit) {
+                'dias' => max(1, (int) ceil(($supplierProposal->estimated_days ?? 1) / 7)),
+                'meses' => ($supplierProposal->estimated_days ?? 1) * 4,
+                default => $supplierProposal->estimated_days ?? 4, // 'semanas' or null
+            };
+
+            $description = $supplierProposal->general_notes
+                ?? "Propuesta de materiales de {$supplierProposal->supplier_name}. Presupuesto total de materiales: \$" . number_format($totalCost, 2);
+
+            $project->proposals()->create([
+                'id' => 'PROP-' . now()->format('Hisv') . sprintf('%02d', $imported),
+                'contractor_code' => $contractor->code,
+                'contractor_name_snapshot' => $contractor->name,
+                'material_cost' => $materialCost,
+                'labor_cost' => $laborCost,
+                'total_cost' => $totalCost,
+                'delivery_weeks' => $deliveryWeeks,
+                'negotiated_advance_percent' => 30,
+                'description' => $description,
+            ]);
+
+            $existingCodes[] = $contractor->code;
+            $imported++;
+        }
+
+        $this->log($project, 'ANALISTA', 'Importación automática de propuestas de proveedores',
+            "{$imported} propuesta(s) importada(s) desde el portal de proveedores" . ($skipped > 0 ? ", {$skipped} omitida(s)." : "."));
+
+        return response()->json([
+            'message' => "Se importaron {$imported} propuesta(s)" . ($skipped > 0 ? " ({$skipped} omitida(s))." : "."),
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'project' => new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents'])),
+        ]);
     }
 
     public function removeProposal(Project $project, ProjectProposal $proposal)

@@ -44,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/proposals', [ProjectController::class, 'addProposal']);
     Route::delete('/projects/{project}/proposals/{proposal}', [ProjectController::class, 'removeProposal']);
     Route::post('/projects/{project}/submit-comparative', [ProjectController::class, 'submitComparative']);
+    Route::post('/projects/{project}/import-supplier-proposals', [ProjectController::class, 'importSupplierProposals']);
     Route::post('/projects/{project}/reject-proposals', [ProjectController::class, 'rejectProposals']);
     Route::post('/projects/{project}/select-contractor', [ProjectController::class, 'selectContractor']);
     Route::post('/projects/{project}/payments', [ProjectController::class, 'pay']);

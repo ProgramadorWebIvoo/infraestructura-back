@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## [2026-07-17] — Feature: Endpoint importación automática de propuestas de proveedores
+
+**Tipo:** feature
+
+**Qué:** Nuevo endpoint `POST /api/projects/{project}/import-supplier-proposals` que importa las `SupplierMaterialProposal` de un proyecto como `ProjectProposal` en el cuadro comparativo de Analistas.
+
+**Lógica del endpoint:**
+1. Busca todas `SupplierMaterialProposal` donde `project_id = {project}`
+2. Por cada una, busca el `Contractor` correspondiente:
+   - Match por `supplier_contact` → `contractor.contact`
+   - Fallback match por `supplier_name` → `contractor.name`
+3. Si no encuentra contractor → omite con error en array `errors[]`
+4. Si el contractor ya tiene una propuesta en el proyecto → omite (deduplicación)
+5. Calcula `materialCost` = suma de `items[].totalPrice`
+6. Convierte duración a semanas según `duration_unit` (días/7, meses×4, semanas directo)
+7. Crea `ProjectProposal` con `negotiated_advance_percent: 30` como default
+8. Si `general_notes` está vacío, genera descripción automática
+9. Registra auditoría con conteo de importadas/omitidas
+
+**Response:**
+```json
+{
+  "message": "Se importaron 3 propuesta(s).",
+  "imported": 3,
+  "skipped": 0,
+  "errors": [],
+  "project": { "...ProjectResource..." }
+}
+```
+
+**Archivos:**
+- `app/Http/Controllers/Api/ProjectController.php` — nuevo método `importSupplierProposals`, import de `SupplierMaterialProposal`
+- `routes/api.php` — nueva ruta en grupo `auth:sanctum`
+
+---
+
 ## Proyecto: Infraestructura (Laravel + MySQL)
 
 Stack: Laravel (PHP), MariaDB/MySQL, Sanctum.

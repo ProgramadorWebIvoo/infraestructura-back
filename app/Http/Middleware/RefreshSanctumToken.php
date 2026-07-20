@@ -34,13 +34,16 @@ class RefreshSanctumToken
         $threshold = now()->addMinutes(self::REFRESH_BEFORE_MINUTES);
 
         if ($tokenExpiresAt->lte($threshold)) {
-            // Rotate: create new token preserving name and abilities, delete old one
+            // Grace period: keep old token valid for 60s for concurrent in-flight requests
+            $token->expires_at = now()->addSeconds(60);
+            $token->save();
+
+            // Rotate: create new token preserving name and abilities
             $newToken = $user->createToken(
                 $token->name,
                 $token->abilities ?? ['*'],
                 now()->addMinutes($expiration)
             );
-            $token->delete();
 
             $response->headers->set('X-Refresh-Token', $newToken->plainTextToken);
         }

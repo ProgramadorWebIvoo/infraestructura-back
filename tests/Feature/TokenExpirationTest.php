@@ -65,10 +65,12 @@ class TokenExpirationTest extends TestCase
         $response->assertStatus(200);
         $response->assertHeader('X-Refresh-Token');
 
-        // Old token must be deleted
-        $this->assertDatabaseMissing('personal_access_tokens', [
+        // Old token still exists with grace period expires_at
+        $this->assertDatabaseHas('personal_access_tokens', [
             'id' => $original->accessToken->id,
         ]);
+        $oldToken = DB::table('personal_access_tokens')->find($original->accessToken->id);
+        $this->assertNotNull($oldToken->expires_at);
 
         // New token returned in header must be valid
         $newToken = $response->headers->get('X-Refresh-Token');
@@ -104,30 +106,44 @@ class TokenExpirationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $expired = $user->createToken('expired');
-        $expired->accessToken->expires_at = now()->subDay();
-        $expired->accessToken->save();
+        // Token with expired expires_at
+        $expiredColumn = $user->createToken('column-expired');
+        $expiredColumn->accessToken->expires_at = now()->subDay();
+        $expiredColumn->accessToken->save();
 
+        // Token with null expires_at but old created_at (config-expired)
+        $expiredConfig = $user->createToken('config-expired');
+        DB::table('personal_access_tokens')
+            ->where('id', $expiredConfig->accessToken->id)
+            ->update(['created_at' => now()->subHours(25)]);
+
+        // Valid token
         $valid = $user->createToken('valid');
         $valid->accessToken->expires_at = now()->addDay();
         $valid->accessToken->save();
 
         $this->artisan('sanctum:clear-expired-tokens')
-            ->expectsOutputToContain('Deleted 1')
+            ->expectsOutputToContain('Deleted 2')
             ->assertExitCode(0);
 
+        // Both expired tokens removed
         $this->assertDatabaseMissing('personal_access_tokens', [
-            'id' => $expired->accessToken->id,
+            'id' => $expiredColumn->accessToken->id,
         ]);
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'id' => $expiredConfig->accessToken->id,
+        ]);
+        // Valid token remains
         $this->assertDatabaseHas('personal_access_tokens', [
             'id' => $valid->accessToken->id,
         ]);
     }
 
-    public function test_refresh_deletes_old_token(): void
+    public function test_refresh_grace_period_keeps_old_token(): void
     {
         $user = User::factory()->create();
         $original = $user->createToken('test');
+        $this->assertNull($original->accessToken->expires_at);
 
         DB::table('personal_access_tokens')
             ->where('id', $original->accessToken->id)
@@ -140,9 +156,19 @@ class TokenExpirationTest extends TestCase
         $response->assertStatus(200);
         $response->assertHeader('X-Refresh-Token');
 
-        // Old token deleted from DB
-        $this->assertDatabaseMissing('personal_access_tokens', [
-            'id' => $original->accessToken->id,
+        // Old token still exists with grace period (60s from now)
+        $oldToken = DB::table('personal_access_tokens')->find($original->accessToken->id);
+        $this->assertNotNull($oldToken);
+        $this->assertNotNull($oldToken->expires_at);
+        $this->assertTrue(
+            now()->diffInSeconds($oldToken->expires_at, true) <= 60,
+            'Grace period must be ≤ 60 seconds'
+        );
+
+        // Old token is still usable during grace period
+        $graceRequest = $this->getJson('/api/user', [
+            'Authorization' => 'Bearer '.$original->plainTextToken,
         ]);
+        $graceRequest->assertStatus(200);
     }
 }

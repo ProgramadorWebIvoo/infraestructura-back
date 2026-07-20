@@ -12,8 +12,21 @@ class ClearExpiredTokens extends Command
 
     public function handle(): int
     {
+        $expiration = config('sanctum.expiration');
+
         $deleted = DB::table('personal_access_tokens')
-            ->where('expires_at', '<', now())
+            ->where(function ($q) use ($expiration) {
+                // Column-based: expires_at in the past
+                $q->where('expires_at', '<', now());
+
+                // Config-based: no expires_at but created_at beyond expiration window
+                if ($expiration) {
+                    $q->orWhere(function ($q2) use ($expiration) {
+                        $q2->whereNull('expires_at')
+                           ->where('created_at', '<', now()->subMinutes($expiration));
+                    });
+                }
+            })
             ->delete();
 
         $this->info("Deleted {$deleted} expired token(s).");

@@ -161,10 +161,16 @@ class TokenExpirationIntegrationTest extends TestCase
         $this->assertEquals('my-device', $newRow->name);
         $this->assertEquals(json_encode(['read', 'write']), $newRow->abilities);
 
-        // Old token deleted from DB
-        $this->assertDatabaseMissing('personal_access_tokens', [
+        // Old token still exists with grace period expires_at
+        $this->assertDatabaseHas('personal_access_tokens', [
             'id' => $original->accessToken->id,
         ]);
+        $oldRow = DB::table('personal_access_tokens')->find($original->accessToken->id);
+        $this->assertNotNull($oldRow->expires_at);
+        $this->assertTrue(
+            now()->diffInSeconds($oldRow->expires_at, true) <= 60,
+            'Grace period must be ≤ 60 seconds'
+        );
     }
 
     /** @test */

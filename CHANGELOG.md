@@ -33,6 +33,34 @@
 - `app/Console/Kernel.php` — schedule diario de limpieza
 - `phpunit.xml` — SQLite in-memory habilitado para tests
 - `tests/Feature/TokenExpirationTest.php` — [NUEVO] 6 tests (expiración, refresh, limpieza, rotación)
+- `docs/plan-concurrencia-refresh.md` — [NUEVO] plan de fix para concurrencia
+
+---
+
+## [2026-07-20] — Fix concurrencia en refresh de tokens (grace period 60s)
+
+**Tipo:** fix
+
+**Qué:** Los tokens refrescados tenían eliminación inmediata del token viejo, causando 401 en requests concurrentes que usaban el token original durante la ventana de refresh.
+
+**Causa raíz:** `$token->delete()` en el middleware eliminaba el token antes de que requests en vuelo pudieran completar su autenticación.
+
+**Solución: Grace period de 60 segundos**
+- En vez de eliminar el token viejo, se asigna `expires_at = now() + 60s`
+- Ambos tokens (viejo + nuevo) son válidos durante 60s
+- Sanctum Guard valida dos condiciones (AND): config-based por `created_at`, column-based por `expires_at`
+- El token viejo pasa la config check aún por ~30min (refresh se gatilla con 60 min de holgura)
+- El token viejo pasa la column check porque su nuevo `expires_at` está 60s en el futuro
+
+**Mejora adicional en cleanup:**
+- `ClearExpiredTokens` ahora también limpia tokens sin `expires_at` cuyo `created_at` ya excedió la ventana de expiración config-based
+- Estos tokens (creados por login, nunca refrescados) antes quedaban huérfanos en BD
+
+**Archivos:**
+- `app/Http/Middleware/RefreshSanctumToken.php` — delete → grace period 60s
+- `app/Console/Commands/ClearExpiredTokens.php` — también limpia config-expired sin expires_at
+- `tests/Feature/TokenExpirationTest.php` — tests actualizados a grace period
+- `tests/Feature/TokenExpirationIntegrationTest.php` — tests actualizados a grace period
 
 ---
 

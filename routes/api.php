@@ -26,7 +26,7 @@ Route::get('/public/invitations/{token}', [SupportController::class, 'getInvitat
 Route::post('/public/invitations/{token}/proposal', [SupportController::class, 'storeSupplierMaterialProposal']);
 
     
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 

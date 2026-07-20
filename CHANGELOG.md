@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## [2026-07-20] — Expiración de tokens Sanctum + renovación silenciosa + limpieza
+
+**Tipo:** feature / security
+
+**Qué:** Implementación completa de expiración automática de tokens de API, renovación silenciosa con rotación, y limpieza programada de tokens expirados.
+
+**Detalle:**
+
+**Fase 1 — Configurar expiración (config-based):**
+- `config/sanctum.php`: `'expiration' => env('SANCTUM_EXPIRATION', 1440)` — 24h por defecto
+- Sanctum Guard valida automáticamente `created_at + expiration` en cada request
+- Aplica a tokens nuevos y existentes (basado en `created_at`)
+
+**Fase 2 — Renovación silenciosa con rotación (`RefreshSanctumToken` middleware):**
+- Middleware que corre después de `auth:sanctum` en todas las rutas protegidas
+- Detecta tokens a menos de 60 min de su expiración config-based
+- Crea un nuevo token (con nombre y abilities preservados), elimina el viejo
+- Devuelve el nuevo token en header `X-Refresh-Token`
+- El cliente debe reemplazar su token almacenado al recibir este header
+
+**Fase 4 — Limpieza programada de tokens expirados:**
+- Nuevo comando `sanctum:clear-expired-tokens` que elimina tokens con `expires_at` en pasado
+- Programado diariamente via `app/Console/Kernel.php`
+
+**Archivos:**
+- `config/sanctum.php` — expiration de null → 1440 (configurable via env)
+- `app/Http/Middleware/RefreshSanctumToken.php` — [NUEVO] middleware de rotación
+- `app/Http/Kernel.php` — registro de middleware `refresh.token`
+- `routes/api.php` — middleware `refresh.token` aplicado al grupo `auth:sanctum`
+- `app/Console/Commands/ClearExpiredTokens.php` — [NUEVO] comando artisan
+- `app/Console/Kernel.php` — schedule diario de limpieza
+- `phpunit.xml` — SQLite in-memory habilitado para tests
+- `tests/Feature/TokenExpirationTest.php` — [NUEVO] 6 tests (expiración, refresh, limpieza, rotación)
+
+---
+
 ## [2026-07-17] — Feature: Endpoint importación automática de propuestas de proveedores
 
 **Tipo:** feature

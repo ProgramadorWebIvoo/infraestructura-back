@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## [2026-07-20] — Seguridad y validación en carga de archivos
+
+**Tipo:** security
+
+**Qué:** Validación real de MIME type (server-side finfo) + extensión por tipo de documento, sanitización de nombres de archivo, y manejo de colisiones en endpoint `POST /projects/{project}/documents`.
+
+**Causa raíz:** Las constantes `ALLOWED_CALC_MIMES` y `ALLOWED_PLANO_MIMES` existían pero nunca se aplicaban en la validación. El nombre original del cliente se usaba directamente en `storeAs` (path traversal). Archivos duplicados sobrescribían el existente sin advertencia.
+
+**Cambios:**
+
+1. **FormRequest `StoreProjectDocumentRequest`** (nuevo):
+   - Valida MIME type detectado por servidor (`finfo`) contra lista permitida según `document_type`
+   - Valida extensión del archivo contra lista permitida
+   - Caso especial: `application/octet-stream` solo aceptado si extensión es `.dwg` o `.dxf` (PLANO)
+   - Elimina imports y validación inline del controlador
+
+2. **Controlador `ProjectDocumentController`**:
+   - `upload()` ahora type-hint `StoreProjectDocumentRequest` en lugar de `Request`
+   - Sanitización de filename (`sanitizeFilename`): remueve path traversal (`basename`), null bytes, caracteres no seguros, normaliza UTF-8, colapsa separadores, fallback si queda vacío
+   - Colisiones evitadas (`uniqueFilename`): si el archivo ya existe en el directorio, se añade sufijo timestamp (`_20260720111500`)
+   - Se eliminaron las constantes MIME duplicadas (ahora en FormRequest)
+
+**Archivos:**
+- `app/Http/Requests/StoreProjectDocumentRequest.php` — [NUEVO]
+- `app/Http/Controllers/Api/ProjectDocumentController.php` — refactor validación + sanitización + colisiones
+
+**Vulnerabilidades cerradas:**
+- S-06 (MIME type no validado)
+- Path traversal vía `getClientOriginalName()` con `../`
+- Sobrescritura de archivos en disco por nombre duplicado
+- Inyección de caracteres de control en nombre de archivo
+
+---
+
 ## [2026-07-20] — Expiración de tokens Sanctum + renovación silenciosa + limpieza
 
 **Tipo:** feature / security

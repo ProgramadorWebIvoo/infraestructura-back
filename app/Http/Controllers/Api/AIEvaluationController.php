@@ -87,12 +87,13 @@ class AIEvaluationController extends Controller
                 'data'    => $result,
             ]);
 
-        } catch (\RuntimeException $e) {
+        } catch (\Throwable $e) {
             Log::error("AI Evaluation failed for project {$data['projectId']}: {$e->getMessage()}");
 
             return response()->json([
                 'success' => false,
                 'error'   => $e->getMessage(),
+                'attemptLog' => $this->aiService->getAttemptLog(),
             ], 503);
         }
     }

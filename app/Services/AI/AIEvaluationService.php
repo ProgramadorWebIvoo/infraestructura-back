@@ -63,7 +63,7 @@ class AIEvaluationService
         $this->attemptLog = [];
         $lastException = null;
 
-        foreach ($this->providers as $key => $provider) {
+         foreach ($this->providers as $key => $provider) {
             try {
                 $this->logAttempt("Intentando con {$provider->name()}...");
 
@@ -74,7 +74,7 @@ class AIEvaluationService
 
                 return $result;
 
-            } catch (RuntimeException $e) {
+            } catch (\Throwable $e) {
                 $lastException = $e;
                 $message = $e->getMessage();
 
@@ -82,19 +82,10 @@ class AIEvaluationService
 
                 Log::warning("AI Evaluation failover [{$provider->name()}]: {$message}", [
                     'projectId' => $payload['project']['projectId'] ?? null,
+                    'exception_class' => get_class($e),
                 ]);
 
-                // Si es rate limit (429), continuamos con el siguiente
-                if (str_contains($message, 'Rate limit')) {
-                    continue;
-                }
-
-                // Si es timeout, continuamos
-                if (str_contains($message, 'timeout') || str_contains($message, 'cURL error 28')) {
-                    continue;
-                }
-
-                // Para otros errores (4xx, 5xx), continuamos igual
+                // ConnectionException, timeout, rate limit, error HTTP → todos failover
                 continue;
             }
         }
@@ -113,16 +104,35 @@ class AIEvaluationService
     */
     public function evaluateWithProvider(array $payload, ?string $forcedprovider = null): array
     {
-        if($forcedprovider) {
+        if ($forcedprovider) {
             $provider = $this->providers[$forcedprovider] ?? null;
             if (!$provider) {
                 throw new RuntimeException("Proveedor '$forcedprovider' no configurado");
             }
-            $this->attempLog = [];
+
+            $this->attemptLog = [];
             $this->logAttempt("Forzando evaluación con {$provider->name()}...");
-            $result = $provider->evaluate($payload);
-            $result['attemptLog'] = $this->attempLog;
-            return $result;
+
+            try {
+                $result = $provider->evaluate($payload);
+                $this->logAttempt("✓ {$provider->name()} respondió exitosamente.");
+                $result['attemptLog'] = $this->attemptLog;
+
+                return $result;
+            } catch (\Throwable $e) {
+                $this->logAttempt("✗ {$provider->name()}: {$e->getMessage()}");
+
+                Log::warning("AI Evaluation forced provider [{$provider->name()}] failed: {$e->getMessage()}", [
+                    'projectId' => $payload['project']['projectId'] ?? null,
+                    'exception_class' => get_class($e),
+                ]);
+
+                throw new RuntimeException(
+                    "El proveedor forzado {$provider->name()} falló: {$e->getMessage()}",
+                    0,
+                    $e
+                );
+            }
         }
 
         //FAILOVER (Vuelve a usar metodo regular principal)

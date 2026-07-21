@@ -35,6 +35,7 @@ class AnthropicProvider extends OpenAIProvider implements AIProviderInterface
         $userPrompt   = $this->buildUserPrompt($payload);
 
         $response = Http::timeout($this->timeout)
+            ->retry(2, 1000)
             ->withHeaders([
                 'x-api-key'         => $this->apiKey,
                 'anthropic-version' => '2023-06-01',

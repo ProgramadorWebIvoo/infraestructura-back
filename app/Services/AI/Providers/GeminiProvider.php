@@ -17,7 +17,7 @@ class GeminiProvider extends OpenAIProvider implements AIProviderInterface
         $this->apiKey  = config('ai.gemini.api_key');
         $this->model   = config('ai.gemini.model', 'gemini-1.5-pro');
         $this->baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1');
-        $this->timeout = config('ai.timeout', 30);
+        $this->timeout = config('ai.timeout', 100);
     }
 
     public function name(): string
@@ -35,6 +35,7 @@ class GeminiProvider extends OpenAIProvider implements AIProviderInterface
         $userPrompt   = $this->buildUserPrompt($payload);
 
         $response = Http::timeout($this->timeout)
+            ->retry(2, 1000)
             ->post("{$this->baseUrl}/models/{$this->model}:generateContent?key={$this->apiKey}", [
                 'contents' => [
                     [

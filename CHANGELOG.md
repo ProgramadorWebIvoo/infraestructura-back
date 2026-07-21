@@ -353,6 +353,30 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ---
 
+## [2026-07-21] — Invitation links single-use + invalidación + tests
+
+**Tipo:** feature / fix
+
+**Qué:** Endpoints públicos de invitación ahora marcan `used_at` al usar el link, invalidan links previos activos al re-invitar, y se agregaron 12 tests de integración.
+
+**Cambios:**
+- Migración: columnas `used_at` (timestamp nullable) y `replaced_by` (char(36) nullable) en `supplier_invitations`
+- `SupplierInvitation::isValid()` — retorna true solo si `used_at` es null y `replaced_by` es null
+- `SupportController@getInvitationPublicInfo` — valida `isValid()`, retorna 404 si inválido
+- `SupportController@storeSupplierMaterialProposal` — marca `used_at = now()` al crear propuesta
+- `SupportController@createSupplierInvitation` — invalida links previos activos para mismo project_id + supplier_contact
+- Fix: enum `type` mayúsculas en tests (`Mantenimiento` → `MANTENIMIENTO`)
+- Fix: formato `used_at` en assertDatabaseHas (`Y-m-d H:i` → `Y-m-d H:i:s`)
+- `tests/Feature/InvitationLinkTest.php` [NUEVO] — 12 tests
+
+**Archivos:**
+- `database/migrations/2026_07_21_000001_add_link_status_to_supplier_invitations.php`
+- `app/Models/SupplierInvitation.php`
+- `app/Http/Controllers/Api/SupportController.php`
+- `tests/Feature/InvitationLinkTest.php`
+
+---
+
 ## [2026-07-17] — Carga de 20 propuestas de materiales a BD
 
 **Tipo:** feature

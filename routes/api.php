@@ -20,10 +20,10 @@ use App\Http\Controllers\Api\AIEvaluationController;
 |
 */
 
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/contractors', [SupportController::class, 'storeContractor']);
-Route::get('/public/invitations/{token}', [SupportController::class, 'getInvitationPublicInfo']);
-Route::post('/public/invitations/{token}/proposal', [SupportController::class, 'storeSupplierMaterialProposal']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:public-api');
+Route::post('/contractors', [SupportController::class, 'storeContractor'])->middleware('throttle:public-api');
+Route::get('/public/invitations/{token}', [SupportController::class, 'getInvitationPublicInfo'])->middleware('throttle:public-api');
+Route::post('/public/invitations/{token}/proposal', [SupportController::class, 'storeSupplierMaterialProposal'])->middleware('throttle:public-api');
 
     
 Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {

@@ -11,6 +11,7 @@ use App\Models\SupplierInvitation;
 use App\Models\SupplierMaterialProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class SupportController extends Controller
@@ -35,12 +36,21 @@ class SupportController extends Controller
             'contact' => ['required', 'string', 'max:180'],
         ]);
 
+        // Sanitización server-side: eliminar etiquetas HTML/XML de campos de texto
+        $data['name'] = strip_tags($data['name']);
+        $data['specialty'] = strip_tags($data['specialty']);
+        $data['contact'] = strip_tags($data['contact']);
+
         $data['code'] ??= $this->nextContractorCode();
         $data['rating'] ??= 4.0;
         $data['registration_source'] = 'PUBLIC_PORTAL';
         $data['status'] = 'PENDING_REVIEW';
 
-        return response()->json(Contractor::create($data), 201);
+        $contractor = Contractor::create($data);
+
+        $this->logPublicAccess($request, 'contractor.register', "Proveedor: {$contractor->name} / Código: {$contractor->code}");
+
+        return response()->json($contractor, 201);
     }
 
     public function updateContractorRating(Request $request, Contractor $contractor)
@@ -95,8 +105,17 @@ class SupportController extends Controller
 
         $project = Project::find($data['project_id']);
 
+        $newId = Str::uuid()->toString();
+
+        // Invalidar enlaces previos activos para el mismo proyecto + contacto
+        SupplierInvitation::where('project_id', $data['project_id'])
+            ->where('supplier_contact', $data['supplierContact'])
+            ->whereNull('used_at')
+            ->whereNull('replaced_by')
+            ->update(['replaced_by' => $newId]);
+
         $invitation = SupplierInvitation::create([
-            'id'               => Str::uuid()->toString(),
+            'id'               => $newId,
             'project_id'       => $data['project_id'],
             'supplier_name'    => $data['supplierName'],
             'supplier_company' => $data['supplierCompany'] ?? null,
@@ -112,14 +131,16 @@ class SupportController extends Controller
         ], 201);
     }
 
-    public function getInvitationPublicInfo(string $token)
+    public function getInvitationPublicInfo(Request $request, string $token)
     {
         $invitation = SupplierInvitation::with('project.materials')->find($token);
-        if (!$invitation) {
+        if (!$invitation || !$invitation->isValid()) {
             return response()->json(['message' => 'Enlace no valido o expirado.'], 404);
         }
 
         $project = $invitation->project;
+
+        $this->logPublicAccess($request, 'invitation.view', "Invitación: {$token} / Proveedor: {$invitation->supplier_name}");
 
         return response()->json([
             'supplierName'    => $invitation->supplier_name,
@@ -145,7 +166,7 @@ class SupportController extends Controller
     public function storeSupplierMaterialProposal(Request $request, string $token)
     {
         $invitation = SupplierInvitation::with('project')->find($token);
-        if (!$invitation) {
+        if (!$invitation || !$invitation->isValid()) {
             return response()->json(['message' => 'Enlace no valido o expirado.'], 404);
         }
 
@@ -176,6 +197,11 @@ class SupportController extends Controller
             'duration_unit'          => $data['durationUnit'] ?? null,
         ]);
 
+        // Marcar el enlace como usado (single-use)
+        $invitation->update(['used_at' => now()]);
+
+        $this->logPublicAccess($request, 'proposal.submit', "Propuesta: {$proposal->id} / Invitación: {$token} / Proveedor: {$invitation->supplier_name}");
+
         return response()->json($this->formatProposal($proposal), 201);
     }
 
@@ -205,6 +231,20 @@ class SupportController extends Controller
             'durationUnit'           => $p->duration_unit,
             'submittedAt'            => optional($p->submitted_at)->format('Y-m-d H:i'),
         ];
+    }
+
+    /**
+     * Log public endpoint access for audit trail.
+     */
+    private function logPublicAccess(Request $request, string $action, ?string $detail = null): void
+    {
+        Log::info('PUBLIC_ACCESS', [
+            'action'    => $action,
+            'ip'        => $request->ip(),
+            'user_agent'=> $request->userAgent(),
+            'detail'    => $detail,
+            'timestamp' => now()->toIso8601String(),
+        ]);
     }
 
     private function nextContractorCode(): string

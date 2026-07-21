@@ -19,11 +19,22 @@ class SupplierInvitation extends Model
         'supplier_name',
         'supplier_company',
         'supplier_contact',
+        'used_at',
+        'replaced_by',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
+        'used_at'    => 'datetime',
     ];
+
+    /**
+     * Verifica si el enlace sigue activo (no usado, no reemplazado).
+     */
+    public function isValid(): bool
+    {
+        return is_null($this->used_at) && is_null($this->replaced_by);
+    }
 
     public function project()
     {

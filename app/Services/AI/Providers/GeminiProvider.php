@@ -55,7 +55,7 @@ class GeminiProvider extends OpenAIProvider implements AIProviderInterface
             throw new RuntimeException('Rate limit excedido en Gemini.');
         }
 
-        if ($response->failed()) {
+if ($response->failed()) {
             throw new RuntimeException(
                 "Gemini error {$response->status()}: {$response->body()}"
             );
@@ -63,12 +63,22 @@ class GeminiProvider extends OpenAIProvider implements AIProviderInterface
 
         $body = $response->json();
         $content = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
+        $usage = $body['usageMetadata'] ?? null;
 
         if (!$content) {
             throw new RuntimeException('Gemini devolvió una respuesta vacía.');
         }
-        
-        return $this->parseResponse($content);
+
+        $result = $this->parseResponse($content);
+        if ($usage) {
+            $result['usage'] = [
+                'prompt_tokens'     => $usage['promptTokenCount'] ?? 0,
+                'completion_tokens' => $usage['candidatesTokenCount'] ?? 0,
+                'total_tokens'      => $usage['totalTokenCount'] ?? 0,
+            ];
+        }
+
+        return $result;
     }
 
     protected function parseResponse(string $content): array

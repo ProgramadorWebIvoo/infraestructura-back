@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ProjectDocumentController;
 use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AIEvaluationController;
+use App\Http\Controllers\Api\AiConfigController;
 use App\Http\Controllers\Api\MaterialController;
 
 /*
@@ -84,5 +85,17 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         Route::get('/materials/config/{material}', [MaterialController::class, 'show']);
         Route::patch('/materials/config/{material}', [MaterialController::class, 'update']);
         Route::post('/materials/config/{material}/toggle-status', [MaterialController::class, 'toggleStatus']);
+
+        // AI Configuration (static routes BEFORE wildcard {id})
+        Route::prefix('ai/config')->group(function () {
+            Route::get('/usage', [AiConfigController::class, 'usage']);
+            Route::post('/sync', [AiConfigController::class, 'sync']);
+            Route::get('/', [AiConfigController::class, 'index']);
+            Route::post('/', [AiConfigController::class, 'store']);
+            Route::get('/{id}', [AiConfigController::class, 'show']);
+            Route::patch('/{id}', [AiConfigController::class, 'update']);
+            Route::delete('/{id}', [AiConfigController::class, 'destroy']);
+            Route::post('/{id}/test', [AiConfigController::class, 'test']);
+        });
     });
 });

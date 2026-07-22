@@ -62,12 +62,22 @@ class AnthropicProvider extends OpenAIProvider implements AIProviderInterface
 
         $body = $response->json();
         $content = $body['content'][0]['text'] ?? null;
+        $usage = $body['usage'] ?? null;
 
         if (!$content) {
             throw new RuntimeException('Anthropic devolvió una respuesta vacía.');
         }
 
-        return $this->parseResponse($content);
+        $result = $this->parseResponse($content);
+        if ($usage) {
+            $result['usage'] = [
+                'prompt_tokens'     => $usage['input_tokens'] ?? 0,
+                'completion_tokens' => $usage['output_tokens'] ?? 0,
+                'total_tokens'      => ($usage['input_tokens'] ?? 0) + ($usage['output_tokens'] ?? 0),
+            ];
+        }
+
+        return $result;
     }
 
     protected function parseResponse(string $content): array

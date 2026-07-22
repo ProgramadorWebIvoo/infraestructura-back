@@ -59,12 +59,22 @@ class OpenAIProvider implements AIProviderInterface
 
         $body = $response->json();
         $content = $body['choices'][0]['message']['content'] ?? null;
+        $usage = $body['usage'] ?? null;
 
         if (!$content) {
             throw new RuntimeException('OpenAI devolvió una respuesta vacía.');
         }
 
-        return $this->parseResponse($content);
+        $result = $this->parseResponse($content);
+        if ($usage) {
+            $result['usage'] = [
+                'prompt_tokens'     => $usage['prompt_tokens'] ?? 0,
+                'completion_tokens' => $usage['completion_tokens'] ?? 0,
+                'total_tokens'      => $usage['total_tokens'] ?? 0,
+            ];
+        }
+
+        return $result;
     }
 
     protected function buildSystemPrompt(): string

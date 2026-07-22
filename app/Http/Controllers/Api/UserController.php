@@ -60,11 +60,13 @@ class UserController extends Controller
         $data = $request->validate([
             'name'   => ['sometimes', 'string', 'max:255'],
             'email'  => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'role'   => ['sometimes', Rule::in(VALID_ROLES)],
             'status' => ['sometimes', Rule::in(VALID_STATUSES)],
         ]);
 
         if (isset($data['name']))   $user->name  = $data['name'];
         if (isset($data['email']))  $user->email = $data['email'];
+        if (isset($data['role']))   $user->role  = $data['role'];
         if (isset($data['status'])) $user->status = $data['status'];
 
         $user->save();

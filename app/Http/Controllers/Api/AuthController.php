@@ -26,6 +26,12 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->isInactive()) {
+            throw ValidationException::withMessages([
+                'email' => ['Esta cuenta ha sido desactivada. Contacta al administrador.'],
+            ]);
+        }
+
         // Allow max 2 active sessions; remove oldest if limit reached
         if ($user->tokens()->count() >= 2) {
             $user->tokens()->oldest('created_at')->first()->delete();

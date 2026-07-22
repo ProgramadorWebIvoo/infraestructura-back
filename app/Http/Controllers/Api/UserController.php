@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 
 const VALID_ROLES = [
@@ -13,11 +14,13 @@ const VALID_ROLES = [
     'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
 ];
 
+const VALID_STATUSES = ['Active', 'Inactive'];
+
 class UserController extends Controller
 {
     public function index()
     {
-        $users = User::select('id', 'name', 'email', 'role', 'created_at')
+        $users = User::select('id', 'name', 'email', 'role', 'status', 'created_at')
             ->orderByDesc('created_at')
             ->get();
 
@@ -31,6 +34,7 @@ class UserController extends Controller
             'email'                 => ['required', 'email', 'unique:users,email'],
             'password'              => ['required', 'string', 'min:8', 'confirmed'],
             'role'                  => ['required', Rule::in(VALID_ROLES)],
+            'status'                => ['sometimes', Rule::in(VALID_STATUSES)],
         ]);
 
         $user = User::create([
@@ -38,6 +42,7 @@ class UserController extends Controller
             'email'    => $data['email'],
             'password' => Hash::make($data['password']),
             'role'     => $data['role'],
+            'status'   => $data['status'] ?? 'Active',
         ]);
 
         return response()->json([
@@ -45,7 +50,59 @@ class UserController extends Controller
             'name'       => $user->name,
             'email'      => $user->email,
             'role'       => $user->role,
+            'status'     => $user->status,
             'created_at' => $user->created_at,
         ], 201);
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'name'   => ['sometimes', 'string', 'max:255'],
+            'email'  => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'status' => ['sometimes', Rule::in(VALID_STATUSES)],
+        ]);
+
+        if (isset($data['name']))   $user->name  = $data['name'];
+        if (isset($data['email']))  $user->email = $data['email'];
+        if (isset($data['status'])) $user->status = $data['status'];
+
+        $user->save();
+
+        return response()->json([
+            'id'         => $user->id,
+            'name'       => $user->name,
+            'email'      => $user->email,
+            'role'       => $user->role,
+            'status'     => $user->status,
+            'created_at' => $user->created_at,
+        ]);
+    }
+
+    public function toggleStatus(User $user)
+    {
+        $user->status = $user->isActive() ? 'Inactive' : 'Active';
+        $user->save();
+
+        // Revocar tokens si se inactiva
+        if ($user->isInactive()) {
+            $user->tokens()->delete();
+        }
+
+        return response()->json([
+            'id'     => $user->id,
+            'status' => $user->status,
+        ]);
+    }
+
+    public function sendResetLink(Request $request, User $user)
+    {
+        $status = Password::sendResetLink(['email' => $user->email]);
+
+        if ($status === Password::RESET_LINK_SENT) {
+            return response()->json(['message' => 'Link de restablecimiento enviado al correo del usuario.']);
+        }
+
+        return response()->json(['message' => 'No se pudo enviar el link. Intente de nuevo.'], 500);
     }
 }

@@ -23,7 +23,9 @@ class SupportController extends Controller
 
     public function contractors()
     {
-        return Contractor::orderBy('name')->get(['code', 'name', 'specialty', 'rating', 'contact', 'status']);
+        return Contractor::where('status', 'ACTIVE')
+            ->orderBy('name')
+            ->get(['code', 'name', 'specialty', 'rating', 'contact', 'status']);
     }
 
     public function storeContractor(Request $request)

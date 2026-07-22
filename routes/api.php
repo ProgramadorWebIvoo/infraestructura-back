@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ContractorController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectDocumentController;
 use App\Http\Controllers\Api\SupportController;
@@ -65,5 +66,15 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
+        Route::patch('/users/{user}', [UserController::class, 'update']);
+        Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus']);
+        Route::post('/users/{user}/send-reset-link', [UserController::class, 'sendResetLink']);
+
+        // Contractor / Proveedores configuration
+        Route::get('/contractors/config', [ContractorController::class, 'index']);
+        Route::post('/contractors/config', [ContractorController::class, 'store']);
+        Route::get('/contractors/config/{contractor}', [ContractorController::class, 'show']);
+        Route::patch('/contractors/config/{contractor}', [ContractorController::class, 'update']);
+        Route::post('/contractors/config/{contractor}/toggle-status', [ContractorController::class, 'toggleStatus']);
     });
 });

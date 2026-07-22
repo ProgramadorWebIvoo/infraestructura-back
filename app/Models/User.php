@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\URL;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -22,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'status',
     ];
 
     /**
@@ -42,4 +44,35 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    // ── Scopes ───────────────────────────────────────────────────────────
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'Active');
+    }
+
+    public function scopeInactive($query)
+    {
+        return $query->where('status', 'Inactive');
+    }
+
+    // ── Password Reset ──────────────────────────────────────────────────
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new \App\Notifications\UserPasswordReset($token, $this->email));
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    public function isActive(): bool
+    {
+        return $this->status === 'Active';
+    }
+
+    public function isInactive(): bool
+    {
+        return $this->status === 'Inactive';
+    }
 }

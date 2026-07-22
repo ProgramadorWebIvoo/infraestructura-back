@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ProjectDocumentController;
 use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AIEvaluationController;
+use App\Http\Controllers\Api\MaterialController;
 
 /*
 |--------------------------------------------------------------------------
@@ -76,5 +77,12 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         Route::get('/contractors/config/{contractor}', [ContractorController::class, 'show']);
         Route::patch('/contractors/config/{contractor}', [ContractorController::class, 'update']);
         Route::post('/contractors/config/{contractor}/toggle-status', [ContractorController::class, 'toggleStatus']);
+
+        // Materials catalog configuration
+        Route::get('/materials/config', [MaterialController::class, 'index']);
+        Route::post('/materials/config', [MaterialController::class, 'store']);
+        Route::get('/materials/config/{material}', [MaterialController::class, 'show']);
+        Route::patch('/materials/config/{material}', [MaterialController::class, 'update']);
+        Route::post('/materials/config/{material}/toggle-status', [MaterialController::class, 'toggleStatus']);
     });
 });

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AIEvaluationController;
 use App\Http\Controllers\Api\AiConfigController;
 use App\Http\Controllers\Api\MaterialController;
+use App\Http\Controllers\Api\PushTokenController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,6 +34,10 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    // Push notifications
+    Route::post('/push-tokens', [PushTokenController::class, 'store']);
+    Route::delete('/push-tokens', [PushTokenController::class, 'destroy']);
+
     Route::get('/modules', [SupportController::class, 'modules'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);
     Route::get('/contractors', [SupportController::class, 'contractors'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);
     Route::post('/contractors/{contractor}/rating', [SupportController::class, 'updateContractorRating']);
@@ -42,22 +47,34 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/supplier-material-proposals', [SupportController::class, 'supplierMaterialProposals']);
 
     Route::apiResource('projects', ProjectController::class)->only(['index', 'store', 'show']);
-    Route::post('/projects/{project}/review', [ProjectController::class, 'review']);
-    Route::post('/projects/{project}/approve-investment', [ProjectController::class, 'approveInvestment']);
-    Route::post('/projects/{project}/proposals', [ProjectController::class, 'addProposal']);
-    Route::delete('/projects/{project}/proposals/{proposal}', [ProjectController::class, 'removeProposal']);
-    Route::post('/projects/{project}/submit-comparative', [ProjectController::class, 'submitComparative']);
-    Route::post('/projects/{project}/import-supplier-proposals', [ProjectController::class, 'importSupplierProposals']);
-    Route::post('/projects/{project}/reject-proposals', [ProjectController::class, 'rejectProposals']);
-    Route::post('/projects/{project}/select-contractor', [ProjectController::class, 'selectContractor']);
-    Route::post('/projects/{project}/payments', [ProjectController::class, 'pay']);
-    Route::post('/projects/{project}/report-finished', [ProjectController::class, 'reportFinished']);
+
+    // Rutas protegidas por rol (matriz de permisos auditoría)
+    Route::post('/projects/{project}/review', [ProjectController::class, 'review'])
+        ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/approve-investment', [ProjectController::class, 'approveInvestment'])
+        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/proposals', [ProjectController::class, 'addProposal'])
+        ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
+    Route::delete('/projects/{project}/proposals/{proposal}', [ProjectController::class, 'removeProposal'])
+        ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/submit-comparative', [ProjectController::class, 'submitComparative'])
+        ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/import-supplier-proposals', [ProjectController::class, 'importSupplierProposals'])
+        ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/reject-proposals', [ProjectController::class, 'rejectProposals'])
+        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/select-contractor', [ProjectController::class, 'selectContractor'])
+        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/payments', [ProjectController::class, 'pay'])
+        ->middleware('role:FINANZAS,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/report-finished', [ProjectController::class, 'reportFinished'])
+        ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/verify-completion', [ProjectController::class, 'verifyCompletion'])
+        ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
 
     // AI Evaluation
-    Route::post('/ai/evaluate-proposals', [AIEvaluationController::class, 'evaluate']);
-
-    
-    Route::post('/projects/{project}/verify-completion', [ProjectController::class, 'verifyCompletion']);
+    Route::post('/ai/evaluate-proposals', [AIEvaluationController::class, 'evaluate'])
+        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
 
     // Project documents (planos y hojas de cálculo)
     Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);

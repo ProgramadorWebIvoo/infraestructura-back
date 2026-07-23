@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class MaterialCatalog extends Model
 {
+    use HasFactory;
+
     protected $table = 'material_catalog';
 
     protected $fillable = [

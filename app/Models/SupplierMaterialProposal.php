@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class SupplierMaterialProposal extends Model
 {
+    use HasFactory;
+
     protected $table = 'supplier_material_proposals';
     protected $primaryKey = 'id';
     public $incrementing = false;

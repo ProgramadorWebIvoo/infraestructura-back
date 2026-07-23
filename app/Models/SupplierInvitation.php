@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class SupplierInvitation extends Model
 {
+    use HasFactory;
+
     protected $table = 'supplier_invitations';
     protected $primaryKey = 'id';
     public $incrementing = false;

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\TransientToken;
 
 class RefreshSanctumToken
 {
@@ -20,6 +21,11 @@ class RefreshSanctumToken
 
         $token = $user->currentAccessToken();
         if (! $token) {
+            return $response;
+        }
+
+        // TransientToken (used in tests via actingAs) has no created_at
+        if ($token instanceof TransientToken) {
             return $response;
         }
 

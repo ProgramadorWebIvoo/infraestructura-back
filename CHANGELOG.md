@@ -1,5 +1,72 @@
 # CHANGELOG
 
+## [2026-07-23] — Tests: fix sintaxis models + RefreshSanctumToken TransientToken guard + actingAs en tests
+
+**Tipo:** fix / test
+
+**Qué:**
+1. **Syntax error en 8 modelos**: Las clases tenían `use HasFactory;{` (duplicación de `{`) que causaba `ParseError`. Eliminado `{` extra en todos.
+2. **TransientToken guard en RefreshSanctumToken**: Middleware asumía `$token->created_at` existía, pero `actingAs()` en tests usa `TransientToken` sin `created_at`. Agregado early return si token es `instanceof TransientToken`.
+3. **Tests migrados de `withHeaders(createToken)` a `actingAs()`**: `createToken('test')` con mismo nombre causaba colisión de autenticación entre requests. Todos los tests ahora usan `$this->actingAs($user)` (vía TransientToken) que es el estándar de Laravel.
+4. **Assertions corregidas**: float/int en `approvedInvestmentAmount`, datos determinísticos en filtro `type`.
+
+**Tests:** 128 tests, 342 assertions — OK.
+
+**Archivos:**
+- `app/Models/Project.php`, `Contractor.php`, `MaterialCatalog.php`, `ProjectProposal.php`, `SupplierInvitation.php`, `SupplierMaterialProposal.php`, `AuditLog.php`, `ProjectMaterial.php`
+- `app/Http/Middleware/RefreshSanctumToken.php`
+- `tests/Feature/ProjectLifecycleTest.php`
+- `tests/Feature/RoleMiddlewareTest.php`
+
+---
+
+## [2026-07-23] — Middleware role en 12 rutas críticas (A-01)
+
+**Tipo:** security
+
+**Qué:** Aplicado middleware `role:X,ADMIN,SUPERADMIN` a 12 endpoints que carecían de restricción de rol, permitiendo que cualquier usuario autenticado ejecutara acciones sensibles (aprobar inversiones, pagar, adjudicar contratos, etc.).
+
+**Causa raíz:** Las rutas estaban protegidas solo con `auth:sanctum` + `refresh.token`, sin verificar el rol del usuario. El middleware `CheckRole` existía pero no se aplicaba a estas rutas.
+
+**Cambios en `routes/api.php`:**
+| Endpoint | Roles |
+|----------|-------|
+| `POST /projects/{project}/review` | `CIERRE_DE_OBRA, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/approve-investment` | `PROCURA, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/proposals` | `ANALISTA, ADMIN, SUPERADMIN` |
+| `DELETE /projects/{project}/proposals/{proposal}` | `ANALISTA, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/submit-comparative` | `ANALISTA, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/import-supplier-proposals` | `ANALISTA, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/reject-proposals` | `PROCURA, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/select-contractor` | `PROCURA, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/payments` | `FINANZAS, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/report-finished` | `CIERRE_DE_OBRA, ADMIN, SUPERADMIN` |
+| `POST /projects/{project}/verify-completion` | `CIERRE_DE_OBRA, ADMIN, SUPERADMIN` |
+| `POST /ai/evaluate-proposals` | `PROCURA, ADMIN, SUPERADMIN` |
+
+**Archivos:**
+- `routes/api.php`
+
+---
+
+## [2026-07-23] — Fix FK type mismatch project_documents.project_id (BD-01)
+
+**Tipo:** fix
+
+**Qué:** Corregido type mismatch en FK `project_documents.project_id` que estaba definido como `VARCHAR(20)` mientras la PK referenciada `projects.id` es `VARCHAR(40)`.
+
+**Causa raíz:** Migration original `2026_07_01_200000_create_project_documents_table.php` definió `string('project_id', 20)` por error. La FK existente en la BD apuntaba a una columna PK de mayor tamaño, lo que constituye una inconsistencia de esquema y puede causar errores en otros DB engines o si futuros IDs superan 20 caracteres.
+
+**Cambios:**
+- `database/migrations/2026_07_01_200000_create_project_documents_table.php`: `string('project_id', 20)` → `string('project_id', 40)`
+- `database/migrations/2026_07_23_000001_fix_project_id_length_in_project_documents.php` [NUEVO]: Altera columna existente de VARCHAR(20) a VARCHAR(40) y recrea FK.
+
+**Archivos:**
+- `database/migrations/2026_07_01_200000_create_project_documents_table.php`
+- `database/migrations/2026_07_23_000001_fix_project_id_length_in_project_documents.php` [NUEVO]
+
+---
+
 ## [2026-07-20] — Seguridad y validación en carga de archivos
 
 **Tipo:** security

@@ -38,9 +38,11 @@ class AuthController extends Controller
         }
 
         $tokenName = $credentials['device_name'] ?? 'ivoo-infraestructura';
+        $expiration = config('sanctum.expiration');
+        $expiresAt = $expiration ? now()->addMinutes($expiration) : null;
 
         return response()->json([
-            'token' => $user->createToken($tokenName)->plainTextToken,
+            'token' => $user->createToken($tokenName, ['*'], $expiresAt)->plainTextToken,
             'user' => [
                 'id'    => $user->id,
                 'name'  => $user->name,

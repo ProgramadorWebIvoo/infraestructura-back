@@ -97,6 +97,67 @@
 
 **Archivos:** `app/Services/AI/AIEvaluationService.php`
 
+## [2026-07-24] — M-08: Método `getModelForProvider()` nunca usado
+
+**Tipo:** cleanup
+
+**Qué:** Se eliminó el método privado `getModelForProvider()` que nunca era llamado. Además usaba `config("ai.{$provider}.model")` que ya no tiene efecto desde el fix A-05 (la config global ya no se muta).
+
+**Archivos:** `app/Services/AI/AIEvaluationService.php`
+
+## [2026-07-24] — B-01: Mensaje de error diferenciado permite enumeración de usuarios
+
+**Tipo:** fix / security
+
+**Qué:** El login devolvía mensaje distinto para "credenciales inválidas" vs "cuenta desactivada", permitiendo inferir si un email existe. Ambos casos ahora devuelven el mismo mensaje genérico.
+
+**Archivos:** `app/Http/Controllers/Api/AuthController.php`
+
+## [2026-07-24] — B-02: Magic strings para estados de proyecto
+
+**Tipo:** refactor
+
+**Qué:** `STATUSES` se cambió de lista indexada a mapa asociativo (`'CREADO' => 'CREADO'`). Las 10 ocurrencias de strings literales de estado en el código fueron reemplazadas por `self::STATUSES['ESTADO']`.
+
+**Archivos:** `app/Http/Controllers/Api/ProjectController.php`
+
+## [2026-07-24] — B-03: DTO para payload de evaluación IA
+
+**Tipo:** refactor
+
+**Qué:** Se crearon 3 DTOs tipados (`EvaluationPayload`, `EvaluationProject`, `EvaluationProposal`) para el payload de evaluación IA. El controller ahora construye los DTOs con named arguments (PHP 8.0+) en lugar de arrays asociativos genéricos. El service y providers siguen recibiendo `array` vía `toArray()` para mantener compatibilidad.
+
+**Archivos:** `app/Services/AI/EvaluationPayload.php`, `app/Services/AI/EvaluationProject.php`, `app/Services/AI/EvaluationProposal.php`, `app/Http/Controllers/Api/AIEvaluationController.php`
+
+## [2026-07-24] — B-04: Validación de tipos MIME en subida de documentos
+
+**Tipo:** audit (ya implementado)
+
+**Qué:** La validación de MIME/extensión ya está implementada en `StoreProjectDocumentRequest::validateFileMimeAndExtension()`. Incluye:
+- Server-side MIME detection via `finfo` (`$file->getMimeType()`)
+- Extensión vs lista blanca según `document_type` (CALC/PLANO)
+- Manejo especial de `application/octet-stream` (solo dwg/dxf)
+- Manejo especial de `application/zip` (solo xlsx/ods)
+- Sanitización de filename contra path traversal en el controller
+
+**Hallazgo cerrado sin cambios.** El código ya cumplía con la validación.
+
+## [2026-07-24] — B-05: Test `test_remove_awarded_proposal_returns_422` sin verificar la causa
+
+**Tipo:** fix / tests
+
+**Qué:** El test solo verificaba `assertStatus(422)` sin confirmar que el error correspondía a "propuesta adjudicada". Se agregó `assertJsonFragment()` sobre el mensaje específico.
+
+**Archivos:** `tests/Feature/ProjectLifecycleTest.php`
+
+## [2026-07-24] — B-06: Nombres inconsistentes en `toArray()` vs `$fillable`
+
+**Tipo:** docs
+
+**Qué:** Se agregó docblock explicativo en `AiConfiguration::toArray()` aclarando que `toArray()` retorna camelCase para la API, mientras que `$fillable` usa snake_case para la BD. Es intencional por convención del proyecto.
+
+**Archivos:** `app/Models/AiConfiguration.php`
+
 ## [2026-07-24] — Queue para notificaciones push (A-01)
 
 **Tipo:** fix / performance

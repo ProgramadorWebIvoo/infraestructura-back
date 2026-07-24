@@ -72,6 +72,13 @@ class AiConfiguration extends Model
 
     // ── Helpers ──
 
+    /**
+     * Serializa a camelCase para la API, mientras que $fillable usa snake_case
+     * para la BD (convención Laravel/Eloquent). La diferencia es intencional:
+     * la API pública expone camelCase, el modelo interno usa snake_case.
+     *
+     * @see $fillable (snake_case) vs esta salida (camelCase)
+     */
     public function toArray(): array
     {
         return [

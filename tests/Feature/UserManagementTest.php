@@ -36,7 +36,7 @@ class UserManagementTest extends TestCase
 
         $response->assertStatus(200);
         // 3 created in setUp (superadmin, admin, analista) + 3 = 6
-        $this->assertCount(6, $response->json());
+        $this->assertCount(6, $response->json('data'));
     }
 
     public function test_store_creates_user(): void

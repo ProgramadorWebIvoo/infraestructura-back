@@ -7,6 +7,9 @@ use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\Project;
 use App\Services\AI\AIEvaluationService;
+use App\Services\AI\EvaluationPayload;
+use App\Services\AI\EvaluationProject;
+use App\Services\AI\EvaluationProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -51,33 +54,45 @@ class AIEvaluationController extends Controller
 
         $project = Project::findOrFail($data['projectId']);
 
-        // Enriquecer cada propuesta con el rating actual del contratista desde la BD
-        $enrichedProposals = [];
+        // Enriquecer propuestas con rating del contratista desde BD y construir DTOs
         $contractorCodes = array_unique(array_column($data['proposals'], 'contractorCode'));
         $contractorsByCode = Contractor::whereIn('code', $contractorCodes)
             ->get()
             ->keyBy('code');
 
+        $proposalDtos = [];
         foreach ($data['proposals'] as $prop) {
-            $rating = $contractorsByCode->get($prop['contractorCode'])?->rating ?? 4.0;
-            $enrichedProposals[] = array_merge($prop, ['contractorRating' => (float) $rating]);
+            $rating = (float) ($contractorsByCode->get($prop['contractorCode'])?->rating ?? 4.0);
+            $proposalDtos[] = new EvaluationProposal(
+                id:                      $prop['id'],
+                contractorCode:          $prop['contractorCode'],
+                contractorName:          $prop['contractorName'],
+                contractorRating:        $rating,
+                materialCost:            (float) $prop['materialCost'],
+                laborCost:               (float) $prop['laborCost'],
+                totalCost:               (float) $prop['totalCost'],
+                deliveryWeeks:           (int) $prop['deliveryWeeks'],
+                negotiatedAdvancePercent: (float) $prop['negotiatedAdvancePercent'],
+                description:             $prop['description'],
+                observations:            $prop['observations'] ?? null,
+            );
         }
 
-        // Construir payload para el servicio AI
-        $payload = [
-            'project'   => [
-                'projectId'                => $data['projectId'],
-                'projectTitle'             => $data['projectTitle'],
-                'projectDescription'       => $data['projectDescription'],
-                'projectLocation'          => $data['projectLocation'],
-                'projectType'              => $data['projectType'],
-                'approvedInvestmentAmount' => $data['approvedInvestmentAmount'],
-            ],
-            'proposals' => $enrichedProposals,
-        ];
+        // Construir payload tipado para el servicio AI
+        $payload = new EvaluationPayload(
+            project: new EvaluationProject(
+                projectId:                $data['projectId'],
+                projectTitle:             $data['projectTitle'],
+                projectDescription:       $data['projectDescription'],
+                projectLocation:          $data['projectLocation'],
+                projectType:              $data['projectType'],
+                approvedInvestmentAmount: (float) $data['approvedInvestmentAmount'],
+            ),
+            proposals: $proposalDtos,
+        );
 
         try {
-            $result = $this->aiService->evaluateWithProvider($payload, $data['provider'] ?? null);
+            $result = $this->aiService->evaluateWithProvider($payload->toArray(), $data['provider'] ?? null);
 
             // Log de auditoría
             $this->logEvaluation($project, $result);

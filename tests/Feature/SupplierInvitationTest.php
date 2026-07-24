@@ -197,14 +197,14 @@ class SupplierInvitationTest extends TestCase
             ->getJson('/api/supplier-material-proposals');
 
         $response->assertStatus(200);
-        $this->assertCount(3, $response->json());
+        $this->assertCount(3, $response->json('data'));
 
         // Filter by project
         $response = $this->withHeaders($this->authHeaders())
             ->getJson('/api/supplier-material-proposals?project_id=' . $this->project->id);
 
         $response->assertStatus(200);
-        $this->assertCount(3, $response->json());
+        $this->assertCount(3, $response->json('data'));
     }
 
     public function test_import_supplier_proposals_as_project_proposals(): void

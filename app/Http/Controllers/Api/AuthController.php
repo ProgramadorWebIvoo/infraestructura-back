@@ -28,7 +28,7 @@ class AuthController extends Controller
 
         if ($user->isInactive()) {
             throw ValidationException::withMessages([
-                'email' => ['Esta cuenta ha sido desactivada. Contacta al administrador.'],
+                'email' => ['Las credenciales no coinciden con nuestros registros.'],
             ]);
         }
 

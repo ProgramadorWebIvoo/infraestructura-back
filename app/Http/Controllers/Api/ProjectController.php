@@ -19,15 +19,15 @@ use Illuminate\Validation\Rule;
 class ProjectController extends Controller
 {
     private const STATUSES = [
-        'CREADO',
-        'REVISADO_CIERRE',
-        'CONFIRMADO_PROCURA',
-        'COMPARATIVA_ENVIADA',
-        'CONTRATADO',
-        'EN_EJECUCION',
-        'VERIFICANDO_FINALIZACION',
-        'LISTO_PAGO_FINAL',
-        'COMPLETADO_PAGADO',
+        'CREADO'                => 'CREADO',
+        'REVISADO_CIERRE'       => 'REVISADO_CIERRE',
+        'CONFIRMADO_PROCURA'    => 'CONFIRMADO_PROCURA',
+        'COMPARATIVA_ENVIADA'   => 'COMPARATIVA_ENVIADA',
+        'CONTRATADO'            => 'CONTRATADO',
+        'EN_EJECUCION'          => 'EN_EJECUCION',
+        'VERIFICANDO_FINALIZACION' => 'VERIFICANDO_FINALIZACION',
+        'LISTO_PAGO_FINAL'      => 'LISTO_PAGO_FINAL',
+        'COMPLETADO_PAGADO'     => 'COMPLETADO_PAGADO',
     ];
 
     public function index(Request $request)
@@ -77,7 +77,7 @@ class ProjectController extends Controller
                 'description' => $data['description'],
                 'location' => $data['location'],
                 'created_date' => now()->toDateString(),
-                'status' => 'CREADO',
+                'status' => self::STATUSES['CREADO'],
                 'estimated_total' => $data['estimatedTotal'] ?? $this->materialsTotal($data['materials']),
             ]);
 
@@ -109,7 +109,7 @@ class ProjectController extends Controller
         ]);
 
         $project->update([
-            'status' => 'REVISADO_CIERRE',
+            'status' => self::STATUSES['REVISADO_CIERRE'],
             'cierre_obra_notes' => $data['notes'],
             'blueprints_count' => $data['blueprintsCount'],
             'calculations_added' => $data['calculationsAdded'],
@@ -128,7 +128,7 @@ class ProjectController extends Controller
         ]);
 
         $project->update([
-            'status' => 'CONFIRMADO_PROCURA',
+            'status' => self::STATUSES['CONFIRMADO_PROCURA'],
             'procura_review_notes' => $data['notes'],
             'approved_investment_amount' => $data['approvedInvestmentAmount'],
         ]);
@@ -173,7 +173,7 @@ class ProjectController extends Controller
     {
         abort_if($project->proposals()->count() === 0, 422, 'El proyecto no tiene propuestas cargadas.');
 
-        $project->update(['status' => 'COMPARATIVA_ENVIADA']);
+        $project->update(['status' => self::STATUSES['COMPARATIVA_ENVIADA']]);
         $this->log($project, 'ANALISTA', 'Carga de cuadro comparativo', 'Comparativa enviada a Procura para adjudicacion.');
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
@@ -272,7 +272,7 @@ class ProjectController extends Controller
 
     public function rejectProposals(Request $request, Project $project)
     {
-        abort_unless($project->status === 'COMPARATIVA_ENVIADA', 422, 'Solo se puede rechazar en estado COMPARATIVA_ENVIADA.');
+        abort_unless($project->status === self::STATUSES['COMPARATIVA_ENVIADA'], 422, 'Solo se puede rechazar en estado COMPARATIVA_ENVIADA.');
 
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:500'],
@@ -282,7 +282,7 @@ class ProjectController extends Controller
             $project->proposals()->delete();
 
             $project->update([
-                'status'                  => 'CONFIRMADO_PROCURA',
+                'status'                  => self::STATUSES['CONFIRMADO_PROCURA'],
                 'selected_contractor_code' => null,
                 'selected_proposal_id'    => null,
             ]);
@@ -303,7 +303,7 @@ class ProjectController extends Controller
         abort_unless($project->proposals()->whereKey($data['proposalId'])->exists(), 422, 'La propuesta no pertenece al proyecto.');
 
         $project->update([
-            'status' => 'CONTRATADO',
+            'status' => self::STATUSES['CONTRATADO'],
             'selected_contractor_code' => $data['contractorCode'],
             'selected_proposal_id' => $data['proposalId'],
         ]);
@@ -332,7 +332,7 @@ class ProjectController extends Controller
             ]
         );
 
-        $project->update(['status' => $data['paymentType'] === 'ADVANCE' ? 'EN_EJECUCION' : 'COMPLETADO_PAGADO']);
+        $project->update(['status' => $data['paymentType'] === 'ADVANCE' ? self::STATUSES['EN_EJECUCION'] : self::STATUSES['COMPLETADO_PAGADO']]);
         $this->log($project, 'FINANZAS', $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos', $data['notes'] ?? null);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
@@ -340,7 +340,7 @@ class ProjectController extends Controller
 
     public function reportFinished(Project $project)
     {
-        $project->update(['status' => 'VERIFICANDO_FINALIZACION']);
+        $project->update(['status' => self::STATUSES['VERIFICANDO_FINALIZACION']]);
         $this->log($project, 'SISTEMA', 'Reporte de obra finalizada', 'La obra fue marcada como finalizada y pendiente de certificacion.');
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
@@ -355,7 +355,7 @@ class ProjectController extends Controller
         ]);
 
         $project->update([
-            'status' => $data['qualityVerified'] ? 'LISTO_PAGO_FINAL' : 'EN_EJECUCION',
+            'status' => $data['qualityVerified'] ? self::STATUSES['LISTO_PAGO_FINAL'] : self::STATUSES['EN_EJECUCION'],
             'quality_verified' => $data['qualityVerified'],
             'completion_verified_date' => $data['completionVerifiedDate'] ?? now()->toDateString(),
         ]);

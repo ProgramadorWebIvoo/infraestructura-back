@@ -252,13 +252,4 @@ private function logAttempt(string $message): void
             6
         );
     }
-
-    /**
-     * Obtiene el modelo configurado para un proveedor.
-     */
-    private function getModelForProvider(?string $provider): string
-    {
-        if (!$provider) return 'unknown';
-        return config("ai.{$provider}.model", $provider);
-    }
 }

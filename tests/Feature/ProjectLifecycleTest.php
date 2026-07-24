@@ -382,6 +382,7 @@ class ProjectLifecycleTest extends TestCase
             ->deleteJson("/api/projects/{$project->id}/proposals/{$proposal->id}");
 
         $response->assertStatus(422);
+        $response->assertJsonFragment(['message' => 'No se puede eliminar una propuesta adjudicada.']);
     }
 
     public function test_show_returns_single_project(): void

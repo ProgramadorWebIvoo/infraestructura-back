@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PushToken;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ExpoPushService
 {
@@ -27,13 +28,13 @@ class ExpoPushService
         ]);
 
         foreach ($messages->chunk(100) as $chunk) {
-            Http::post(self::EXPO_API, $chunk->values()->toArray());
+            $this->sendBatch($userId, $chunk);
         }
     }
 
     public function sendToToken(string $token, string $title, string $body, array $data = []): void
     {
-        Http::post(self::EXPO_API, [[
+        $response = Http::post(self::EXPO_API, [[
             'to' => $token,
             'sound' => 'default',
             'title' => $title,
@@ -41,5 +42,61 @@ class ExpoPushService
             'data' => $data,
             'priority' => 'high',
         ]]);
+
+        $this->processResponse(null, [['to' => $token]], $response);
+    }
+
+    /**
+     * Envía un batch (máx 100) y procesa la respuesta para limpiar tokens inválidos.
+     */
+    private function sendBatch(?int $userId, $messages): void
+    {
+        $response = Http::post(self::EXPO_API, $messages->values()->toArray());
+
+        if ($response->failed()) {
+            Log::warning('Expo API request failed', [
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ]);
+            return;
+        }
+
+        $this->processResponse($userId, $messages, $response);
+    }
+
+    /**
+     * Analiza la respuesta de Expo y elimina tokens con DeviceNotRegistered.
+     */
+    private function processResponse(?int $userId, $messages, $response): void
+    {
+        $body = $response->json();
+        $items = $body['data'] ?? [];
+
+        foreach ($items as $i => $item) {
+            if (($item['status'] ?? '') === 'ok') {
+                continue;
+            }
+
+            $error = $item['details']['error'] ?? '';
+            if ($error !== 'DeviceNotRegistered' && $error !== 'ExponentNotRegistered') {
+                continue;
+            }
+
+            $failedToken = $messages[$i]['to'] ?? null;
+            if (!$failedToken) {
+                continue;
+            }
+
+            $query = PushToken::where('token', $failedToken);
+            if ($userId !== null) {
+                $query->where('user_id', $userId);
+            }
+            $query->delete();
+
+            Log::info('Push token eliminado por DeviceNotRegistered', [
+                'user_id' => $userId,
+                'token'   => $failedToken,
+            ]);
+        }
     }
 }

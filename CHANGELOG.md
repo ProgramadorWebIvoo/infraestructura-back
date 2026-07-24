@@ -25,6 +25,22 @@
 
 **Archivos:** `app/Notifications/ProjectStatusChanged.php`, `database/migrations/2026_07_24_000001_create_jobs_table.php`, `.env`, `app/Console/Kernel.php`, `start.sh`
 
+## [2026-07-24] — ExpoPushService procesa respuesta y elimina tokens zombies (A-02)
+
+**Tipo:** fix / maintenance
+
+**Qué:** `ExpoPushService` ahora captura la respuesta de Expo Push API, detecta errores `DeviceNotRegistered`/`ExponentNotRegistered` y elimina automáticamente esos tokens de la BD.
+
+**Por qué:** Antes se ignoraba la respuesta. Los tokens de dispositivos que desinstalaron la app o expiraron nunca se limpiaban, acumulándose indefinidamente. Cada notificación intentaba enviar a esos tokens zombies, generando llamadas HTTP inútiles y riesgo de rate-limiting por parte de Expo.
+
+**Cómo funciona:**
+- Expo Push API responde con un array `data` en el mismo orden que los mensajes enviados
+- `processResponse()` itera cada entrada; si `details.error === "DeviceNotRegistered"`, obtiene el token del mensaje original y lo elimina de la BD
+- También loguea la eliminación para trazabilidad
+- En caso de error HTTP (timeout, 5xx), se loguea la advertencia pero no se reintenta (el queue ya reintentará el job completo)
+
+**Archivos:** `app/Services/ExpoPushService.php`
+
 ## [2026-07-24] — Fix crítico: estimateCost() con keys incorrectas
 
 **Tipo:** fix / critical

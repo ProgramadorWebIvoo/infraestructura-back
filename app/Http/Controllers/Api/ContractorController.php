@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Contractor;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 const CONTRACTOR_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'INACTIVE'];
@@ -42,12 +43,14 @@ class ContractorController extends Controller
         $data['specialty'] = strip_tags($data['specialty']);
         $data['contact'] = strip_tags($data['contact']);
 
-        $data['code'] ??= $this->nextContractorCode();
-        $data['rating'] ??= 4.0;
-        $data['registration_source'] = 'INTERNAL';
-        $data['status'] = $data['status'] ?? 'ACTIVE';
+        $contractor = DB::transaction(function () use ($data) {
+            $data['code'] ??= $this->nextContractorCode();
+            $data['rating'] ??= 4.0;
+            $data['registration_source'] = 'INTERNAL';
+            $data['status'] = $data['status'] ?? 'ACTIVE';
 
-        $contractor = Contractor::create($data);
+            return Contractor::create($data);
+        });
 
         return response()->json([
             'code'               => $contractor->code,
@@ -129,6 +132,7 @@ class ContractorController extends Controller
         $last = Contractor::query()
             ->where('code', 'like', 'CON-%')
             ->orderByRaw('CAST(SUBSTRING(code, 5) AS UNSIGNED) DESC')
+            ->lockForUpdate()
             ->first();
 
         $number = $last ? ((int) substr($last->code, 4)) + 1 : 301;

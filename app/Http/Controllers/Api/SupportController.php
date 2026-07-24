@@ -43,12 +43,14 @@ class SupportController extends Controller
         $data['specialty'] = strip_tags($data['specialty']);
         $data['contact'] = strip_tags($data['contact']);
 
-        $data['code'] ??= $this->nextContractorCode();
-        $data['rating'] ??= 4.0;
-        $data['registration_source'] = 'PUBLIC_PORTAL';
-        $data['status'] = 'PENDING_REVIEW';
+        $contractor = DB::transaction(function () use ($data) {
+            $data['code'] ??= $this->nextContractorCode();
+            $data['rating'] ??= 4.0;
+            $data['registration_source'] = 'PUBLIC_PORTAL';
+            $data['status'] = 'PENDING_REVIEW';
 
-        $contractor = Contractor::create($data);
+            return Contractor::create($data);
+        });
 
         $this->logPublicAccess($request, 'contractor.register', "Proveedor: {$contractor->name} / Código: {$contractor->code}");
 
@@ -82,18 +84,22 @@ class SupportController extends Controller
             ]);
     }
 
-    public function auditLogs()
+    public function auditLogs(Request $request)
     {
-        return AuditLog::latest('logged_at')->limit(200)->get()->map(fn ($log) => [
-            'id' => $log->id,
-            'projectId' => $log->project_id,
-            'projectTitle' => $log->project_title_snapshot,
-            'role' => $log->role,
-            'userName' => $log->user_name_snapshot,
-            'action' => $log->action,
-            'timestamp' => optional($log->logged_at)->format('Y-m-d H:i'),
-            'details' => $log->details,
-        ]);
+        $perPage = min((int) ($request->get('per_page', 50)), 200);
+
+        return AuditLog::latest('logged_at')
+            ->paginate($perPage)
+            ->through(fn ($log) => [
+                'id' => $log->id,
+                'projectId' => $log->project_id,
+                'projectTitle' => $log->project_title_snapshot,
+                'role' => $log->role,
+                'userName' => $log->user_name_snapshot,
+                'action' => $log->action,
+                'timestamp' => optional($log->logged_at)->format('Y-m-d H:i'),
+                'details' => $log->details,
+            ]);
     }
 
     public function createSupplierInvitation(Request $request)
@@ -185,22 +191,26 @@ class SupportController extends Controller
             'generalNotes'          => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $proposal = SupplierMaterialProposal::create([
-            'id'                     => $this->nextProposalId(),
-            'invitation_token'       => $token,
-            'project_id'             => $invitation->project_id,
-            'project_title_snapshot' => $invitation->project->title,
-            'supplier_name'          => $invitation->supplier_name,
-            'supplier_company'       => $invitation->supplier_company,
-            'supplier_contact'       => $invitation->supplier_contact,
-            'items'                  => $data['items'],
-            'general_notes'          => $data['generalNotes'] ?? null,
-            'estimated_days'         => $data['estimatedDays'] ?? null,
-            'duration_unit'          => $data['durationUnit'] ?? null,
-        ]);
+        $proposal = DB::transaction(function () use ($token, $invitation, $data) {
+            $proposal = SupplierMaterialProposal::create([
+                'id'                     => $this->nextProposalId(),
+                'invitation_token'       => $token,
+                'project_id'             => $invitation->project_id,
+                'project_title_snapshot' => $invitation->project->title,
+                'supplier_name'          => $invitation->supplier_name,
+                'supplier_company'       => $invitation->supplier_company,
+                'supplier_contact'       => $invitation->supplier_contact,
+                'items'                  => $data['items'],
+                'general_notes'          => $data['generalNotes'] ?? null,
+                'estimated_days'         => $data['estimatedDays'] ?? null,
+                'duration_unit'          => $data['durationUnit'] ?? null,
+            ]);
 
-        // Marcar el enlace como usado (single-use)
-        $invitation->update(['used_at' => now()]);
+            // Marcar el enlace como usado (single-use)
+            $invitation->update(['used_at' => now()]);
+
+            return $proposal;
+        });
 
         $this->logPublicAccess($request, 'proposal.submit', "Propuesta: {$proposal->id} / Invitación: {$token} / Proveedor: {$invitation->supplier_name}");
 
@@ -209,13 +219,15 @@ class SupportController extends Controller
 
     public function supplierMaterialProposals(Request $request)
     {
+        $perPage = min((int) ($request->get('per_page', 20)), 100);
+
         $query = SupplierMaterialProposal::latest('submitted_at');
 
         if ($request->filled('project_id')) {
             $query->where('project_id', $request->project_id);
         }
 
-        return response()->json($query->get()->map(fn ($p) => $this->formatProposal($p)));
+        return response()->json($query->paginate($perPage)->through(fn ($p) => $this->formatProposal($p)));
     }
 
     private function formatProposal(SupplierMaterialProposal $p): array
@@ -254,6 +266,7 @@ class SupportController extends Controller
         $last = Contractor::query()
             ->where('code', 'like', 'CON-%')
             ->orderByRaw('CAST(SUBSTRING(code, 5) AS UNSIGNED) DESC')
+            ->lockForUpdate()
             ->first();
 
         $number = $last ? ((int) substr($last->code, 4)) + 1 : 301;
@@ -266,6 +279,7 @@ class SupportController extends Controller
         $last = SupplierMaterialProposal::query()
             ->where('id', 'like', 'SMP-%')
             ->orderByRaw('CAST(SUBSTRING(id, 5) AS UNSIGNED) DESC')
+            ->lockForUpdate()
             ->first();
 
         $number = $last ? ((int) substr($last->id, 4)) + 1 : 1;

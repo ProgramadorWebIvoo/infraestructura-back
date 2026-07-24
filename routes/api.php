@@ -38,11 +38,11 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::post('/push-tokens', [PushTokenController::class, 'store']);
     Route::delete('/push-tokens', [PushTokenController::class, 'destroy']);
 
-    Route::get('/modules', [SupportController::class, 'modules'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);
-    Route::get('/contractors', [SupportController::class, 'contractors'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);
+    Route::get('/modules', [SupportController::class, 'modules'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::get('/contractors', [SupportController::class, 'contractors'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
     Route::post('/contractors/{contractor}/rating', [SupportController::class, 'updateContractorRating']);
-    Route::get('/materials', [SupportController::class, 'materials'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);
-    Route::get('/audit-logs', [SupportController::class, 'auditLogs'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);
+    Route::get('/materials', [SupportController::class, 'materials'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::get('/audit-logs', [SupportController::class, 'auditLogs'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
     Route::post('/supplier-invitations', [SupportController::class, 'createSupplierInvitation']);
     Route::get('/supplier-material-proposals', [SupportController::class, 'supplierMaterialProposals']);
 
@@ -77,7 +77,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
 
     // Project documents (planos y hojas de cálculo)
-    Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);
+    Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
     Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload']);
     Route::delete('/projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy']);
     Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download']);

@@ -9,20 +9,22 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 
-const VALID_ROLES = [
-    'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
-    'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
-];
-
-const VALID_STATUSES = ['Active', 'Inactive'];
-
 class UserController extends Controller
 {
-    public function index()
+    private const VALID_ROLES = [
+        'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
+        'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
+    ];
+
+    private const VALID_STATUSES = ['Active', 'Inactive'];
+
+    public function index(Request $request)
     {
+        $perPage = min((int) ($request->get('per_page', 20)), 100);
+
         $users = User::select('id', 'name', 'email', 'role', 'status', 'created_at')
             ->orderByDesc('created_at')
-            ->get();
+            ->paginate($perPage);
 
         return response()->json($users);
     }
@@ -33,8 +35,8 @@ class UserController extends Controller
             'name'                  => ['required', 'string', 'max:255'],
             'email'                 => ['required', 'email', 'unique:users,email'],
             'password'              => ['required', 'string', 'min:8', 'confirmed'],
-            'role'                  => ['required', Rule::in(VALID_ROLES)],
-            'status'                => ['sometimes', Rule::in(VALID_STATUSES)],
+            'role'                  => ['required', Rule::in(self::VALID_ROLES)],
+            'status'                => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);
 
         $user = User::create([
@@ -60,8 +62,8 @@ class UserController extends Controller
         $data = $request->validate([
             'name'   => ['sometimes', 'string', 'max:255'],
             'email'  => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'role'   => ['sometimes', Rule::in(VALID_ROLES)],
-            'status' => ['sometimes', Rule::in(VALID_STATUSES)],
+            'role'   => ['sometimes', Rule::in(self::VALID_ROLES)],
+            'status' => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);
 
         if (isset($data['name']))   $user->name  = $data['name'];

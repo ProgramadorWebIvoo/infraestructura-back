@@ -10,6 +10,63 @@
 
 **Archivos:** `DOCS/PRUEBAS_AUDITORIAS_TYPE-A.md`, `test-fixes.sh`
 
+## [2026-07-24] — M-01: Constantes globales movidas a clase UserController
+
+**Tipo:** refactor
+
+**Qué:** `VALID_ROLES` y `VALID_STATUSES` estaban como constantes globales (fuera de la clase). Se movieron como `private const` dentro de `UserController`.
+
+**Por qué:** Las constantes globales contaminan el namespace global, no son encapsuladas y pueden causar colisiones.
+
+**Archivos:** `app/Http/Controllers/Api/UserController.php`
+
+## [2026-07-24] — M-02: Rate limiting inadecuado en rutas autenticadas
+
+**Tipo:** fix / security
+
+**Qué:** 5 rutas autenticadas eliminaban `ThrottleRequests` completamente sin sustituto. Se creó un rate limiter `catalog` (200 req/min por usuario) y se aplicó a esas rutas, reemplazando el `withoutMiddleware` desnudo por `withoutMiddleware + middleware('throttle:catalog')`.
+
+**Rutas afectadas:**
+- `GET /api/modules`
+- `GET /api/contractors`
+- `GET /api/materials`
+- `GET /api/audit-logs`
+- `GET /api/projects/{project}/documents`
+
+**Archivos:** `routes/api.php`, `app/Providers/RouteServiceProvider.php`
+
+## [2026-07-24] — M-03: Paginación en endpoints de listado
+
+**Tipo:** feature / performance
+
+**Qué:** Se implementó paginación (`paginate()`) en los 4 endpoints de listado que devolvían todos los registros sin límite. Cada uno acepta `?per_page=` con un máximo capping para evitar abuso.
+
+| Endpoint | Default | Max |
+|----------|--------|-----|
+| `GET /api/projects` | 20 | 100 |
+| `GET /api/users` | 20 | 100 |
+| `GET /api/audit-logs` | 50 | 200 |
+| `GET /api/supplier-material-proposals` | 20 | 100 |
+
+**Archivos:** `app/Http/Controllers/Api/ProjectController.php`, `app/Http/Controllers/Api/UserController.php`, `app/Http/Controllers/Api/SupportController.php`
+
+## [2026-07-24] — M-04: IDs auto-generados con posibles colisiones en concurrencia
+
+**Tipo:** fix
+
+**Qué:** Se corrigieron 5 puntos de generación de IDs que podían colisionar bajo concurrencia:
+
+| # | Método | Problema | Fix |
+|---|--------|----------|-----|
+| 1 | `ProjectController::nextProjectId()` | SELECT max → INSERT sin bloqueo | `lockForUpdate()` en la SELECT |
+| 2 | `ProjectController::addProposal()` | `'PROP-' . now()->format('Hisv')` colisiona en mismo ms | Se agregó sufijo `-` . `Str::random(4)` |
+| 3 | `ProjectController::log()` | `'LOG-' . now()->format('YmdHisv')` colisiona en mismo ms | Se agregó sufijo `-` . `Str::random(4)` |
+| 4 | `SupportController::nextContractorCode()` | SELECT max → INSERT sin bloqueo | `lockForUpdate()` + `DB::transaction()` |
+| 5 | `SupportController::nextProposalId()` | SELECT max → INSERT sin bloqueo | `lockForUpdate()` + `DB::transaction()` |
+| 6 | `ContractorController::nextContractorCode()` | SELECT max → INSERT sin bloqueo | `lockForUpdate()` + `DB::transaction()` |
+
+**Archivos:** `app/Http/Controllers/Api/ProjectController.php`, `app/Http/Controllers/Api/SupportController.php`, `app/Http/Controllers/Api/ContractorController.php`
+
 ## [2026-07-24] — Queue para notificaciones push (A-01)
 
 **Tipo:** fix / performance

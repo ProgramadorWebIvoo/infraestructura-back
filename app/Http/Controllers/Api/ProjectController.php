@@ -13,6 +13,7 @@ use App\Models\ProjectProposal;
 use App\Models\SupplierMaterialProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
@@ -31,6 +32,8 @@ class ProjectController extends Controller
 
     public function index(Request $request)
     {
+        $perPage = min((int) ($request->get('per_page', 20)), 100);
+
         $query = Project::with(['materials', 'proposals', 'payments', 'documents'])->latest('created_date');
 
         if ($request->filled('status')) {
@@ -41,7 +44,7 @@ class ProjectController extends Controller
             $query->where('type', $request->type);
         }
 
-        return ProjectResource::collection($query->get());
+        return ProjectResource::collection($query->paginate($perPage));
     }
 
     public function show(Project $project)
@@ -150,7 +153,7 @@ class ProjectController extends Controller
         $contractor = Contractor::findOrFail($data['contractorCode']);
 
         $proposal = $project->proposals()->create([
-            'id' => 'PROP-' . now()->format('Hisv'),
+            'id' => 'PROP-' . now()->format('Hisv') . '-' . Str::random(4),
             'contractor_code' => $contractor->code,
             'contractor_name_snapshot' => $contractor->name,
             'material_cost' => $data['materialCost'],
@@ -364,7 +367,12 @@ class ProjectController extends Controller
 
     private function nextProjectId(): string
     {
-        $last = Project::query()->select('id')->where('id', 'like', 'PRJ-%')->orderByDesc('id')->first();
+        $last = Project::query()->select('id')
+            ->where('id', 'like', 'PRJ-%')
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->first();
+
         $number = $last ? ((int) substr($last->id, 4)) + 1 : 1;
 
         return 'PRJ-' . str_pad((string) $number, 3, '0', STR_PAD_LEFT);
@@ -379,7 +387,7 @@ class ProjectController extends Controller
     {
         $user = auth()->user();
         AuditLog::create([
-            'id' => 'LOG-' . now()->format('YmdHisv'),
+            'id' => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
             'project_id' => $project->id,
             'project_title_snapshot' => $project->title,
             'role' => $role,

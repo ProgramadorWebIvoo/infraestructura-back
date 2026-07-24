@@ -21,9 +21,9 @@ class AIEvaluationService
 
     private AiConfigurationService $configService;
 
-    public function __construct(?AiConfigurationService $configService = null)
+    public function __construct(AiConfigurationService $configService)
     {
-        $this->configService = $configService ?? app(AiConfigurationService::class);
+        $this->configService = $configService;
         $this->registerProviders();
     }
 

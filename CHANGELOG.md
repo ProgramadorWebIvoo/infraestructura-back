@@ -67,6 +67,36 @@
 
 **Archivos:** `app/Http/Controllers/Api/ProjectController.php`, `app/Http/Controllers/Api/SupportController.php`, `app/Http/Controllers/Api/ContractorController.php`
 
+## [2026-07-24] — M-05: Test `test_token_works_with_device_name` con bug lógico
+
+**Tipo:** fix / tests
+
+**Qué:** El test hacía un primer login con `user@test.com` (usuario que no existía en ese test) sin verificar la respuesta, y luego un segundo login con `device@test.com` que sí pasaba. Se eliminó el primer login irrelevante, dejando solo la llamada correcta con su assertion.
+
+**Archivos:** `tests/Feature/AuthTest.php`
+
+## [2026-07-24] — M-06: GeminiProvider y AnthropicProvider con herencia incorrecta
+
+**Tipo:** refactor
+
+**Qué:** Se creó `BaseAIProvider` (abstracta) que implementa `AIProviderInterface` y contiene los métodos comunes: constructor, `buildSystemPrompt()`, `buildUserPrompt()`, `sanitizeInput()`, `parseResponse()`, `normalizeResult()`. Cada provider ahora extiende `BaseAIProvider` independientemente con sus props `defaultModel()`, `defaultBaseUrl()`, `defaultMaxTokens()`, `name()` y `evaluate()`.
+
+**Antes:** `GeminiProvider extends OpenAIProvider`, `AnthropicProvider extends OpenAIProvider` — heredaban e invalidaban casi todo.
+
+**Ahora:** Los 3 extienden `BaseAIProvider` con herencia plana y sin jerarquía artificial.
+
+**Adicional:** Se eliminaron los defaults hardcodeados (`defaultModel()`, `defaultBaseUrl()`, `defaultMaxTokens()`) de los providers. Ahora `model`, `base_url` y `max_tokens` vienen exclusivamente de la BD (con fallbacks solo en `AiConfigurationService::toServiceConfig()`). Único punto de defaults: `AiConfigurationService`.
+
+**Archivos:** `app/Services/AI/Providers/BaseAIProvider.php` (nuevo), `app/Services/AI/Providers/OpenAIProvider.php`, `app/Services/AI/Providers/GeminiProvider.php`, `app/Services/AI/Providers/AnthropicProvider.php`
+
+## [2026-07-24] — M-07: `registerProviders()` inyecta dependencias vía `app()`
+
+**Tipo:** refactor
+
+**Qué:** El constructor de `AIEvaluationService` aceptaba `?AiConfigurationService $configService = null` con `app()` como fallback, escondiendo la dependencia. Se cambió a parámetro obligatorio para que Laravel resuelva automáticamente.
+
+**Archivos:** `app/Services/AI/AIEvaluationService.php`
+
 ## [2026-07-24] — Queue para notificaciones push (A-01)
 
 **Tipo:** fix / performance

@@ -155,19 +155,12 @@ class AuthTest extends TestCase
 
     public function test_token_works_with_device_name(): void
     {
-        $user = User::factory()->create([
+        User::factory()->create([
             'email'    => 'device@test.com',
             'password' => bcrypt('secret123'),
             'status'   => 'Active',
         ]);
 
-        $response = $this->postJson('/api/login', [
-            'email'       => 'user@test.com',
-            'password'    => 'secret123',
-            'device_name' => 'mobile-app',
-        ]);
-
-        // Login should still work — device_name is optional
         $response = $this->postJson('/api/login', [
             'email'       => 'device@test.com',
             'password'    => 'secret123',

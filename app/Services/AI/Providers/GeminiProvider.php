@@ -5,17 +5,8 @@ namespace App\Services\AI\Providers;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
-class GeminiProvider extends OpenAIProvider implements AIProviderInterface
+class GeminiProvider extends BaseAIProvider
 {
-    /**
-     * @param array $config { api_key, model, base_url, timeout, max_tokens }
-     */
-    public function __construct(array $config = [])
-    {
-        $config['max_tokens'] ??= 8192;
-        parent::__construct($config);
-    }
-
     public function name(): string
     {
         return 'gemini';
@@ -51,7 +42,7 @@ class GeminiProvider extends OpenAIProvider implements AIProviderInterface
             throw new RuntimeException('Rate limit excedido en Gemini.');
         }
 
-if ($response->failed()) {
+        if ($response->failed()) {
             throw new RuntimeException(
                 "Gemini error {$response->status()}: {$response->body()}"
             );
@@ -75,19 +66,5 @@ if ($response->failed()) {
         }
 
         return $result;
-    }
-
-    protected function parseResponse(string $content): array
-    {
-        // Gemini a veces envuelve en ```json, otras veces no
-        $content = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($content));
-
-        $data = json_decode($content, true);
-
-        if (!is_array($data)) {
-            throw new RuntimeException('No se pudo parsear la respuesta JSON de Gemini.');
-        }
-
-        return $this->normalizeResult($data, 'gemini');
     }
 }

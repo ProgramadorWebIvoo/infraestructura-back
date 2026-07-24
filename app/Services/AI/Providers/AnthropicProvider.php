@@ -5,16 +5,8 @@ namespace App\Services\AI\Providers;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
-class AnthropicProvider extends OpenAIProvider implements AIProviderInterface
+class AnthropicProvider extends BaseAIProvider
 {
-    /**
-     * @param array $config { api_key, model, base_url, timeout, max_tokens }
-     */
-    public function __construct(array $config = [])
-    {
-        parent::__construct($config);
-    }
-
     public function name(): string
     {
         return 'claude';
@@ -73,18 +65,5 @@ class AnthropicProvider extends OpenAIProvider implements AIProviderInterface
         }
 
         return $result;
-    }
-
-    protected function parseResponse(string $content): array
-    {
-        $content = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($content));
-
-        $data = json_decode($content, true);
-
-        if (!is_array($data)) {
-            throw new RuntimeException('No se pudo parsear la respuesta JSON de Anthropic.');
-        }
-
-        return $this->normalizeResult($data, 'claude');
     }
 }

@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## [2026-07-24] — Queue para notificaciones push (A-01)
+
+**Tipo:** fix / performance
+
+**Qué:** Las notificaciones push ahora se encolan vía `QUEUE_CONNECTION=database` en lugar de ejecutarse sincrónicamente.
+
+**Cambios:**
+- `ProjectStatusChanged` implementa `ShouldQueue` → se encola automáticamente
+- Migración `create_jobs_table` para la tabla de jobs (estructura estándar de Laravel)
+- `QUEUE_CONNECTION=sync` → `database` en `.env`
+- Schedule `queue:work --stop-when-empty` cada minuto en `Console/Kernel.php`
+- Script `start.sh` para arrancar serve + scheduler juntos
+
+**Por qué (el problema):** `ProjectObserver::updated()` itera usuarios y por cada uno hace un HTTP POST a Expo Push API. Con `QUEUE_CONNECTION=sync`, cada `$user->notify()` se ejecuta en el mismo request. Si hay 100 usuarios → 100 llamadas HTTP secuenciales → el request puede tardar 30-50 segundos o dar timeout. El frontend queda sin respuesta hasta que terminen todas.
+
+**Por qué queue y no otra cosa:**
+- **Async (Http::pool):** Envía en paralelo pero el request sigue esperando a que terminen todas. Gana tiempo pero no libera el request.
+- **Queue database:** El request solo hace un INSERT (~1ms) y responde al instante. El procesamiento real corre en background via el scheduler. Además da reintentos automáticos si falla (3 intentos) sin afectar al usuario.
+
+**Por qué la tabla `jobs` no crece infinitamente:** Los jobs se eliminan automáticamente al procesarse (DELETE). Solo contiene jobs pendientes. Con el scheduler cada minuto, la tabla está siempre vacía o con 1-2 registros en tránsito. No hay acumulación.
+
+**Por qué schedule:work y no un worker daemon:** En entornos Windows/compartidos no se puede mantener un proceso PHP vivo permanentemente. `schedule:work` emula el cron: cada minuto ejecuta `queue:work --stop-when-empty`, que procesa todo lo pendiente y termina. No deja procesos colgados.
+
+**Archivos:** `app/Notifications/ProjectStatusChanged.php`, `database/migrations/2026_07_24_000001_create_jobs_table.php`, `.env`, `app/Console/Kernel.php`, `start.sh`
+
 ## [2026-07-24] — Fix crítico: estimateCost() con keys incorrectas
 
 **Tipo:** fix / critical

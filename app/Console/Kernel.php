@@ -16,6 +16,12 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('sanctum:clear-expired-tokens')->daily();
+
+        // Procesar cola de notificaciones cada minuto (pausa si no hay jobs)
+        $schedule->command('queue:work --queue=default --max-time=60 --max-jobs=50 --stop-when-empty')
+            ->everyMinute()
+            ->withoutOverlapping()
+            ->runInBackground();
     }
 
     /**

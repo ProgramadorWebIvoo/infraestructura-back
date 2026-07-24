@@ -5,9 +5,10 @@ namespace App\Notifications;
 use App\Models\Project;
 use App\Services\ExpoPushService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class ProjectStatusChanged extends Notification
+class ProjectStatusChanged extends Notification implements ShouldQueue
 {
     use Queueable;
 

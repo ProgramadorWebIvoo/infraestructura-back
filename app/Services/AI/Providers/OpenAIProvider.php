@@ -11,13 +11,18 @@ class OpenAIProvider implements AIProviderInterface
     private string $model;
     private string $baseUrl;
     private int $timeout;
+    private int $maxTokens;
 
-    public function __construct()
+    /**
+     * @param array $config { api_key, model, base_url, timeout, max_tokens }
+     */
+    public function __construct(array $config = [])
     {
-        $this->apiKey  = config('ai.openai.api_key');
-        $this->model   = config('ai.openai.model', 'gpt-4o');
-        $this->baseUrl = config('ai.openai.base_url', 'https://api.openai.com/v1');
-        $this->timeout = config('ai.timeout', 30);
+        $this->apiKey    = $config['api_key'] ?? '';
+        $this->model     = $config['model'] ?? 'gpt-4o';
+        $this->baseUrl   = $config['base_url'] ?? 'https://api.openai.com/v1';
+        $this->timeout   = $config['timeout'] ?? 30;
+        $this->maxTokens = $config['max_tokens'] ?? 4096;
     }
 
     public function name(): string
@@ -44,7 +49,7 @@ class OpenAIProvider implements AIProviderInterface
                     ['role' => 'user',   'content' => $userPrompt],
                 ],
                 'temperature' => 0.3,
-                'max_tokens'  => config('ai.openai.max_tokens', 4096),
+                'max_tokens'  => $this->maxTokens,
             ]);
 
         if ($response->status() === 429) {

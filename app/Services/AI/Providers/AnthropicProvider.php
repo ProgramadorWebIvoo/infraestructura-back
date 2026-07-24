@@ -7,17 +7,12 @@ use RuntimeException;
 
 class AnthropicProvider extends OpenAIProvider implements AIProviderInterface
 {
-    private string $apiKey;
-    private string $model;
-    private string $baseUrl;
-    private int $timeout;
-
-    public function __construct()
+    /**
+     * @param array $config { api_key, model, base_url, timeout, max_tokens }
+     */
+    public function __construct(array $config = [])
     {
-        $this->apiKey  = config('ai.anthropic.api_key');
-        $this->model   = config('ai.anthropic.model', 'claude-3-opus-20240229');
-        $this->baseUrl = config('ai.anthropic.base_url', 'https://api.anthropic.com/v1');
-        $this->timeout = config('ai.timeout', 30);
+        parent::__construct($config);
     }
 
     public function name(): string
@@ -42,7 +37,7 @@ class AnthropicProvider extends OpenAIProvider implements AIProviderInterface
             ])
             ->post("{$this->baseUrl}/messages", [
                 'model'       => $this->model,
-                'max_tokens'  => config('ai.anthropic.max_tokens', 4096),
+                'max_tokens'  => $this->maxTokens,
                 'temperature' => 0.3,
                 'system'      => $systemPrompt,
                 'messages'    => [

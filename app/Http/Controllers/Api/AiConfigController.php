@@ -9,7 +9,9 @@ use App\Services\AI\AiConfigurationService;
 use App\Services\AI\AIEvaluationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AiConfigController extends Controller
 {
@@ -41,7 +43,7 @@ class AiConfigController extends Controller
             'provider'   => ['required', 'string', Rule::in(['openai', 'anthropic', 'gemini'])],
             'model'      => ['required', 'string', 'max:100'],
             'apiKey'     => ['required', 'string', 'min:8'],
-            'baseUrl'    => ['nullable', 'string', 'max:255'],
+            'baseUrl'    => ['nullable', 'string', 'max:255', $this->ssrfSafeUrl()],
             'maxTokens'  => ['nullable', 'integer', 'min:1', 'max:100000'],
             'isActive'   => ['sometimes', 'boolean'],
             'isFallback' => ['sometimes', 'boolean'],
@@ -96,7 +98,7 @@ class AiConfigController extends Controller
         $data = $request->validate([
             'model'      => ['sometimes', 'string', 'max:100'],
             'apiKey'     => ['sometimes', 'string', 'min:8'],
-            'baseUrl'    => ['nullable', 'string', 'max:255'],
+            'baseUrl'    => ['nullable', 'string', 'max:255', $this->ssrfSafeUrl()],
             'maxTokens'  => ['nullable', 'integer', 'min:1', 'max:100000'],
             'isActive'   => ['sometimes', 'boolean'],
             'isFallback' => ['sometimes', 'boolean'],
@@ -349,5 +351,55 @@ class AiConfigController extends Controller
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => "Gemini: {$e->getMessage()}"];
         }
+    }
+
+    // ── SSRF protection ──
+
+    /**
+     * Valida que la URL no apunte a direcciones internas (SSRF prevention).
+     * Solo permite URLs HTTPS a dominios públicos.
+     */
+    private function ssrfSafeUrl(): callable
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if ($value === null || $value === '') {
+                return;
+            }
+
+            // Debe comenzar con https://
+            if (!str_starts_with($value, 'https://')) {
+                $fail($attribute, 'La URL debe usar HTTPS (conexión segura).');
+                return;
+            }
+
+            $host = parse_url($value, PHP_URL_HOST);
+
+            if ($host === false || $host === null || $host === '') {
+                $fail($attribute, 'La URL no tiene un host válido.');
+                return;
+            }
+
+            // Rejectar localhost / 127.0.0.1 / 0.0.0.0 / [::1]
+            $localHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'];
+            if (in_array(strtolower($host), $localHosts, true)) {
+                $fail($attribute, 'No se permite usar direcciones locales (localhost/127.0.0.1).');
+                return;
+            }
+
+            // Rejectar IPs privadas (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
+            if (filter_var($host, FILTER_VALIDATE_IP)) {
+                if (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    $fail($attribute, 'No se permite usar IPs privadas o de rangos reservados.');
+                    return;
+                }
+            }
+
+            // Rejectar TLDs peligrosos o inexistentes (opcional)
+            $domain = $host;
+            // Si hay subdominios, tomar el dominio principal
+            if (preg_match('/[^.]+\.[a-z]{2,}$/i', $host, $matches)) {
+                $domain = $matches[0];
+            }
+        };
     }
 }

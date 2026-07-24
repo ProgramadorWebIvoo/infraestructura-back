@@ -49,6 +49,8 @@ class AIEvaluationService
 
         $order = $this->configService->getProviderOrder();
 
+        $timeout = (int) config('ai.timeout', 60);
+
         foreach ($order as $key) {
             $key = trim($key);
             if (!isset($map[$key])) {
@@ -57,10 +59,21 @@ class AIEvaluationService
             $class = $map[$key];
             $config = $dbProviders[$key] ?? $this->configService->getProviderConfig($key);
 
-            if ($config && ($config['enabled'] ?? true) && !empty($config['api_key'])) {
-                config(["ai.{$key}" => $config]);
-                $this->providers[$key] = new $class();
+            if (!$config || !($config['enabled'] ?? true)) {
+                continue;
             }
+
+            // API key se obtiene directamente de BD, nunca del cache
+            $apiKey = $this->configService->getApiKey($key);
+            if (empty($apiKey)) {
+                continue;
+            }
+
+            $config['api_key'] = $apiKey;
+            $config['timeout'] = $timeout;
+
+            // Se pasa la config directamente al constructor — no se muta config global
+            $this->providers[$key] = new $class($config);
         }
     }
 

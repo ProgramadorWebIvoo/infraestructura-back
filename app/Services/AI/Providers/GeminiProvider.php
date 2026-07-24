@@ -7,17 +7,13 @@ use RuntimeException;
 
 class GeminiProvider extends OpenAIProvider implements AIProviderInterface
 {
-    private string $apiKey;
-    private string $model;
-    private string $baseUrl;
-    private int $timeout;
-
-    public function __construct()
+    /**
+     * @param array $config { api_key, model, base_url, timeout, max_tokens }
+     */
+    public function __construct(array $config = [])
     {
-        $this->apiKey  = config('ai.gemini.api_key');
-        $this->model   = config('ai.gemini.model', 'gemini-1.5-pro');
-        $this->baseUrl = config('ai.gemini.base_url', 'https://generativelanguage.googleapis.com/v1');
-        $this->timeout = config('ai.timeout', 100);
+        $config['max_tokens'] ??= 8192;
+        parent::__construct($config);
     }
 
     public function name(): string
@@ -47,7 +43,7 @@ class GeminiProvider extends OpenAIProvider implements AIProviderInterface
                 ],
                 'generationConfig' => [
                     'temperature' => 0.3,
-                    'maxOutputTokens' => config('ai.gemini.max_tokens', 8192),
+                    'maxOutputTokens' => $this->maxTokens,
                 ],
             ]);
 

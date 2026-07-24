@@ -19,12 +19,27 @@ class AiConfigurationService
     }
 
     /**
-     * Get configuration for a single provider from DB only.
+     * Get configuration for a single provider from DB only (sin api_key).
      */
     public function getProviderConfig(string $provider): ?array
     {
         $dbConfigs = $this->fromDb();
         return $dbConfigs[$provider] ?? null;
+    }
+
+    /**
+     * Obtiene la API key de un proveedor directamente desde la BD.
+     * Nunca se cachea — solo en memoria durante el request.
+     */
+    public function getApiKey(string $provider): ?string
+    {
+        $record = AiConfiguration::where('provider', $provider)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->first();
+
+        return $record?->api_key;
     }
 
     /**
@@ -117,7 +132,7 @@ class AiConfigurationService
     {
         return [
             'enabled'    => $record->is_active,
-            'api_key'    => $record->api_key,  // decrypted by accessor
+            // api_key no se cachea — se obtiene vía getApiKey() directamente desde BD
             'model'      => $record->model,
             'max_tokens' => $record->max_tokens ?? 4096,
             'base_url'   => $record->base_url ?? $this->defaultBaseUrl($record->provider),

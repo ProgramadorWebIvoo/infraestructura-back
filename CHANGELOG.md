@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-07-24] — Documentación de pruebas para fixes Type-A
+
+**Tipo:** docs
+
+**Qué:** Se creó `DOCS/PRUEBAS_AUDITORIAS_TYPE-A.md` con procedimientos detallados para verificar los 7 fixes de severidad crítica y alta. Incluye pruebas unitarias, de integración y manuales para cada fix.
+
+**Adicional:** `test-fixes.sh` script automatizado que verifica 7 puntos clave de los fixes sin necesidad de servidor corriendo.
+
+**Archivos:** `DOCS/PRUEBAS_AUDITORIAS_TYPE-A.md`, `test-fixes.sh`
+
 ## [2026-07-24] — Queue para notificaciones push (A-01)
 
 **Tipo:** fix / performance
@@ -40,6 +50,53 @@
 - En caso de error HTTP (timeout, 5xx), se loguea la advertencia pero no se reintenta (el queue ya reintentará el job completo)
 
 **Archivos:** `app/Services/ExpoPushService.php`
+
+## [2026-07-24] — Validación SSRF en baseUrl de IA (A-03)
+
+**Tipo:** security
+
+**Qué:** Se agregó validación `ssrfSafeUrl()` al campo `baseUrl` en los endpoints de creación y actualización de configuración IA.
+
+**Por qué:** El campo `base_url` se usaba directamente en llamadas HTTP a proveedores IA. Sin validación, un ADMIN/SUPERADMIN malintencionado o un ataque XSS podría redirigir las peticiones a servicios internos (localhost, IPs privadas) — SSRF (Server-Side Request Forgery).
+
+**Validaciones aplicadas:**
+- Solo permite URLs `https://` (nada de HTTP plano)
+- Rechaza localhost, 127.0.0.1, 0.0.0.0, ::1
+- Rechaza rangos de IPs privadas (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
+- Valida que el host sea una dirección o dominio válido
+
+**Archivos:** `app/Http/Controllers/Api/AiConfigController.php`
+
+## [2026-07-24] — API keys no se cachean en texto plano (A-04)
+
+**Tipo:** security
+
+**Qué:** Se separó la API key del resto de la configuración cacheada. El cache ahora solo almacena metadatos no sensibles (modelo, proveedor, activo, etc.). La API key se obtiene directamente de la BD en cada request.
+
+**Cambios:**
+- `AiConfigurationService::toServiceConfig()` ya no incluye `api_key` en el array que se persiste en cache
+- Nuevo método `getApiKey(string $provider): ?string` que consulta la BD directamente y usa el accessor de Eloquent que desencripta la key
+- `AIEvaluationService::registerProviders()` obtiene la API key vía `getApiKey()` en lugar de leerla del cache
+
+**Por qué:** `Cache::forever()` almacena datos en disco/redis/archivos según el driver. Si alguien accede al almacenamiento de cache, podía leer las API keys de todos los proveedores IA en texto plano. Ahora las keys solo están en memoria durante la ejecución del request y nunca se persisten fuera de la BD (donde están encriptadas con `Crypt::encryptString`).
+
+**Archivos:** `app/Services/AI/AiConfigurationService.php`, `app/Services/AI/AIEvaluationService.php`
+
+## [2026-07-24] — Providers IA reciben config por constructor, sin mutar estado global (A-05)
+
+**Tipo:** security / refactor
+
+**Qué:** Se eliminó la mutación de `config(["ai.{$key}" => $config])` en `registerProviders()`. Ahora la configuración se pasa directamente al constructor de cada provider.
+
+**Cambios:**
+- `OpenAIProvider::__construct()` ahora acepta `array $config` en lugar de leer de `config()`
+- `GeminiProvider` y `AnthropicProvider` igual — heredan y pasan al parent
+- `AIEvaluationService::registerProviders()` construye el array de config y lo inyecta en el constructor
+- Se eliminaron todas las llamadas a `config()` dentro de los providers
+
+**Por qué:** `config(["ai.{$key}" => $config])` muta el estado global de Laravel. En entornos concurrentes (php-fpm con múltiples workers, Swoole, ReactPHP), una request podía ver la configuración de IA de otra request, incluyendo API keys de diferentes proveedores. Al pasar la config por constructor, cada provider es autocontenido y no depende del estado global.
+
+**Archivos:** `app/Services/AI/AIEvaluationService.php`, `app/Services/AI/Providers/OpenAIProvider.php`, `app/Services/AI/Providers/GeminiProvider.php`, `app/Services/AI/Providers/AnthropicProvider.php`
 
 ## [2026-07-24] — Fix crítico: estimateCost() con keys incorrectas
 

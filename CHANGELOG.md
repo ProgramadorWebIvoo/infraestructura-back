@@ -1,5 +1,102 @@
 # CHANGELOG
 
+## [2026-07-24] — Fix crítico: estimateCost() con keys incorrectas
+
+**Tipo:** fix / critical
+
+**Qué:** Las keys del array `$pricing` en `estimateCost()` usaban `chatgpt`/`claude` pero el método recibe `openai`/`anthropic`. Corregido a `openai`/`anthropic`. También se fixeó indentación inconsistente en línea 234.
+
+**Por qué causaba:** Todos los costos estimados de IA se registraban como $0 en `AiUsageLog`, imposibilitando cualquier análisis de costos real desde que se implementó el sistema.
+
+**Archivos:** `app/Services/AI/AIEvaluationService.php`
+
+## [2026-07-24] — Filtro de notificaciones push por rol en ProjectObserver
+
+**Tipo:** fix / performance
+
+**Qué:** Se reemplazó `User::all()` por filtro basado en matriz de roles según el nuevo estado del proyecto. `LISTO_PAGO_FINAL` queda como estado técnico sin notificaciones.
+
+**Por qué:** Evita spam de notificaciones a usuarios irrelevantes y reduce drásticamente llamadas HTTP a Expo API (de N usuarios a ~2-6 según el evento).
+
+**Archivos:** `app/Observers/ProjectObserver.php`
+
+**Matriz implementada:**
+| Estado | Notificados |
+|---|---|
+| CREADO | CIERRE_DE_OBRA, SUPERADMIN, ADMIN |
+| REVISADO_CIERRE | PROCURA, SUPERADMIN, ADMIN |
+| CONFIRMADO_PROCURA | ANALISTA, SUPERADMIN, ADMIN |
+| COMPARATIVA_ENVIADA | PROCURA, SUPERADMIN, ADMIN |
+| CONTRATADO | FINANZAS, CIERRE_DE_OBRA, INFRAESTRUCTURA, PRESIDENCIA, SUPERADMIN, ADMIN |
+| EN_EJECUCION | CIERRE_DE_OBRA, INFRAESTRUCTURA, PRESIDENCIA, SUPERADMIN, ADMIN |
+| VERIFICANDO_FINALIZACION | SUPERADMIN, ADMIN |
+| LISTO_PAGO_FINAL | (ninguno — estado técnico) |
+| COMPLETADO_PAGADO | CIERRE_DE_OBRA, INFRAESTRUCTURA, PRESIDENCIA, SUPERADMIN, ADMIN |
+
+## [2026-07-24] — V2 Auditoría integral backend + 27 hallazgos documentados
+
+**Tipo:** docs / security / code-quality
+
+**Qué:** Segunda auditoría integral del backend. Se evaluaron 75+ archivos. **27 hallazgos totales** (1 crítico, 6 altos, 12 medios, 8 bajos). Reporte completo en `AUDITORIA_back_24_07_2026_V2.md`.
+
+**Hallazgos nuevos/clasificados:**
+
+🔴 **Crítico (1):**
+- C-01: `estimateCost()` usa keys 'chatgpt'/'claude' pero recibe 'openai'/'anthropic' → costos IA siempre $0
+
+🟠 **Altos (6):**
+- A-01: Notificaciones push bloquean el request HTTP (QUEUE_CONNECTION=sync)
+- A-02: `ExpoPushService` ignora respuesta API → tokens zombies perpetuos
+- A-03: `base_url` en fillable de `AiConfiguration` permite SSRF potencial
+- A-04: `AiConfigurationService` cachea API keys desencriptadas en texto plano
+- A-05: `config(["ai.{$key}"])` muta estado global (peligro concurrencia)
+
+🟡 **Medios (12):**
+- M-01: Constantes en `UserController` definidas fuera de clase
+- M-02: Rutas sin rate limiting (`withoutMiddleware([ThrottleRequests])`)
+- M-03: Endpoints de listado sin paginación
+- M-04: IDs auto-generados colisionables bajo concurrencia
+- M-05: Bug lógico en test `test_token_works_with_device_name`
+- M-06: Herencia incorrecta en Gemini/AnthropicProvider (extienden OpenAIProvider)
+- M-07: `registerProviders()` inyecta dependencias vía `app()` en constructor
+- M-08: `getModelForProvider()` es código muerto (nunca usado)
+- M-09: `.env` expone API keys + dump BD versionado
+
+🔵 **Bajos (8):**
+- B-01: Mensajes de error permiten enumeración de usuarios
+- B-02: Magic strings para estados de proyecto
+- B-03: Sin DTO para payload de evaluación IA
+- B-04: Sin validación de tipos MIME en subida de documentos
+- B-05: Test débil de `test_send_reset_link`
+- B-06: Inconsistencia `camelCase`/`snake_case` en `AiConfiguration`
+- B-07: Sin tests para PushToken, AI Evaluation, AI Config, ProjectDocuments
+- B-08: `log()` duplicado en 3 controladores (violación DRY)
+
+**Porcentaje de remediación:** 10% (3 de 30 hallazgos previos corregidos según V1)
+
+## [2026-07-24] — Auditoría integral backend (75+ archivos, 50+ hallazgos) [V1]
+
+**Tipo:** docs / security
+
+**Qué:** Auditoría completa del backend. 50+ hallazgos totales (12 críticos, 15 altos, 20 medios, 10 bajos). **5 críticos nuevos** no documentados previamente:
+
+- **C-02**: `ProjectObserver::updated()` notifica a TODOS los usuarios sincrónicamente (spam/DoS)
+- **C-03**: Notificaciones push bloquean el request HTTP (sin queue)
+- **C-04**: `estimateCost()` en AIEvaluationService con keys incorrectas → costos siempre $0
+- **C-05**: `config(["ai.{$key}"])` muta estado global (peligro en entornos concurrentes)
+- **C-06**: ExpoPushService ignora respuesta de API → tokens zombies perpetuos
+- **C-07**: `AiConfiguration::base_url` en fillable permite SSRF
+- **C-08**: `AiConfigurationService` cachea API keys desencriptadas en texto plano
+
+**Hallazgos altos nuevos:** IDs con timestamp colisionables, race conditions en generadores, invitaciones sin expiración, Gemini API key en URL query param, PushToken sin unique constraint.
+
+**Estado de previos:** A-01 (roles en rutas), BD-01 (FK length), C-01 (typo attempLog), S-04 (rate limiting) → ✅ FIXED. S-01, S-05 (keys en git), S-03 (APP_DEBUG), S-07 (password policy) → ❌ ABIERTOS.
+
+**Archivos:**
+- `AUDITORIA_INTERNA_BACK.md` — actualizado con todos los hallazgos nuevos
+
+---
+
 ## [2026-07-23] — Tests: fix sintaxis models + RefreshSanctumToken TransientToken guard + actingAs en tests
 
 **Tipo:** fix / test

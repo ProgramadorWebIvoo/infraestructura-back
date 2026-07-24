@@ -226,12 +226,12 @@ private function logAttempt(string $message): void
 
         // Precios por 1M tokens (USD) - valores aproximados 2024
         $pricing = [
-            'chatgpt' => ['input' => 2.50, 'output' => 10.00],   // gpt-4o
-            'gemini'  => ['input' => 0.35, 'output' => 1.05],    // gemini-1.5-pro
-            'claude'  => ['input' => 3.00, 'output' => 15.00],   // claude-3-opus
+            'openai'    => ['input' => 2.50, 'output' => 10.00],   // gpt-4o
+            'gemini'    => ['input' => 0.35, 'output' => 1.05],    // gemini-1.5-pro
+            'anthropic' => ['input' => 3.00, 'output' => 15.00],   // claude-3-opus
         ];
 
-$rates = $pricing[$provider] ?? ['input' => 0, 'output' => 0];
+        $rates = $pricing[$provider] ?? ['input' => 0, 'output' => 0];
 
         return round(
             ($promptTokens / 1_000_000) * $rates['input'] +

@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [2026-07-27] — 🟠 ALTO Audit V3 #1–6: batch de severidad alta (IDs, expiración, API keys, SSRF, contraseñas, constantes)
+
+**Tipo:** security + fix
+
+**Qué:**
+- **#1 Colisión de IDs (fix M-04 incompleto):** `AIEvaluationController::logEvaluation()`, `ProjectDocumentController::log()` y `ProjectController::importSupplierProposals()` generaban IDs con formato `LOG-`/`PROP-` + timestamp sin sufijo aleatorio — el fix original de M-04 no cubrió estos tres focos. Se añadió `'-' . Str::random(4)` a los tres.
+- **#2 `SupplierInvitation` sin expiración temporal:** solo invalidaba por `used_at`/`replaced_by`, nunca por tiempo — un link filtrado seguía siendo válido indefinidamente. Nueva migración agrega `expires_at` (nullable, indexado); `SupplierInvitation::DEFAULT_VALIDITY_DAYS = 7`; `isValid()` ahora también exige `expires_at` futura o nula.
+- **#3 API key de Gemini en query string:** `GeminiProvider::evaluate()` y `AiConfigController::testGemini()` mandaban `?key={apiKey}` en la URL — queda en logs de servidor/proxy y en el header `Referer` si la respuesta redirige. Cambiado a header `x-goog-api-key`.
+- **#4 SSRF: validación no cubre DNS rebinding:** `AiConfigController::ssrfSafeUrl()` solo validaba IPs privadas cuando el host ya era una IP literal — un dominio público (`evil.com`) apuntando a una IP privada/metadata de nube pasaba sin chequeo. Ahora resuelve el host vía `dns_get_record()` (A + AAAA) y valida todas las IPs resultantes contra `FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE`. Se eliminó un fragmento de código muerto (cómputo de `$domain`/TLD que no se usaba en ningún chequeo real).
+- **#5 Política de contraseñas débil:** `UserController::store()` solo exigía `min:8`. Nuevo `passwordRule()` usa `Password::min(8)->mixedCase()->numbers()` (sin `->uncompromised()` para no depender de una llamada de red a HaveIBeenPwned en cada alta/test, sin `->symbols()` para no romper contraseñas de test existentes).
+- **#6 Constante `CONTRACTOR_STATUSES` fuera de la clase:** vivía como constante de archivo en vez de pertenecer a `ContractorController`. Movida a `private const` dentro de la clase.
+
+**Por qué:** Todos son hallazgos de `AUDITORIA_back_27_07_2026_V3.md` sección ALTO — issues de integridad (colisión de IDs bajo concurrencia), exposición de credenciales (API key en URL/logs), superficie SSRF real (DNS rebinding hacia metadata de nube), y política de auth débil.
+
+**Archivos:** `AIEvaluationController.php`, `ProjectDocumentController.php`, `ProjectController.php`, `database/migrations/2026_07_27_185438_add_expires_at_to_supplier_invitations_table.php`, `SupplierInvitation.php`, `SupportController.php`, `SupplierInvitationFactory.php`, `GeminiProvider.php`, `AiConfigController.php`, `UserController.php`, `ContractorController.php`.
+
+**Verificación:** tests nuevos en `SupplierInvitationTest.php` (expiración), `UserManagementTest.php` (rechazo de contraseña débil), `AiConfigSsrfTest.php` (rechazo de HTTP, localhost, IP privada literal, IP de metadata de nube; aceptación de host público). Suite completa: 154/154 tests pasando.
+
 ## [2026-07-27] — 🔴 ALTO A-6: Guardas de estado en ciclo de vida de proyecto (integridad financiera)
 
 **Tipo:** security + fix

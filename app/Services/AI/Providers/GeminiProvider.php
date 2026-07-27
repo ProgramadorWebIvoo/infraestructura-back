@@ -21,9 +21,13 @@ class GeminiProvider extends BaseAIProvider
         $systemPrompt = $this->buildSystemPrompt();
         $userPrompt   = $this->buildUserPrompt($payload);
 
+        // La API key va en el header x-goog-api-key, no en la query string:
+        // en la URL queda expuesta en logs de servidor/proxy y en el header
+        // Referer si la respuesta redirige a otro origen.
         $response = Http::timeout($this->timeout)
             ->retry(2, 1000)
-            ->post("{$this->baseUrl}/models/{$this->model}:generateContent?key={$this->apiKey}", [
+            ->withHeaders(['x-goog-api-key' => $this->apiKey])
+            ->post("{$this->baseUrl}/models/{$this->model}:generateContent", [
                 'contents' => [
                     [
                         'role' => 'user',

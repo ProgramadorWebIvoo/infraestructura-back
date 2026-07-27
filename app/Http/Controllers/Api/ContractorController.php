@@ -8,10 +8,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
-const CONTRACTOR_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'INACTIVE'];
-
 class ContractorController extends Controller
 {
+    private const CONTRACTOR_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'INACTIVE'];
+
     public function index()
     {
         $contractors = Contractor::orderBy('name')->get();
@@ -36,7 +36,7 @@ class ContractorController extends Controller
             'specialty'  => ['required', 'string', 'max:180'],
             'contact'    => ['required', 'string', 'max:180'],
             'rating'     => ['nullable', 'numeric', 'min:0', 'max:5'],
-            'status'     => ['sometimes', Rule::in(CONTRACTOR_STATUSES)],
+            'status'     => ['sometimes', Rule::in(self::CONTRACTOR_STATUSES)],
         ]);
 
         $data['name'] = strip_tags($data['name']);
@@ -87,7 +87,7 @@ class ContractorController extends Controller
             'specialty' => ['sometimes', 'string', 'max:180'],
             'contact'   => ['sometimes', 'string', 'max:180'],
             'rating'    => ['sometimes', 'numeric', 'min:0', 'max:5'],
-            'status'    => ['sometimes', Rule::in(CONTRACTOR_STATUSES)],
+            'status'    => ['sometimes', Rule::in(self::CONTRACTOR_STATUSES)],
         ]);
 
         if (isset($data['name']))      $data['name'] = strip_tags($data['name']);

@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\ProjectDocument;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectDocumentController extends Controller
@@ -168,7 +169,7 @@ class ProjectDocumentController extends Controller
     {
         $user = auth()->user();
         AuditLog::create([
-            'id'                     => 'LOG-' . now()->format('YmdHisv'),
+            'id'                     => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
             'project_id'             => $project->id,
             'project_title_snapshot' => $project->title,
             'role'                   => 'CIERRE_DE_OBRA',

@@ -84,6 +84,22 @@ class UserManagementTest extends TestCase
         ]);
     }
 
+    public function test_store_rejects_password_without_mixed_case_or_numbers(): void
+    {
+        $response = $this->withHeaders($this->headers($this->superadmin))
+            ->postJson('/api/users', [
+                'name'                  => 'Weak Password User',
+                'email'                 => 'weakpass@test.com',
+                'password'              => 'onlylowercase',
+                'password_confirmation' => 'onlylowercase',
+                'role'                  => 'ANALISTA',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('password');
+        $this->assertDatabaseMissing('users', ['email' => 'weakpass@test.com']);
+    }
+
     public function test_store_requires_valid_role(): void
     {
         $response = $this->withHeaders($this->headers($this->superadmin))

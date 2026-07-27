@@ -50,7 +50,7 @@ class SupplierInvitationTest extends TestCase
 
         $response->assertStatus(201);
         $response->assertJsonStructure([
-            'token', 'projectTitle', 'supplierName', 'supplierContact', 'createdAt',
+            'token', 'projectTitle', 'supplierName', 'supplierContact', 'createdAt', 'expiresAt',
         ]);
         $this->assertTrue(Str::isUuid($response->json('token')));
         $this->assertEquals('Proveedor Test', $response->json('supplierName'));
@@ -114,6 +114,40 @@ class SupplierInvitationTest extends TestCase
         $response = $this->getJson("/api/public/invitations/{$invitation->id}");
         $response->assertStatus(404);
         $response->assertJson(['message' => 'Enlace no valido o expirado.']);
+    }
+
+    public function test_create_invitation_sets_default_expiration(): void
+    {
+        $this->withHeaders($this->authHeaders())
+            ->postJson('/api/supplier-invitations', [
+                'project_id'      => $this->project->id,
+                'supplierName'    => 'Proveedor Test',
+                'supplierContact' => 'proveedor@test.com',
+            ])->assertStatus(201);
+
+        $invitation = SupplierInvitation::first();
+        $this->assertNotNull($invitation->expires_at);
+        $this->assertTrue($invitation->expires_at->isFuture());
+    }
+
+    public function test_view_time_expired_invitation_returns_404(): void
+    {
+        $invitation = SupplierInvitation::factory()->expired()->create();
+
+        $response = $this->getJson("/api/public/invitations/{$invitation->id}");
+        $response->assertStatus(404);
+        $response->assertJson(['message' => 'Enlace no valido o expirado.']);
+    }
+
+    public function test_submit_proposal_with_time_expired_token_returns_404(): void
+    {
+        $invitation = SupplierInvitation::factory()->expired()->create();
+
+        $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'items' => [],
+        ]);
+
+        $response->assertStatus(404);
     }
 
     public function test_view_replaced_invitation_returns_404(): void

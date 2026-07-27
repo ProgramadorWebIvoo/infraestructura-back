@@ -16,6 +16,9 @@ class SupplierInvitation extends Model
 
     const UPDATED_AT = null;
 
+    /** Vigencia por defecto de un enlace de invitación nunca usado. */
+    public const DEFAULT_VALIDITY_DAYS = 7;
+
     protected $fillable = [
         'id',
         'project_id',
@@ -24,19 +27,23 @@ class SupplierInvitation extends Model
         'supplier_contact',
         'used_at',
         'replaced_by',
+        'expires_at',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'used_at'    => 'datetime',
+        'expires_at' => 'datetime',
     ];
 
     /**
-     * Verifica si el enlace sigue activo (no usado, no reemplazado).
+     * Verifica si el enlace sigue activo (no usado, no reemplazado, no expirado).
      */
     public function isValid(): bool
     {
-        return is_null($this->used_at) && is_null($this->replaced_by);
+        return is_null($this->used_at)
+            && is_null($this->replaced_by)
+            && (is_null($this->expires_at) || $this->expires_at->isFuture());
     }
 
     public function project()

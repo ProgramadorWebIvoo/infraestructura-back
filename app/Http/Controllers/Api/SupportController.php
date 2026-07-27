@@ -128,6 +128,7 @@ class SupportController extends Controller
             'supplier_name'    => $data['supplierName'],
             'supplier_company' => $data['supplierCompany'] ?? null,
             'supplier_contact' => $data['supplierContact'],
+            'expires_at'       => now()->addDays(SupplierInvitation::DEFAULT_VALIDITY_DAYS),
         ]);
 
         return response()->json([
@@ -136,6 +137,7 @@ class SupportController extends Controller
             'supplierName'   => $invitation->supplier_name,
             'supplierContact'=> $invitation->supplier_contact,
             'createdAt'      => $invitation->created_at?->format('Y-m-d H:i'),
+            'expiresAt'      => $invitation->expires_at?->format('Y-m-d H:i'),
         ], 201);
     }
 

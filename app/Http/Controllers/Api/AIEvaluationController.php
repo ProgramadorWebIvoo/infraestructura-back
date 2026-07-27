@@ -12,6 +12,7 @@ use App\Services\AI\EvaluationProject;
 use App\Services\AI\EvaluationProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AIEvaluationController extends Controller
@@ -122,7 +123,7 @@ class AIEvaluationController extends Controller
             $user = auth()->user();
 
             AuditLog::create([
-                'id'                => 'LOG-' . now()->format('YmdHisv'),
+                'id'                => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
                 'project_id'        => $project->id,
                 'project_title_snapshot' => $project->title,
                 'role'              => 'PROCURA',

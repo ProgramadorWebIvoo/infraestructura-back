@@ -333,9 +333,10 @@ class AiConfigController extends Controller
     private function testGemini(string $apiKey, string $model): array
     {
         try {
-            $url = "https://generativelanguage.googleapis.com/v1/models/{$model}:generateContent?key={$apiKey}";
+            $url = "https://generativelanguage.googleapis.com/v1/models/{$model}:generateContent";
 
             $response = Http::timeout(10)
+                ->withHeaders(['x-goog-api-key' => $apiKey])
                 ->post($url, [
                     'contents' => [
                         [
@@ -401,13 +402,39 @@ class AiConfigController extends Controller
                     $fail($attribute, 'No se permite usar IPs privadas o de rangos reservados.');
                     return;
                 }
+                return;
             }
 
-            // Rejectar TLDs peligrosos o inexistentes (opcional)
-            $domain = $host;
-            // Si hay subdominios, tomar el dominio principal
-            if (preg_match('/[^.]+\.[a-z]{2,}$/i', $host, $matches)) {
-                $domain = $matches[0];
+            // El host es un dominio, no una IP literal: resolverlo y validar
+            // TODAS las IPs que devuelve. Esto bloquea el caso obvio de un
+            // dominio público apuntando a una IP privada/metadata de nube
+            // (169.254.169.254, etc.). No protege contra "DNS rebinding" en
+            // sentido estricto (TTL≈0, la IP cambia entre esta validación y
+            // la request real del provider) — eso requeriría fijar la IP
+            // resuelta a nivel de conexión HTTP (handler cURL/Guzzle custom),
+            // fuera de alcance de esta validación de formulario.
+            $resolvedIps = [];
+
+            $aRecords = @dns_get_record($host, DNS_A);
+            foreach ($aRecords ?: [] as $record) {
+                if (!empty($record['ip'])) $resolvedIps[] = $record['ip'];
+            }
+
+            $aaaaRecords = @dns_get_record($host, DNS_AAAA);
+            foreach ($aaaaRecords ?: [] as $record) {
+                if (!empty($record['ipv6'])) $resolvedIps[] = $record['ipv6'];
+            }
+
+            if (empty($resolvedIps)) {
+                $fail($attribute, 'No se pudo resolver el host de la URL.');
+                return;
+            }
+
+            foreach (array_unique($resolvedIps) as $ip) {
+                if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    $fail($attribute, 'El host de la URL resuelve a una dirección IP privada o reservada.');
+                    return;
+                }
             }
         };
     }

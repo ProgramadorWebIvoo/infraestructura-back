@@ -232,7 +232,7 @@ class ProjectController extends Controller
                 ?? "Propuesta de materiales de {$supplierProposal->supplier_name}. Presupuesto total de materiales: \$" . number_format($totalCost, 2);
 
             $project->proposals()->create([
-                'id' => 'PROP-' . now()->format('Hisv') . sprintf('%02d', $imported),
+                'id' => 'PROP-' . now()->format('Hisv') . '-' . Str::random(4),
                 'contractor_code' => $contractor->code,
                 'contractor_name_snapshot' => $contractor->name,
                 'material_cost' => $materialCost,

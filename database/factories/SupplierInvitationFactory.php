@@ -19,6 +19,7 @@ class SupplierInvitationFactory extends Factory
             'supplier_name' => fake()->name(),
             'supplier_company' => fake()->company(),
             'supplier_contact' => fake()->email(),
+            'expires_at' => now()->addDays(SupplierInvitation::DEFAULT_VALIDITY_DAYS),
         ];
     }
 
@@ -30,5 +31,10 @@ class SupplierInvitationFactory extends Factory
     public function replaced(): static
     {
         return $this->state(fn() => ['replaced_by' => Str::uuid()]);
+    }
+
+    public function expired(): static
+    {
+        return $this->state(fn() => ['expires_at' => now()->subDay()]);
     }
 }

@@ -8,7 +8,6 @@ use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\ProjectDocument;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectDocumentController extends Controller
@@ -50,7 +49,7 @@ class ProjectDocumentController extends Controller
         }
 
         $label = $type === 'CALC' ? 'hojas de calculo/cubicaciones' : 'planos de ingenieria';
-        $this->log($project, "Carga de {$label}", count($saved) . " archivo(s) adjuntados: " . implode(', ', array_column($saved, 'originalName')));
+        AuditLog::record($project, 'CIERRE_DE_OBRA', "Carga de {$label}", count($saved) . " archivo(s) adjuntados: " . implode(', ', array_column($saved, 'originalName')));
 
         // Sync counts back to project for backward compatibility
         $this->syncProjectCounts($project);
@@ -70,7 +69,7 @@ class ProjectDocumentController extends Controller
         $document->delete();
 
         $this->syncProjectCounts($project);
-        $this->log($project, 'Eliminacion de documento adjunto', "Archivo eliminado: {$label}");
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Eliminacion de documento adjunto', "Archivo eliminado: {$label}");
 
         return response()->json(['message' => 'Documento eliminado correctamente.']);
     }
@@ -163,21 +162,5 @@ class ProjectDocumentController extends Controller
             'uploadedBy'   => $doc->uploaded_by,
             'uploadedAt'   => $doc->created_at?->toIso8601String(),
         ];
-    }
-
-    private function log(Project $project, string $action, ?string $details): void
-    {
-        $user = auth()->user();
-        AuditLog::create([
-            'id'                     => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
-            'project_id'             => $project->id,
-            'project_title_snapshot' => $project->title,
-            'role'                   => 'CIERRE_DE_OBRA',
-            'user_id'                => $user?->id,
-            'user_name_snapshot'     => $user?->name,
-            'action'                 => $action,
-            'logged_at'              => now(),
-            'details'                => $details,
-        ]);
     }
 }

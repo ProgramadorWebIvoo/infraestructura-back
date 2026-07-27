@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class AuditLog extends Model
 {
@@ -29,6 +30,30 @@ class AuditLog extends Model
     public function user()
     {
         return $this->belongsTo(\App\Models\User::class);
+    }
+
+    /**
+     * Registra una entrada de auditoría para un proyecto. Punto único de
+     * generación de ID (timestamp + sufijo random para evitar colisiones
+     * bajo concurrencia) — antes triplicado carácter por carácter entre
+     * ProjectController::log(), ProjectDocumentController::log() y
+     * AIEvaluationController::logEvaluation().
+     */
+    public static function record(Project $project, string $role, string $action, ?string $details = null): self
+    {
+        $user = auth()->user();
+
+        return static::create([
+            'id' => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
+            'project_id' => $project->id,
+            'project_title_snapshot' => $project->title,
+            'role' => $role,
+            'user_id' => $user?->id,
+            'user_name_snapshot' => $user?->name,
+            'action' => $action,
+            'logged_at' => now(),
+            'details' => $details,
+        ]);
     }
 
     protected $casts = [

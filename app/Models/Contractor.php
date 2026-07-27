@@ -26,4 +26,22 @@ class Contractor extends Model
     protected $casts = [
         'rating' => 'float',
     ];
+
+    /**
+     * Genera el siguiente código secuencial (CON-301, CON-302, ...).
+     * Bloquea la última fila con ese prefijo para evitar colisiones bajo
+     * concurrencia; el caller debe envolver la creación en una transacción.
+     */
+    public static function nextCode(): string
+    {
+        $last = static::query()
+            ->where('code', 'like', 'CON-%')
+            ->orderByRaw('CAST(SUBSTRING(code, 5) AS UNSIGNED) DESC')
+            ->lockForUpdate()
+            ->first();
+
+        $number = $last ? ((int) substr($last->code, 4)) + 1 : 301;
+
+        return 'CON-' . $number;
+    }
 }

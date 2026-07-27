@@ -7,6 +7,9 @@ use RuntimeException;
 
 class AnthropicProvider extends BaseAIProvider
 {
+    /** Versión de la API de Anthropic (header `anthropic-version`). */
+    public const API_VERSION = '2023-06-01';
+
     public function name(): string
     {
         return 'claude';
@@ -25,7 +28,7 @@ class AnthropicProvider extends BaseAIProvider
             ->retry(2, 1000)
             ->withHeaders([
                 'x-api-key'         => $this->apiKey,
-                'anthropic-version' => '2023-06-01',
+                'anthropic-version' => self::API_VERSION,
             ])
             ->post("{$this->baseUrl}/messages", [
                 'model'       => $this->model,

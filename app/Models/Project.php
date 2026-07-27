@@ -67,4 +67,22 @@ class Project extends Model
     {
         return $this->hasMany(AuditLog::class);
     }
+
+    /**
+     * Genera el siguiente ID secuencial (PRJ-001, PRJ-002, ...). Bloquea la
+     * última fila para evitar colisiones bajo concurrencia; el caller debe
+     * envolver la creación en una transacción.
+     */
+    public static function nextId(): string
+    {
+        $last = static::query()->select('id')
+            ->where('id', 'like', 'PRJ-%')
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->first();
+
+        $number = $last ? ((int) substr($last->id, 4)) + 1 : 1;
+
+        return 'PRJ-' . str_pad((string) $number, 3, '0', STR_PAD_LEFT);
+    }
 }

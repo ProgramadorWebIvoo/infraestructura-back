@@ -44,20 +44,6 @@ class AiConfiguration extends Model
         }
     }
 
-    /**
-     * Returns the API key masked, showing only the last 4 characters.
-     * eg. "sk-proj-••••••••••••1234"
-     */
-    public function getMaskedApiKey(): string
-    {
-        $key = $this->api_key; // triggers decrypt via accessor
-        if (empty($key)) return '••••••••';
-        $len = strlen($key);
-        if ($len <= 8) return str_repeat('•', $len);
-        $prefix = $len > 12 ? substr($key, 0, 7) . '-••••••••••••' : str_repeat('•', $len - 4);
-        return $prefix . substr($key, -4);
-    }
-
     // ── Scopes ──
 
     public function scopeActive($query)

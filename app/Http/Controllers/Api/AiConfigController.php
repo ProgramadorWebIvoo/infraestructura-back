@@ -7,6 +7,7 @@ use App\Models\AiConfiguration;
 use App\Models\AiUsageLog;
 use App\Services\AI\AiConfigurationService;
 use App\Services\AI\AIEvaluationService;
+use App\Services\AI\Providers\AnthropicProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
@@ -307,7 +308,7 @@ class AiConfigController extends Controller
             $response = Http::timeout(10)
                 ->withHeaders([
                     'x-api-key'         => $apiKey,
-                    'anthropic-version' => '2023-06-01',
+                    'anthropic-version' => AnthropicProvider::API_VERSION,
                 ])
                 ->post('https://api.anthropic.com/v1/messages', [
                     'model'      => $model,

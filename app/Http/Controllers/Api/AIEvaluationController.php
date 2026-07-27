@@ -12,7 +12,6 @@ use App\Services\AI\EvaluationProject;
 use App\Services\AI\EvaluationProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AIEvaluationController extends Controller
@@ -50,7 +49,7 @@ class AIEvaluationController extends Controller
             'proposals.*.negotiatedAdvancePercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'proposals.*.description'              => ['required', 'string', 'max:2000'],
             'proposals.*.observations'             => ['nullable', 'string', 'max:2000'],
-            'provider' => ['nullable', 'string', Rule::in('chatgpt', 'gemini', 'claude')],
+            'provider' => ['nullable', 'string', Rule::in(['chatgpt', 'gemini', 'claude'])],
         ]);
 
         $project = Project::findOrFail($data['projectId']);
@@ -120,18 +119,11 @@ class AIEvaluationController extends Controller
     private function logEvaluation(Project $project, array $result): void
     {
         try {
-            $user = auth()->user();
-
-            AuditLog::create([
-                'id'                => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
-                'project_id'        => $project->id,
-                'project_title_snapshot' => $project->title,
-                'role'              => 'PROCURA',
-                'user_id'           => $user?->id,
-                'user_name_snapshot' => $user?->name,
-                'action'            => 'Evaluación Inteligente - ' . $result['winnerContractorName'],
-                'logged_at'         => now(),
-                'details'           => sprintf(
+            AuditLog::record(
+                $project,
+                'PROCURA',
+                'Evaluación Inteligente - ' . $result['winnerContractorName'],
+                sprintf(
                     'Evaluación via %s | Score: %d%% | Ganador: %s (%s) | Fortalezas: %d | Debilidades: %d',
                     $result['providerUsed'] ?? 'N/A',
                     $result['confidenceScore'] ?? 0,
@@ -140,7 +132,7 @@ class AIEvaluationController extends Controller
                     count($result['strengths'] ?? []),
                     count($result['weaknesses'] ?? [])
                 ),
-            ]);
+            );
         } catch (\Throwable $e) {
             // No debe romper la respuesta si falla el log
             Log::warning("No se pudo registrar auditoría AI: {$e->getMessage()}");

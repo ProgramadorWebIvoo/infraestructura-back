@@ -13,7 +13,6 @@ use App\Models\ProjectProposal;
 use App\Models\SupplierMaterialProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
@@ -71,7 +70,7 @@ class ProjectController extends Controller
 
         $project = DB::transaction(function () use ($data) {
             $project = Project::create([
-                'id' => $this->nextProjectId(),
+                'id' => Project::nextId(),
                 'title' => $data['title'],
                 'type' => $data['type'],
                 'description' => $data['description'],
@@ -92,7 +91,7 @@ class ProjectController extends Controller
                 ]);
             }
 
-            $this->log($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'Peticion registrada desde el modulo de infraestructura.');
+            AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'Peticion registrada desde el modulo de infraestructura.');
 
             return $project;
         });
@@ -115,7 +114,7 @@ class ProjectController extends Controller
             'calculations_added' => $data['calculationsAdded'],
         ]);
 
-        $this->log($project, 'CIERRE_DE_OBRA', 'Revision tecnica de calculos y planos', $data['notes']);
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Revision tecnica de calculos y planos', $data['notes']);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
@@ -133,7 +132,7 @@ class ProjectController extends Controller
             'approved_investment_amount' => $data['approvedInvestmentAmount'],
         ]);
 
-        $this->log($project, 'PROCURA', 'Confirmacion de presupuesto y envio a licitacion', $data['notes']);
+        AuditLog::record($project, 'PROCURA', 'Confirmacion de presupuesto y envio a licitacion', $data['notes']);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
@@ -153,7 +152,7 @@ class ProjectController extends Controller
         $contractor = Contractor::findOrFail($data['contractorCode']);
 
         $proposal = $project->proposals()->create([
-            'id' => 'PROP-' . now()->format('Hisv') . '-' . Str::random(4),
+            'id' => ProjectProposal::nextId(),
             'contractor_code' => $contractor->code,
             'contractor_name_snapshot' => $contractor->name,
             'material_cost' => $data['materialCost'],
@@ -164,7 +163,7 @@ class ProjectController extends Controller
             'description' => $data['description'],
         ]);
 
-        $this->log($project, 'ANALISTA', 'Carga de propuesta', "Oferta {$proposal->id} cargada por {$contractor->name}.");
+        AuditLog::record($project, 'ANALISTA', 'Carga de propuesta', "Oferta {$proposal->id} cargada por {$contractor->name}.");
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
@@ -174,7 +173,7 @@ class ProjectController extends Controller
         abort_if($project->proposals()->count() === 0, 422, 'El proyecto no tiene propuestas cargadas.');
 
         $project->update(['status' => self::STATUSES['COMPARATIVA_ENVIADA']]);
-        $this->log($project, 'ANALISTA', 'Carga de cuadro comparativo', 'Comparativa enviada a Procura para adjudicacion.');
+        AuditLog::record($project, 'ANALISTA', 'Carga de cuadro comparativo', 'Comparativa enviada a Procura para adjudicacion.');
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
@@ -232,7 +231,7 @@ class ProjectController extends Controller
                 ?? "Propuesta de materiales de {$supplierProposal->supplier_name}. Presupuesto total de materiales: \$" . number_format($totalCost, 2);
 
             $project->proposals()->create([
-                'id' => 'PROP-' . now()->format('Hisv') . '-' . Str::random(4),
+                'id' => ProjectProposal::nextId(),
                 'contractor_code' => $contractor->code,
                 'contractor_name_snapshot' => $contractor->name,
                 'material_cost' => $materialCost,
@@ -247,7 +246,7 @@ class ProjectController extends Controller
             $imported++;
         }
 
-        $this->log($project, 'ANALISTA', 'Importación automática de propuestas de proveedores',
+        AuditLog::record($project, 'ANALISTA', 'Importación automática de propuestas de proveedores',
             "{$imported} propuesta(s) importada(s) desde el portal de proveedores" . ($skipped > 0 ? ", {$skipped} omitida(s)." : "."));
 
         return response()->json([
@@ -265,7 +264,7 @@ class ProjectController extends Controller
         abort_if($project->selected_proposal_id === $proposal->id, 422, 'No se puede eliminar una propuesta adjudicada.');
 
         $proposal->delete();
-        $this->log($project, 'ANALISTA', 'Eliminacion de propuesta', "Propuesta {$proposal->id} retirada del cuadro comparativo.");
+        AuditLog::record($project, 'ANALISTA', 'Eliminacion de propuesta', "Propuesta {$proposal->id} retirada del cuadro comparativo.");
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
@@ -287,7 +286,7 @@ class ProjectController extends Controller
                 'selected_proposal_id'    => null,
             ]);
 
-            $this->log($project, 'PROCURA', 'Rechazo de cuadro comparativo', $data['reason']);
+            AuditLog::record($project, 'PROCURA', 'Rechazo de cuadro comparativo', $data['reason']);
         });
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
@@ -310,7 +309,7 @@ class ProjectController extends Controller
             'selected_proposal_id' => $data['proposalId'],
         ]);
 
-        $this->log($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$data['contractorCode']} adjudicado.");
+        AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$data['contractorCode']} adjudicado.");
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
@@ -344,7 +343,7 @@ class ProjectController extends Controller
         );
 
         $project->update(['status' => $data['paymentType'] === 'ADVANCE' ? self::STATUSES['EN_EJECUCION'] : self::STATUSES['COMPLETADO_PAGADO']]);
-        $this->log($project, 'FINANZAS', $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos', $data['notes'] ?? null);
+        AuditLog::record($project, 'FINANZAS', $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos', $data['notes'] ?? null);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
@@ -354,7 +353,7 @@ class ProjectController extends Controller
         abort_unless($project->status === self::STATUSES['EN_EJECUCION'], 422, 'Solo se puede reportar como finalizada una obra en ejecución (EN_EJECUCION).');
 
         $project->update(['status' => self::STATUSES['VERIFICANDO_FINALIZACION']]);
-        $this->log($project, 'SISTEMA', 'Reporte de obra finalizada', 'La obra fue marcada como finalizada y pendiente de certificacion.');
+        AuditLog::record($project, 'SISTEMA', 'Reporte de obra finalizada', 'La obra fue marcada como finalizada y pendiente de certificacion.');
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
@@ -375,22 +374,9 @@ class ProjectController extends Controller
             'completion_verified_date' => $data['completionVerifiedDate'] ?? now()->toDateString(),
         ]);
 
-        $this->log($project, 'CIERRE_DE_OBRA', 'Verificacion de finalizacion y calidad de obra', $data['details'] ?? null);
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Verificacion de finalizacion y calidad de obra', $data['details'] ?? null);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
-    }
-
-    private function nextProjectId(): string
-    {
-        $last = Project::query()->select('id')
-            ->where('id', 'like', 'PRJ-%')
-            ->orderByDesc('id')
-            ->lockForUpdate()
-            ->first();
-
-        $number = $last ? ((int) substr($last->id, 4)) + 1 : 1;
-
-        return 'PRJ-' . str_pad((string) $number, 3, '0', STR_PAD_LEFT);
     }
 
     private function materialsTotal(array $materials): float
@@ -398,19 +384,4 @@ class ProjectController extends Controller
         return collect($materials)->sum(fn ($item) => $item['quantity'] * $item['estimatedUnitPrice']);
     }
 
-    private function log(Project $project, string $role, string $action, ?string $details): void
-    {
-        $user = auth()->user();
-        AuditLog::create([
-            'id' => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
-            'project_id' => $project->id,
-            'project_title_snapshot' => $project->title,
-            'role' => $role,
-            'user_id' => $user?->id,
-            'user_name_snapshot' => $user?->name,
-            'action' => $action,
-            'logged_at' => now(),
-            'details' => $details,
-        ]);
-    }
 }

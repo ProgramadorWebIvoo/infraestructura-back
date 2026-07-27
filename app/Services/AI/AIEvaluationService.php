@@ -3,10 +3,7 @@
 namespace App\Services\AI;
 
 use App\Models\AiUsageLog;
-use App\Services\AI\Providers\AIProviderInterface;
-use App\Services\AI\Providers\OpenAIProvider;
-use App\Services\AI\Providers\GeminiProvider;
-use App\Services\AI\Providers\AnthropicProvider;
+use App\Services\AI\Providers\AIProviderFactory;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -33,12 +30,6 @@ class AIEvaluationService
      */
     private function registerProviders(): void
     {
-        $map = [
-            'openai'    => OpenAIProvider::class,
-            'gemini'    => GeminiProvider::class,
-            'anthropic' => AnthropicProvider::class,
-        ];
-
         // Solo configuración desde BD
         $dbProviders = $this->configService->getActiveProviders();
 
@@ -53,10 +44,9 @@ class AIEvaluationService
 
         foreach ($order as $key) {
             $key = trim($key);
-            if (!isset($map[$key])) {
+            if (!AIProviderFactory::supports($key)) {
                 continue;
             }
-            $class = $map[$key];
             $config = $dbProviders[$key] ?? $this->configService->getProviderConfig($key);
 
             if (!$config || !($config['enabled'] ?? true)) {
@@ -73,7 +63,7 @@ class AIEvaluationService
             $config['timeout'] = $timeout;
 
             // Se pasa la config directamente al constructor — no se muta config global
-            $this->providers[$key] = new $class($config);
+            $this->providers[$key] = AIProviderFactory::make($key, $config);
         }
     }
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class ProjectProposal extends Model
 {
@@ -34,4 +35,15 @@ class ProjectProposal extends Model
         'delivery_weeks' => 'integer',
         'negotiated_advance_percent' => 'float',
     ];
+
+    /**
+     * Genera un ID único por timestamp + sufijo random (no requiere lock:
+     * a diferencia de Project/Contractor/SupplierMaterialProposal, no es
+     * secuencial legible, así que la resolución al milisegundo + 4 chars
+     * random ya evita colisiones bajo concurrencia normal).
+     */
+    public static function nextId(): string
+    {
+        return 'PROP-' . now()->format('Hisv') . '-' . Str::random(4);
+    }
 }

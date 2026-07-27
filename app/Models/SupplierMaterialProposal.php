@@ -41,4 +41,22 @@ class SupplierMaterialProposal extends Model
     {
         return $this->belongsTo(Project::class);
     }
+
+    /**
+     * Genera el siguiente ID secuencial (SMP-001, SMP-002, ...). Bloquea la
+     * última fila para evitar colisiones bajo concurrencia; el caller debe
+     * envolver la creación en una transacción.
+     */
+    public static function nextId(): string
+    {
+        $last = static::query()
+            ->where('id', 'like', 'SMP-%')
+            ->orderByRaw('CAST(SUBSTRING(id, 5) AS UNSIGNED) DESC')
+            ->lockForUpdate()
+            ->first();
+
+        $number = $last ? ((int) substr($last->id, 4)) + 1 : 1;
+
+        return 'SMP-' . str_pad($number, 3, '0', STR_PAD_LEFT);
+    }
 }

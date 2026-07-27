@@ -44,7 +44,7 @@ class ContractorController extends Controller
         $data['contact'] = strip_tags($data['contact']);
 
         $contractor = DB::transaction(function () use ($data) {
-            $data['code'] ??= $this->nextContractorCode();
+            $data['code'] ??= Contractor::nextCode();
             $data['rating'] ??= 4.0;
             $data['registration_source'] = 'INTERNAL';
             $data['status'] = $data['status'] ?? 'ACTIVE';
@@ -125,18 +125,5 @@ class ContractorController extends Controller
             'code'   => $contractor->code,
             'status' => $contractor->status,
         ]);
-    }
-
-    private function nextContractorCode(): string
-    {
-        $last = Contractor::query()
-            ->where('code', 'like', 'CON-%')
-            ->orderByRaw('CAST(SUBSTRING(code, 5) AS UNSIGNED) DESC')
-            ->lockForUpdate()
-            ->first();
-
-        $number = $last ? ((int) substr($last->code, 4)) + 1 : 301;
-
-        return 'CON-' . $number;
     }
 }

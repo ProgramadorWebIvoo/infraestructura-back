@@ -44,7 +44,7 @@ class SupportController extends Controller
         $data['contact'] = strip_tags($data['contact']);
 
         $contractor = DB::transaction(function () use ($data) {
-            $data['code'] ??= $this->nextContractorCode();
+            $data['code'] ??= Contractor::nextCode();
             $data['rating'] ??= 4.0;
             $data['registration_source'] = 'PUBLIC_PORTAL';
             $data['status'] = 'PENDING_REVIEW';
@@ -195,7 +195,7 @@ class SupportController extends Controller
 
         $proposal = DB::transaction(function () use ($token, $invitation, $data) {
             $proposal = SupplierMaterialProposal::create([
-                'id'                     => $this->nextProposalId(),
+                'id'                     => SupplierMaterialProposal::nextId(),
                 'invitation_token'       => $token,
                 'project_id'             => $invitation->project_id,
                 'project_title_snapshot' => $invitation->project->title,
@@ -263,29 +263,4 @@ class SupportController extends Controller
         ]);
     }
 
-    private function nextContractorCode(): string
-    {
-        $last = Contractor::query()
-            ->where('code', 'like', 'CON-%')
-            ->orderByRaw('CAST(SUBSTRING(code, 5) AS UNSIGNED) DESC')
-            ->lockForUpdate()
-            ->first();
-
-        $number = $last ? ((int) substr($last->code, 4)) + 1 : 301;
-
-        return 'CON-' . $number;
-    }
-
-    private function nextProposalId(): string
-    {
-        $last = SupplierMaterialProposal::query()
-            ->where('id', 'like', 'SMP-%')
-            ->orderByRaw('CAST(SUBSTRING(id, 5) AS UNSIGNED) DESC')
-            ->lockForUpdate()
-            ->first();
-
-        $number = $last ? ((int) substr($last->id, 4)) + 1 : 1;
-
-        return 'SMP-' . str_pad($number, 3, '0', STR_PAD_LEFT);
-    }
 }

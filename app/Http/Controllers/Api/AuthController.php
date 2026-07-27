@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -32,7 +34,24 @@ class AuthController extends Controller
             ]);
         }
 
-        // Allow max 2 active sessions; remove oldest if limit reached
+        $userPayload = [
+            'id'    => $user->id,
+            'name'  => $user->name,
+            'email' => $user->email,
+            'role'  => $user->role,
+        ];
+
+        // Peticiones desde el dominio SPA configurado en SANCTUM_STATEFUL_DOMAINS
+        // (EnsureFrontendRequestsAreStateful ya inició la sesión en este punto):
+        // autenticación por cookie httpOnly de sesión, sin token expuesto a JS.
+        if ($request->hasSession()) {
+            Auth::guard('web')->login($user);
+            $request->session()->regenerate();
+
+            return response()->json(['user' => $userPayload]);
+        }
+
+        // Clientes no-SPA (mobile): autenticación por token Bearer, sin cambios.
         if ($user->tokens()->count() >= 2) {
             $user->tokens()->oldest('created_at')->first()->delete();
         }
@@ -43,12 +62,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $user->createToken($tokenName, ['*'], $expiresAt)->plainTextToken,
-            'user' => [
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
-                'role'  => $user->role,
-            ],
+            'user' => $userPayload,
         ]);
     }
 
@@ -68,7 +82,16 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()?->delete();
+        $token = $request->user()->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+        }
+
+        if ($request->hasSession()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->noContent();
     }

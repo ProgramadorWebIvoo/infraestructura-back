@@ -170,4 +170,120 @@ class AuthTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonStructure(['token', 'user']);
     }
+
+    // ── Flujo SPA (cookie httpOnly de sesión, sin token expuesto a JS) ──
+
+    private function frontendCsrfCookies(): array
+    {
+        $csrf = $this->withHeader('Referer', 'http://localhost:3000/login')
+            ->get('/sanctum/csrf-cookie');
+        $csrf->assertNoContent();
+
+        return collect($csrf->headers->getCookies())
+            ->mapWithKeys(fn ($c) => [$c->getName() => $c->getValue()])
+            ->only([config('session.cookie'), 'XSRF-TOKEN'])
+            ->all();
+    }
+
+    public function test_web_login_establishes_session_cookie_without_exposing_token(): void
+    {
+        User::factory()->create([
+            'email'    => 'spa@test.com',
+            'password' => bcrypt('secret123'),
+            'role'     => 'INFRAESTRUCTURA',
+            'status'   => 'Active',
+        ]);
+
+        $cookies = $this->frontendCsrfCookies();
+        $xsrfToken = urldecode($cookies['XSRF-TOKEN']);
+
+        $response = $this->withHeader('Referer', 'http://localhost:3000/login')
+            ->withHeader('X-XSRF-TOKEN', $xsrfToken)
+            ->withCookies($cookies)
+            ->postJson('/api/login', [
+                'email'    => 'spa@test.com',
+                'password' => 'secret123',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonMissingPath('token');
+        $response->assertJsonStructure(['user' => ['id', 'name', 'email', 'role']]);
+        $response->assertCookie(config('session.cookie'));
+        $this->assertTrue(
+            collect($response->headers->getCookies())
+                ->first(fn ($c) => $c->getName() === config('session.cookie'))
+                ->isHttpOnly()
+        );
+    }
+
+    // Nota: Laravel desactiva VerifyCsrfToken automáticamente dentro de
+    // `php artisan test` (ver VerifyCsrfToken::runningUnitTests()), por lo
+    // que el rechazo 419 sin token CSRF no es observable en un Feature test.
+    // La protección la provee el middleware core de Laravel/Sanctum
+    // (EnsureFrontendRequestsAreStateful + VerifyCsrfToken); lo que sí se
+    // verifica aquí es que el middleware quede correctamente enganchado
+    // (sesión creada, /user autenticado por cookie, logout invalida sesión).
+
+    public function test_web_session_authenticates_user_endpoint(): void
+    {
+        User::factory()->create([
+            'email'    => 'spa3@test.com',
+            'password' => bcrypt('secret123'),
+            'role'     => 'FINANZAS',
+            'status'   => 'Active',
+        ]);
+
+        $cookies = $this->frontendCsrfCookies();
+        $xsrfToken = urldecode($cookies['XSRF-TOKEN']);
+
+        $login = $this->withHeader('Referer', 'http://localhost:3000/login')
+            ->withHeader('X-XSRF-TOKEN', $xsrfToken)
+            ->withCookies($cookies)
+            ->postJson('/api/login', ['email' => 'spa3@test.com', 'password' => 'secret123']);
+
+        $sessionCookies = collect($login->headers->getCookies())
+            ->mapWithKeys(fn ($c) => [$c->getName() => $c->getValue()])
+            ->only([config('session.cookie')])
+            ->all();
+
+        $me = $this->withHeader('Referer', 'http://localhost:3000/login')
+            ->withCookies($sessionCookies)
+            ->getJson('/api/user');
+
+        $me->assertStatus(200);
+        $me->assertJson(['user' => ['email' => 'spa3@test.com', 'role' => 'FINANZAS']]);
+    }
+
+    public function test_web_logout_invalidates_session(): void
+    {
+        User::factory()->create([
+            'email'    => 'spa4@test.com',
+            'password' => bcrypt('secret123'),
+            'status'   => 'Active',
+        ]);
+
+        $cookies = $this->frontendCsrfCookies();
+        $xsrfToken = urldecode($cookies['XSRF-TOKEN']);
+
+        $login = $this->withHeader('Referer', 'http://localhost:3000/login')
+            ->withHeader('X-XSRF-TOKEN', $xsrfToken)
+            ->withCookies($cookies)
+            ->postJson('/api/login', ['email' => 'spa4@test.com', 'password' => 'secret123']);
+
+        $sessionCookies = collect($login->headers->getCookies())
+            ->mapWithKeys(fn ($c) => [$c->getName() => $c->getValue()])
+            ->only([config('session.cookie')])
+            ->all();
+
+        $logout = $this->withHeader('Referer', 'http://localhost:3000/login')
+            ->withHeader('X-XSRF-TOKEN', $xsrfToken)
+            ->withCookies(array_merge($sessionCookies, ['XSRF-TOKEN' => $cookies['XSRF-TOKEN']]))
+            ->postJson('/api/logout');
+
+        $logout->assertStatus(204);
+
+        // Verificado en el mismo ciclo de app (no una nueva request simulada):
+        // el guard 'web' quedó sin usuario autenticado tras logout.
+        $this->assertGuest('web');
+    }
 }

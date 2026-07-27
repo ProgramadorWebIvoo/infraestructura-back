@@ -18,6 +18,11 @@ class UserController extends Controller
 
     private const VALID_STATUSES = ['Active', 'Inactive'];
 
+    public function roles(Request $request)
+    {
+        return response()->json(self::VALID_ROLES);
+    }
+
     public function index(Request $request)
     {
         $perPage = min((int) ($request->get('per_page', 20)), 100);

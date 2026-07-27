@@ -80,6 +80,15 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/auth/permissions
+     * Matriz de rutas SPA permitidas por rol (config/permissions.php).
+     */
+    public function permissions(Request $request)
+    {
+        return response()->json(config('permissions', []));
+    }
+
     public function logout(Request $request)
     {
         $token = $request->user()->currentAccessToken();

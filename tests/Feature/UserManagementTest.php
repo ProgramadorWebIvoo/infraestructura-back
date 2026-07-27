@@ -27,6 +27,26 @@ class UserManagementTest extends TestCase
         return ['Authorization' => 'Bearer ' . $user->createToken('test')->plainTextToken];
     }
 
+    public function test_roles_returns_valid_role_list(): void
+    {
+        $response = $this->withHeaders($this->headers($this->superadmin))
+            ->getJson('/api/roles');
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
+            'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
+        ]);
+    }
+
+    public function test_roles_requires_superadmin_or_admin(): void
+    {
+        $response = $this->withHeaders($this->headers($this->analista))
+            ->getJson('/api/roles');
+
+        $response->assertStatus(403);
+    }
+
     public function test_index_returns_all_users(): void
     {
         User::factory()->count(3)->create();

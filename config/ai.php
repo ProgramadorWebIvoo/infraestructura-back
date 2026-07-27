@@ -65,4 +65,19 @@ return [
         'base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Modelos seleccionables por proveedor (UI de configuración de IA)
+    |--------------------------------------------------------------------------
+    |
+    | Fuente única de verdad para el selector de modelos del panel de admin
+    | (GET /ai/config/models) — evita duplicar esta lista en el frontend.
+    |
+    */
+    'available_models' => [
+        'openai' => ['gpt-5.6-sol', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-5.4-nano', 'gpt-5.6-luna', 'gpt-5.6-terra'],
+        'anthropic' => ['claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
+        'gemini' => ['gemini-3.6-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+    ],
+
 ];

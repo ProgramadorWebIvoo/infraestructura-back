@@ -134,6 +134,30 @@ class AuthTest extends TestCase
         $response->assertStatus(401);
     }
 
+    public function test_permissions_returns_route_matrix_for_all_roles(): void
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('test');
+
+        $response = $this->getJson('/api/auth/permissions', [
+            'Authorization' => 'Bearer ' . $token->plainTextToken,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
+            'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
+        ]);
+        $this->assertContains('/presidencia', $response->json('PRESIDENCIA'));
+        $this->assertNotContains('/presidencia', $response->json('ADMIN'));
+    }
+
+    public function test_permissions_without_token_returns_401(): void
+    {
+        $response = $this->getJson('/api/auth/permissions');
+        $response->assertStatus(401);
+    }
+
     public function test_logout_revokes_token(): void
     {
         $user = User::factory()->create();

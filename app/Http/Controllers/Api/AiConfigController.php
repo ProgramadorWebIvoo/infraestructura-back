@@ -34,6 +34,15 @@ class AiConfigController extends Controller
     }
 
     /**
+     * GET /api/ai/config/models
+     * Modelos seleccionables por proveedor, para el selector del panel de admin.
+     */
+    public function availableModels()
+    {
+        return response()->json(config('ai.available_models', []));
+    }
+
+    /**
      * POST /api/ai/config
      * Create a new AI configuration.
      */

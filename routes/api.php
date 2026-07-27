@@ -32,6 +32,7 @@ Route::post('/public/invitations/{token}/proposal', [SupportController::class, '
     
 Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
+    Route::get('/auth/permissions', [AuthController::class, 'permissions']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Push notifications
@@ -83,6 +84,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download']);
 
     Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {
+        Route::get('/roles', [UserController::class, 'roles']);
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
         Route::patch('/users/{user}', [UserController::class, 'update']);
@@ -106,6 +108,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         // AI Configuration (static routes BEFORE wildcard {id})
         Route::prefix('ai/config')->group(function () {
             Route::get('/usage', [AiConfigController::class, 'usage']);
+            Route::get('/models', [AiConfigController::class, 'availableModels']);
             Route::post('/sync', [AiConfigController::class, 'sync']);
             Route::get('/', [AiConfigController::class, 'index']);
             Route::post('/', [AiConfigController::class, 'store']);

@@ -77,15 +77,22 @@ class AiConfiguration extends Model
      * para la BD (convención Laravel/Eloquent). La diferencia es intencional:
      * la API pública expone camelCase, el modelo interno usa snake_case.
      *
+     * Por seguridad NUNCA se envía la API key completa.
+     * Solo: `hasApiKey` (bool) + últimos 4 caracteres en `apiKey`.
+     *
      * @see $fillable (snake_case) vs esta salida (camelCase)
      */
     public function toArray(): array
     {
+        $key = $this->api_key; // triggers accessor → decrypt
+        $hasKey = !empty($key);
+
         return [
             'id'          => $this->id,
             'provider'    => $this->provider,
             'model'       => $this->model,
-            'apiKey'      => $this->getMaskedApiKey(),
+            'hasApiKey'   => $hasKey,
+            'apiKey'      => $hasKey ? '••••' . substr($key, -4) : '',
             'baseUrl'     => $this->base_url,
             'maxTokens'   => $this->max_tokens,
             'isActive'    => $this->is_active,

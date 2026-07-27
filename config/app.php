@@ -60,6 +60,12 @@ return [
 
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
 
+    // Proxies confiables para detección de esquema real (HTTPS) detrás de un
+    // reverse proxy / load balancer / CDN. "*" para confiar en cualquiera
+    // (solo si la app no es alcanzable directamente sin pasar por ese proxy),
+    // o una lista de IPs separadas por coma. Ver App\Http\Middleware\TrustProxies.
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

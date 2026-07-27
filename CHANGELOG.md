@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## [2026-07-27] — C-03: HSTS, upgrade-insecure-requests, TRUSTED_PROXIES y forceScheme(https)
+
+**Tipo:** security
+
+**Qué:**
+- `AddCspHeaders`: agrega `upgrade-insecure-requests` a la CSP y el header `Strict-Transport-Security: max-age=31536000; includeSubDomains` en todas las respuestas de la API (enviarlo sobre HTTP no tiene efecto por spec, seguro incluirlo siempre).
+- `TrustProxies`: ahora lee `config('app.trusted_proxies')` (nueva key `trusted_proxies` en `config/app.php`, vía `env('TRUSTED_PROXIES')` — no `env()` directo en el middleware, para no romperse con `config:cache`). Sin esto, si el backend está detrás de un reverse proxy/CDN que termina TLS, Laravel nunca detecta `$request->isSecure()` correctamente y el HSTS/cookies Secure quedan inertes.
+- `AppServiceProvider::boot()`: en producción, `URL::forceScheme('https')` para que cualquier URL generada (ej. links de reset de contraseña) sea siempre https.
+
+**Por qué / causa raíz:** PENDIENTES CRITICAL #3 (auditoría interna) — las contraseñas viajan en claro en el body de `/login`; el control real no es hashear en cliente (evaluado y descartado, no añade seguridad sobre TLS) sino garantizar que la conexión sea siempre HTTPS y que el backend pueda detectarlo correctamente detrás de cualquier proxy de producción.
+
+**Archivos:** `app/Http/Middleware/AddCspHeaders.php`, `app/Http/Middleware/TrustProxies.php`, `app/Providers/AppServiceProvider.php`, `config/app.php`, `.env.example`
+
+**Verificación:** 131/131 tests pasando.
+
+## [2026-07-27] — 🔴 CRITICAL C-02 (rehecho): Sanctum SPA nativo (session + CSRF) reemplaza cookie casera con CSRF roto
+
+**Tipo:** security
+
+**Qué:** Se descartó un intento previo sin commitear (`TokenFromCookie`, `RefreshSanctumToken` cookie-side, `CorsDiagnosticController`) que migraba el token de `localStorage` a cookie httpOnly pero requería `SameSite=None` sin ningún token CSRF — CSRF explotable sobre `pay()`, `approve-investment`, `toggle-status`, etc. Se reemplazó por el flujo oficial de Sanctum SPA, ya parcialmente andamiado en el proyecto (`config/sanctum.php` con `'guard' => ['web']`, `cors.php` ya incluía `sanctum/csrf-cookie`):
+- `Kernel.php`: activado `EnsureFrontendRequestsAreStateful` en el grupo `api` (estaba comentado).
+- `config/cors.php`: `supports_credentials => true`.
+- `AuthController@login`/`@logout`: bifurcan por `$request->hasSession()` — si la petición viene del SPA (Referer/Origin en `SANCTUM_STATEFUL_DOMAINS`), autentica por sesión httpOnly sin exponer token en el body; si no (mobile), sigue emitiendo Bearer token exactamente como antes. `RefreshSanctumToken` (refresh de token mobile) no requirió cambios — ya era un no-op seguro para sesiones vía su chequeo de `TransientToken`.
+
+**Por qué / causa raíz:** Auditorías V3 paralelas de frontend y backend (`AUDITORIA_back_27_07_2026_V3.md`, `AUDITORIA_front_27_07_2026_V3.md`) detectaron, de forma independiente desde ambos lados del stack, el mismo CSRF explotable en el intento anterior.
+
+**Archivos:** `app/Http/Kernel.php`, `config/cors.php`, `app/Http/Controllers/Api/AuthController.php`, `tests/Feature/AuthTest.php`, `.env.example`
+
+**Verificación:** 131/131 tests pasando (incluye 4 tests nuevos del flujo de sesión SPA: login sin token expuesto, `/api/user` autenticado por cookie, logout invalida sesión).
+
 ## [2026-07-24] — Documentación de pruebas para fixes Type-A
 
 **Tipo:** docs

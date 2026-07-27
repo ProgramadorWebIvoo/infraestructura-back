@@ -295,6 +295,8 @@ class ProjectController extends Controller
 
     public function selectContractor(Request $request, Project $project)
     {
+        abort_unless($project->status === self::STATUSES['COMPARATIVA_ENVIADA'], 422, 'Solo se puede adjudicar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
+
         $data = $request->validate([
             'contractorCode' => ['required', 'exists:contractors,code'],
             'proposalId' => ['required', 'exists:project_proposals,id'],
@@ -322,6 +324,15 @@ class ProjectController extends Controller
             'notes' => ['nullable', 'string', 'max:255'],
         ]);
 
+        // El anticipo solo procede recién adjudicado el contratista; el pago
+        // final solo tras verificar calidad — sin esto, FINANZAS podía pagar
+        // un proyecto en cualquier estado, incluyendo reabrir uno ya cerrado.
+        if ($data['paymentType'] === 'ADVANCE') {
+            abort_unless($project->status === self::STATUSES['CONTRATADO'], 422, 'El anticipo solo se puede liberar con el contratista recién adjudicado (CONTRATADO).');
+        } else {
+            abort_unless($project->status === self::STATUSES['LISTO_PAGO_FINAL'], 422, 'El pago final solo se puede liberar tras la verificación de calidad (LISTO_PAGO_FINAL).');
+        }
+
         ProjectPayment::updateOrCreate(
             ['project_id' => $project->id, 'payment_type' => $data['paymentType']],
             [
@@ -340,6 +351,8 @@ class ProjectController extends Controller
 
     public function reportFinished(Project $project)
     {
+        abort_unless($project->status === self::STATUSES['EN_EJECUCION'], 422, 'Solo se puede reportar como finalizada una obra en ejecución (EN_EJECUCION).');
+
         $project->update(['status' => self::STATUSES['VERIFICANDO_FINALIZACION']]);
         $this->log($project, 'SISTEMA', 'Reporte de obra finalizada', 'La obra fue marcada como finalizada y pendiente de certificacion.');
 
@@ -348,6 +361,8 @@ class ProjectController extends Controller
 
     public function verifyCompletion(Request $request, Project $project)
     {
+        abort_unless($project->status === self::STATUSES['VERIFICANDO_FINALIZACION'], 422, 'Solo se puede verificar la finalización de una obra reportada como terminada (VERIFICANDO_FINALIZACION).');
+
         $data = $request->validate([
             'qualityVerified' => ['required', 'boolean'],
             'completionVerifiedDate' => ['nullable', 'date'],

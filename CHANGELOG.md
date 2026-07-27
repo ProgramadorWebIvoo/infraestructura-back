@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## [2026-07-27] — 🔴 ALTO A-6: Guardas de estado en ciclo de vida de proyecto (integridad financiera)
+
+**Tipo:** security + fix
+
+**Qué:** `ProjectController::selectContractor()`, `pay()`, `reportFinished()` y `verifyCompletion()` no validaban el `status` del proyecto antes de ejecutar la transición — solo el middleware `role:` verificaba *quién* podía llamar, nunca *cuándo* era válido. Se agregó `abort_unless($project->status === ..., 422, ...)` a cada uno, mismo patrón que ya usaba `rejectProposals()`:
+- `selectContractor()` → requiere `COMPARATIVA_ENVIADA`.
+- `pay(ADVANCE)` → requiere `CONTRATADO`. `pay(FINAL)` → requiere `LISTO_PAGO_FINAL`.
+- `reportFinished()` → requiere `EN_EJECUCION`.
+- `verifyCompletion()` → requiere `VERIFICANDO_FINALIZACION`.
+
+**Por qué / causa raíz:** Auditoría V3 (A-6/Sec. 3) — un usuario con rol `FINANZAS` podía invocar `POST /projects/{id}/payments` con `paymentType=FINAL` sobre un proyecto recién `CREADO` (saltando adjudicación, ejecución y verificación de calidad). Peor: `paymentType=ADVANCE` sobre un proyecto ya `COMPLETADO_PAGADO` actualizaba el pago existente y el `update()` posterior **revertía el status a `EN_EJECUCION`**, reabriendo un proyecto ya cerrado y pagado sin ninguna restricción de BD que lo impidiera.
+
+**Archivos:** `app/Http/Controllers/Api/ProjectController.php`, `tests/Feature/ProjectLifecycleTest.php`
+
+**Verificación:** 6 tests nuevos cubriendo exactamente los escenarios de la auditoría (pago sobre proyecto `CREADO`, reapertura de proyecto `COMPLETADO_PAGADO`, cada transición fuera de orden). 144/144 tests pasando.
+
+## [2026-07-27] — MEDIUM #15–#17: nuevos endpoints de configuración (permisos, modelos IA, roles)
+
+**Tipo:** feature
+
+**Qué:**
+- `GET /api/auth/permissions` (`AuthController::permissions`) — matriz rol→rutas SPA, desde `config/permissions.php` (nuevo). Reemplaza el `roleAccess` que el frontend tenía hardcodeado.
+- `GET /api/ai/config/models` (`AiConfigController::availableModels`) — modelos seleccionables por proveedor, desde `config/ai.php` → `available_models` (nuevo). Reemplaza `PROVIDER_MODELS` hardcodeado en el frontend.
+- `GET /api/roles` (`UserController::roles`) — devuelve `VALID_ROLES`, ya existente como constante de clase. Reemplaza el array `ROLES` hardcodeado en `UsuariosPanel.tsx` (que además le faltaba `CATALOGOS`).
+- Los 3 endpoints viven dentro de grupos ya protegidos por `auth:sanctum` (permisos: cualquier autenticado; roles y modelos IA: `role:SUPERADMIN,ADMIN`, mismo grupo que el resto de configuración).
+
+**Por qué / causa raíz:** ítems MEDIUM #15–#17 de la re-auditoría V2 del frontend — cada uno de estos valores estaba duplicado como constante hardcodeada en el bundle del SPA, requiriendo un deploy de frontend para cualquier cambio (nuevo rol, nuevo modelo, cambio de permisos).
+
+**Archivos:** `routes/api.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Controllers/Api/AiConfigController.php`, `app/Http/Controllers/Api/UserController.php`, `config/permissions.php` [NUEVO], `config/ai.php`, `tests/Feature/AuthTest.php`, `tests/Feature/UserManagementTest.php`, `tests/Feature/AiConfigModelsTest.php` [NUEVO]
+
+**Verificación:** 138/138 tests pasando.
+
 ## [2026-07-27] — C-03: HSTS, upgrade-insecure-requests, TRUSTED_PROXIES y forceScheme(https)
 
 **Tipo:** security

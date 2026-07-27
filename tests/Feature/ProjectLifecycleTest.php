@@ -395,4 +395,99 @@ class ProjectLifecycleTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonPath('data.id', $project->id);
     }
+
+    // ── Guardas de estado (bug de integridad financiera, auditoría V3 A-6) ──
+    // Antes de este fix, ninguno de estos 4 endpoints validaba el estado
+    // del proyecto: FINANZAS podía pagar un proyecto recién creado, o
+    // reabrir uno ya cerrado y pagado. El middleware `role:` solo valida
+    // *quién* puede llamar, no *cuándo* es válido hacerlo.
+
+    public function test_select_contractor_rejects_project_not_in_comparativa_enviada(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $this->contractor->code,
+        ]);
+
+        $response = $this->actingAs($this->procura)
+            ->postJson("/api/projects/{$project->id}/select-contractor", [
+                'contractorCode' => $this->contractor->code,
+                'proposalId'     => $proposal->id,
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertEquals('CREADO', $project->fresh()->status);
+    }
+
+    public function test_pay_advance_rejects_project_not_in_contratado(): void
+    {
+        // Escenario exacto de la auditoría: FINANZAS paga un proyecto
+        // recién creado, saltándose adjudicación, ejecución y verificación.
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        $response = $this->actingAs($this->finanzas)
+            ->postJson("/api/projects/{$project->id}/payments", [
+                'paymentType' => 'ADVANCE',
+                'amount'      => 999999,
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertEquals('CREADO', $project->fresh()->status);
+        $this->assertDatabaseMissing('project_payments', ['project_id' => $project->id]);
+    }
+
+    public function test_pay_final_rejects_project_not_in_listo_pago_final(): void
+    {
+        $project = Project::factory()->create(['status' => 'EN_EJECUCION']);
+
+        $response = $this->actingAs($this->finanzas)
+            ->postJson("/api/projects/{$project->id}/payments", [
+                'paymentType' => 'FINAL',
+                'amount'      => 1000,
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertEquals('EN_EJECUCION', $project->fresh()->status);
+    }
+
+    public function test_pay_final_rejects_reopening_completed_project(): void
+    {
+        // Escenario exacto de la auditoría: pagar sobre un proyecto ya
+        // COMPLETADO_PAGADO no debe poder reabrirlo.
+        $project = Project::factory()->create(['status' => 'COMPLETADO_PAGADO']);
+
+        $response = $this->actingAs($this->finanzas)
+            ->postJson("/api/projects/{$project->id}/payments", [
+                'paymentType' => 'ADVANCE',
+                'amount'      => 500,
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertEquals('COMPLETADO_PAGADO', $project->fresh()->status);
+    }
+
+    public function test_report_finished_rejects_project_not_in_en_ejecucion(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/report-finished");
+
+        $response->assertStatus(422);
+        $this->assertEquals('CREADO', $project->fresh()->status);
+    }
+
+    public function test_verify_completion_rejects_project_not_in_verificando_finalizacion(): void
+    {
+        $project = Project::factory()->create(['status' => 'EN_EJECUCION']);
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/verify-completion", [
+                'qualityVerified' => true,
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertEquals('EN_EJECUCION', $project->fresh()->status);
+    }
 }

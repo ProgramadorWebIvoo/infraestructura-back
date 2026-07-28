@@ -7,6 +7,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -63,6 +65,37 @@ class AuthController extends Controller
         return response()->json([
             'token' => $user->createToken($tokenName, ['*'], $expiresAt)->plainTextToken,
             'user' => $userPayload,
+        ]);
+    }
+
+    /**
+     * POST /api/reset-password
+     * Consume el token emitido por Password::sendResetLink() (ver
+     * UserController::sendResetLink) y establece la nueva contraseña.
+     * Ruta pública, sin auth:sanctum: el token es la prueba de identidad.
+     */
+    public function resetPassword(Request $request)
+    {
+        $data = $request->validate([
+            'token'    => ['required', 'string'],
+            'email'    => ['required', 'email'],
+            'password' => ['required', 'string', 'confirmed', PasswordRule::min(8)->mixedCase()->numbers()],
+        ]);
+
+        $status = Password::reset(
+            $data,
+            function (User $user, string $password) {
+                $user->password = Hash::make($password);
+                $user->save();
+            },
+        );
+
+        if ($status === Password::PASSWORD_RESET) {
+            return response()->json(['message' => 'Contraseña actualizada correctamente.']);
+        }
+
+        throw ValidationException::withMessages([
+            'email' => [__($status)],
         ]);
     }
 

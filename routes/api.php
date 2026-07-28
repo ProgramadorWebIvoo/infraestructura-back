@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\PushTokenController;
 */
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:public-api');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:public-api');
 Route::post('/contractors', [SupportController::class, 'storeContractor'])->middleware('throttle:public-api');
 Route::get('/public/invitations/{token}', [SupportController::class, 'getInvitationPublicInfo'])->middleware('throttle:public-api');
 Route::post('/public/invitations/{token}/proposal', [SupportController::class, 'storeSupplierMaterialProposal'])->middleware('throttle:public-api');

@@ -183,6 +183,7 @@ class SupportController extends Controller
         $data = $request->validate([
             'estimatedDays'         => ['nullable', 'integer', 'min:1'],
             'durationUnit'          => ['nullable', 'string', 'in:dias,semanas,meses'],
+            'advancePercent'        => ['nullable', 'integer', 'min:0', 'max:100'],
             'items'                 => ['required', 'array', 'min:1'],
             'items.*.materialName'  => ['required', 'string', 'max:220'],
             'items.*.quantity'      => ['required', 'numeric', 'min:0'],
@@ -206,6 +207,7 @@ class SupportController extends Controller
                 'general_notes'          => $data['generalNotes'] ?? null,
                 'estimated_days'         => $data['estimatedDays'] ?? null,
                 'duration_unit'          => $data['durationUnit'] ?? null,
+                'advance_percent'        => $data['advancePercent'] ?? null,
             ]);
 
             // Marcar el enlace como usado (single-use)
@@ -245,6 +247,7 @@ class SupportController extends Controller
             'generalNotes'           => $p->general_notes,
             'estimatedDays'          => $p->estimated_days,
             'durationUnit'           => $p->duration_unit,
+            'advancePercent'         => $p->advance_percent,
             'submittedAt'            => optional($p->submitted_at)->format('Y-m-d H:i'),
         ];
     }

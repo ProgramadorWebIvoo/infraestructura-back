@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [2026-07-28] — Fix: anticipo/tiempo estimado fabricados al importar propuestas de proveedores
+
+**Tipo:** fix + feature
+
+**Qué:**
+- **Anticipo hardcodeado a 30%:** `ProjectController::importSupplierProposals()` asignaba `negotiated_advance_percent = 30` a toda propuesta importada desde el portal público de proveedores, sin importar si el proveedor había indicado algo distinto (de hecho, no tenía forma de indicarlo). Se agregó la columna `advance_percent` a `supplier_material_proposals` (migración `2026_07_28_142038`), validación y persistencia en `SupportController::storeSupplierMaterialProposal()`, y exposición en `formatProposal()`. El import ahora usa `$supplierProposal->advance_percent ?? 0` — el `0` es el default real de la columna en `project_proposals` y es consistente con el copy del formulario público ("déjelo vacío si no requiere anticipo"); el `30` anterior era un resabio de cuando el campo no existía y contradecía ese mensaje.
+- **Tiempo estimado inventado:** el mismo import convertía `estimated_days`/`duration_unit` a `delivery_weeks` vía un `match` que, ante datos vacíos, fabricaba 1, 2 o 4 semanas según la rama (`'dias' => ceil(1/7)`, `default => estimated_days ?? 4`). Un proveedor que no daba estimado terminaba compitiendo con un plazo ficticio contra ofertas de contratistas con plazos reales en la tabla comparativa y en la evaluación con IA. Ahora, sin dato, `delivery_weeks` queda en `0` (el default real de la columna) en lugar de un número inventado.
+- **Prompt de evaluación IA:** `BaseAIProvider::buildPrompt()` mandaba literalmente "Entrega: 0 semanas" a ChatGPT/Gemini/Claude cuando no había dato, lo que un modelo puede interpretar como "entrega instantánea" y sesgar la evaluación a favor de esa oferta. Ahora manda "Entrega: sin dato" cuando `deliveryWeeks === 0`.
+
+**Por qué / causa raíz:** reportado por el usuario durante pruebas manuales del portal público de proveedores — notó que el sistema asumía 30% de anticipo pese a que la UI invitaba a dejarlo vacío si no aplicaba, y que el plazo de entrega aparecía como 1/2/4 semanas aun sin haber sido especificado por el proveedor.
+
+**Archivos:** `database/migrations/2026_07_28_142038_add_advance_percent_to_supplier_material_proposals_table.php` [NUEVO], `app/Models/SupplierMaterialProposal.php`, `app/Http/Controllers/Api/{SupportController,ProjectController}.php`, `app/Services/AI/Providers/BaseAIProvider.php`, `database/factories/SupplierMaterialProposalFactory.php`.
+
+**Verificación:** suite completa 177/177 tests pasando.
+
 ## [2026-07-27] — 🟠 ALTO Audit V3 #1–6: batch de severidad alta (IDs, expiración, API keys, SSRF, contraseñas, constantes)
 
 **Tipo:** security + fix

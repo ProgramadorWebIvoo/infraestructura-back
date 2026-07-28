@@ -26,6 +26,7 @@ class SupplierMaterialProposalFactory extends Factory
             'general_notes' => fake()->optional()->paragraph(),
             'estimated_days' => fake()->numberBetween(15, 120),
             'duration_unit' => fake()->randomElement(['dias', 'semanas', 'meses']),
+            'advance_percent' => fake()->randomElement([0, 10, 20, 30, 40, 50]),
         ];
     }
 }

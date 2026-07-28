@@ -220,11 +220,17 @@ class ProjectController extends Controller
             $laborCost = 0;
             $totalCost = $materialCost + $laborCost;
 
-            // Convert estimated duration to weeks
+            // Convert estimated duration to weeks. Sin dato del proveedor, se deja en 0
+            // (default real de la columna) en vez de inventar un plazo.
             $deliveryWeeks = match ($supplierProposal->duration_unit) {
-                'dias' => max(1, (int) ceil(($supplierProposal->estimated_days ?? 1) / 7)),
-                'meses' => ($supplierProposal->estimated_days ?? 1) * 4,
-                default => $supplierProposal->estimated_days ?? 4, // 'semanas' or null
+                'dias' => $supplierProposal->estimated_days !== null
+                    ? max(1, (int) ceil($supplierProposal->estimated_days / 7))
+                    : 0,
+                'meses' => $supplierProposal->estimated_days !== null
+                    ? $supplierProposal->estimated_days * 4
+                    : 0,
+                'semanas' => $supplierProposal->estimated_days ?? 0,
+                default => 0, // sin duration_unit => sin dato
             };
 
             $description = $supplierProposal->general_notes
@@ -238,7 +244,7 @@ class ProjectController extends Controller
                 'labor_cost' => $laborCost,
                 'total_cost' => $totalCost,
                 'delivery_weeks' => $deliveryWeeks,
-                'negotiated_advance_percent' => 30,
+                'negotiated_advance_percent' => $supplierProposal->advance_percent ?? 0,
                 'description' => $description,
             ]);
 

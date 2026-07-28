@@ -29,6 +29,7 @@ class SupplierMaterialProposal extends Model
         'general_notes',
         'estimated_days',
         'duration_unit',
+        'advance_percent',
         'submitted_at',
     ];
 

@@ -94,7 +94,8 @@ PROMPT;
             $text .= "Costo Materiales: \${$prop['materialCost']}\n";
             $text .= "Costo Mano de Obra: \${$prop['laborCost']}\n";
             $text .= "Costo Total: \${$prop['totalCost']}\n";
-            $text .= "Entrega: {$prop['deliveryWeeks']} semanas\n";
+            $entrega = $prop['deliveryWeeks'] > 0 ? "{$prop['deliveryWeeks']} semanas" : "sin dato";
+            $text .= "Entrega: {$entrega}\n";
             $text .= "Anticipo Pactado: {$prop['negotiatedAdvancePercent']}%\n";
             $text .= "Descripción: [INICIO_DATOS]" . $this->sanitizeInput($prop['description']) . "[FIN_DATOS]\n";
 

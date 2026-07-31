@@ -31,7 +31,10 @@ class OpenAIProvider extends BaseAIProvider
                     ['role' => 'user',   'content' => $userPrompt],
                 ],
                 'temperature' => 0.3,
-                'max_tokens'  => $this->maxTokens,
+                // max_completion_tokens (no max_tokens): es el campo vigente en la
+                // API de OpenAI para modelos modernos (gpt-5/o-series); max_tokens
+                // está deprecado y es rechazado por esos modelos.
+                'max_completion_tokens' => $this->maxTokens,
             ]);
 
         if ($response->status() === 429) {

@@ -10,12 +10,21 @@ use App\Services\AI\AIEvaluationService;
 use App\Services\AI\Providers\AnthropicProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 class AiConfigController extends Controller
 {
+    /**
+     * Modelos seleccionables por proveedor para el selector del panel de admin.
+     * Catálogo estático (no por BD): lista las opciones que el admin puede elegir.
+     * Debe estar sincronizado con src/constants/aiModels.ts del frontend.
+     */
+    private const AVAILABLE_MODELS = [
+        'openai' => ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.2', 'gpt-4.1', 'gpt-4.1-mini', 'o3', 'o4-mini'],
+        'anthropic' => ['claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+        'gemini' => ['gemini-3.6-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.0-flash'],
+    ];
+
     private AiConfigurationService $configService;
 
     public function __construct(AiConfigurationService $configService)
@@ -40,7 +49,7 @@ class AiConfigController extends Controller
      */
     public function availableModels()
     {
-        return response()->json(config('ai.available_models', []));
+        return response()->json(self::AVAILABLE_MODELS);
     }
 
     /**
@@ -286,7 +295,7 @@ class AiConfigController extends Controller
                     'messages' => [
                         ['role' => 'user', 'content' => 'Respond with "ok"'],
                     ],
-                    'max_tokens' => 5,
+                    'max_completion_tokens' => 5,
                 ]);
 
             if ($response->successful()) {

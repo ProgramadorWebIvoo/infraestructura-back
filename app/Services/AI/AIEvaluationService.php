@@ -10,6 +10,9 @@ use RuntimeException;
 
 class AIEvaluationService
 {
+    /** Timeout por llamada a proveedor IA (segundos). Config global, no por BD. */
+    private const DEFAULT_TIMEOUT = 60;
+
     /** Mapa de proveedores disponibles */
     private array $providers = [];
 
@@ -40,7 +43,7 @@ class AIEvaluationService
 
         $order = $this->configService->getProviderOrder();
 
-        $timeout = (int) config('ai.timeout', 60);
+        $timeout = self::DEFAULT_TIMEOUT;
 
         foreach ($order as $key) {
             $key = trim($key);
@@ -198,7 +201,7 @@ private function logAttempt(string $message): void
 
             AiUsageLog::create([
                 'provider'           => $provider,
-                'model'              => $result['providerUsed'] ?? config("ai.{$provider}.model", 'unknown'),
+                'model'              => $result['providerUsed'] ?? 'unknown',
                 'endpoint'           => 'evaluate-proposals',
                 'prompt_tokens'      => $usage['prompt_tokens'] ?? null,
                 'completion_tokens'  => $usage['completion_tokens'] ?? null,

@@ -31,11 +31,12 @@ class AnthropicProvider extends BaseAIProvider
                 'anthropic-version' => self::API_VERSION,
             ])
             ->post("{$this->baseUrl}/messages", [
-                'model'       => $this->model,
-                'max_tokens'  => $this->maxTokens,
-                'temperature' => 0.3,
-                'system'      => $systemPrompt,
-                'messages'    => [
+                'model'      => $this->model,
+                'max_tokens' => $this->maxTokens,
+                // Sin 'temperature': no soportada por los modelos Claude nuevos
+                // (Opus 4.x / Sonnet 4.5+ / Haiku 4.5); enviarla devuelve 400.
+                'system'     => $systemPrompt,
+                'messages'   => [
                     ['role' => 'user', 'content' => $userPrompt],
                 ],
             ]);

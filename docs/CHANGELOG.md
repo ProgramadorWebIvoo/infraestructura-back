@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [2026-07-31] — Limpieza: eliminado config/ai.php (config IA 100% por BD) + código muerto
+
+**Tipo:** refactor
+
+**Qué:**
+- **Eliminado `config/ai.php`**: la configuración IA es administrada en runtime desde la tabla `ai_configurations` (BD, `AiConfigurationService`). El archivo quedaba obsoleto: `provider_order`, `timeout` y los bloques por proveedor (`OPENAI_*`, `GEMINI_*`, `ANTHROPIC_*`, `AI_PROVIDER_ORDER`, `AI_TIMEOUT`) no tenían efecto sobre el runtime desde el fix A-05/A-04.
+- **Últimas 3 referencias a `config('ai.*')` reemplazadas:**
+  - `AIEvaluationService::registerProviders()` — `config('ai.timeout', 60)` → constante `DEFAULT_TIMEOUT = 60` (config global, no por BD; `BaseAIProvider` mantiene default 30 si no se pasa).
+  - `AIEvaluationService::logUsage()` — `config("ai.{$provider}.model", 'unknown')` → `'unknown'` (fallback muerto: `BaseAIProvider::normalizeResult()` siempre setea `providerUsed`).
+  - `AiConfigController::availableModels()` — `config('ai.available_models', [])` → constante `AVAILABLE_MODELS` en el propio controller (catálogo estático de modelos seleccionables; comportamiento del endpoint y tests intactos).
+- **Imports muertos:** `Validator` y `ValidationException` en `AiConfigController` (el controller usa `$request->validate()`, no las fachadas).
+- **`AI_TIMEOUT` eliminado** de `.env.example` y `.env` (única variable env IA restante; sin efecto tras borrar `config/ai.php`).
+- **`test-fixes.sh` eliminado** — script temporal de verificación de los 7 fixes de la auditoría TYPE-A (2026-07-24); todos los fixes ya verificados y cubiertos por la suite.
+
+**Por qué / causa raíz:** estructura actual = configuración IA 100% por BD. `config/ai.php` era un resabio de la etapa env-based y sus variables no afectaban el comportamiento; los scripts/imports restantes eran restos de diagnósticos cerrados.
+
+**Archivos:** `config/ai.php` [ELIMINADO], `test-fixes.sh` [ELIMINADO], `app/Http/Controllers/Api/AiConfigController.php`, `app/Services/AI/AIEvaluationService.php`, `.env.example`, `.env`.
+
+**Verificación:** suite completa `php artisan test` — 186/186 tests pasando; `grep config('ai` = 0 coincidencias en `*.php`; `php -l` sin errores en archivos editados.
+
 ## [2026-07-31] — DashboardSummary: winner con fallback por contractor_code (consistencia con el espejo cliente)
 **Tipo:** fix
 

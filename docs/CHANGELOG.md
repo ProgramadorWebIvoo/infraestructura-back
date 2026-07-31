@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## [2026-07-31] — DashboardSummary: winner con fallback por contractor_code (consistencia con el espejo cliente)
+**Tipo:** fix
+
+**Qué:** `DashboardSummaryController` ahora resuelve la propuesta ganadora con `firstWhere('id', selected_proposal_id)` **o** fallback a `firstWhere('contractor_code', selected_contractor_code)` — antes solo por `selected_proposal_id`. Proyectos adjudicados solo por código de contratista (sin `selected_proposal_id`) quedaban fuera de `totalCommittedAmount`, `topContractors` y `negotiationMetrics`, mientras el fallback cliente (espejo) sí los contaba → inconsistencias entre servidor y dashboard.
+
+**Verificación:** test nuevo `test_winner_falls_back_to_selected_contractor_code`; suite completa — 186/186 tests pasando.
+
+**Archivos:** `app/Http/Controllers/Api/DashboardSummaryController.php`, `tests/Feature/DashboardSummaryTest.php`.
+
+
+## [2026-07-31] — Endpoint de resumen ejecutivo para Presidencia + metadatos en ProjectResource
+
+**Tipo:** feature
+
+**Qué:**
+- **`GET /api/dashboard/summary`** (`DashboardSummaryController`): agregados exactos server-side para el dashboard de Presidencia — totales financieros (aprobado, liberado, comprometido, pendiente, `releasedPercent`, `excessReleased` cuando lo liberado supera lo aprobado), funnel por estado en orden canónico (9 estados), desglose por tipo (infra/mantenimiento), inversión por ubicación (top 8), tendencia mensual de creación, top 5 contratistas adjudicados, obras estancadas (sin actividad ≥14 días), métricas de negociación (anticipo y plazo promedio de propuestas ganadoras) y `updatedAt` ISO8601.
+- **Ruta**: `GET /api/dashboard/summary` con `middleware('role:PRESIDENCIA,SUPERADMIN')` — solo roles ejecutivos pueden leer el agregado; el resto recibe 403 (cubierto por test).
+- **`ProjectResource`**: ahora serializa `createdAt`/`updatedAt` (ISO8601) y `contractorRating` en cada propuesta (lookup batch sobre `contractors` para evitar N+1) — alimenta las columnas nuevas del master de Presidencia.
+- **Tests**: `DashboardSummaryTest` (403 para rol no autorizado, agregados con datos vacíos, montos/porcentajes, `excessReleased`, estancados, desgloses) y `ProjectResourceTest` (timestamps y rating 4.7).
+
+**Por qué / causa raíz:** el dashboard de Presidencia calculaba agregados en el cliente sobre una lista paginada (conteos incompletos con >20 obras) y no había señal de sobre-ejecución ni metadata temporal en el resource; el servidor es la fuente de verdad exacta.
+
+**Archivos:** `app/Http/Controllers/Api/DashboardSummaryController.php` [NUEVO], `routes/api.php`, `app/Http/Resources/ProjectResource.php`, `tests/Feature/DashboardSummaryTest.php` [NUEVO], `tests/Feature/ProjectResourceTest.php` [NUEVO].
+
+**Verificación:** suite completa `php artisan test` — 185/185 tests pasando.
+
+
 ## [2026-07-28] — Fix: anticipo/tiempo estimado fabricados al importar propuestas de proveedores
 
 **Tipo:** fix + feature

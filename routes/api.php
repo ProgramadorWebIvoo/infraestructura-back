@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\AIEvaluationController;
 use App\Http\Controllers\Api\AiConfigController;
 use App\Http\Controllers\Api\MaterialController;
 use App\Http\Controllers\Api\PushTokenController;
+use App\Http\Controllers\Api\DashboardSummaryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -47,6 +48,10 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/audit-logs', [SupportController::class, 'auditLogs'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
     Route::post('/supplier-invitations', [SupportController::class, 'createSupplierInvitation']);
     Route::get('/supplier-material-proposals', [SupportController::class, 'supplierMaterialProposals']);
+
+    // Resumen ejecutivo del dashboard de Presidencia (agregados exactos, sin paginación)
+    Route::get('/dashboard/summary', DashboardSummaryController::class)
+        ->middleware('role:PRESIDENCIA,SUPERADMIN');
 
     Route::apiResource('projects', ProjectController::class)->only(['index', 'store', 'show']);
 

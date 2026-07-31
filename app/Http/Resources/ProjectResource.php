@@ -11,6 +11,11 @@ class ProjectResource extends JsonResource
         $advance = $this->payments->firstWhere('payment_type', 'ADVANCE');
         $final = $this->payments->firstWhere('payment_type', 'FINAL');
 
+        $contractorRatings = \App\Models\Contractor::whereIn(
+            'code',
+            $this->proposals->pluck('contractor_code')
+        )->pluck('rating', 'code');
+
         return [
             'id' => $this->id,
             'title' => $this->title,
@@ -18,6 +23,8 @@ class ProjectResource extends JsonResource
             'description' => $this->description,
             'location' => $this->location,
             'createdDate' => optional($this->created_date)->format('Y-m-d'),
+            'createdAt' => optional($this->created_at)->toIso8601String(),
+            'updatedAt' => optional($this->updated_at)->toIso8601String(),
             'status' => $this->status,
             'materials' => $this->materials->map(fn ($item) => [
                 'id' => $item->id,
@@ -36,6 +43,7 @@ class ProjectResource extends JsonResource
                 'id' => $proposal->id,
                 'contractorCode' => $proposal->contractor_code,
                 'contractorName' => $proposal->contractor_name_snapshot,
+                'contractorRating' => $contractorRatings[$proposal->contractor_code] ?? null,
                 'materialCost' => $proposal->material_cost,
                 'laborCost' => $proposal->labor_cost,
                 'totalCost' => $proposal->total_cost,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\SupplierProposalResource;
 use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\MaterialCatalog;
@@ -150,7 +151,7 @@ class SupportController extends Controller
 
         $project = $invitation->project;
 
-        $this->logPublicAccess($request, 'invitation.view', "Invitación: {$token} / Proveedor: {$invitation->supplier_name}");
+        $this->logPublicAccess($request, 'invitation.view', "Invitación: {$token} / Proveedor: {$invitation->supplier_name}", $project);
 
         return response()->json([
             'supplierName'    => $invitation->supplier_name,
@@ -216,9 +217,9 @@ class SupportController extends Controller
             return $proposal;
         });
 
-        $this->logPublicAccess($request, 'proposal.submit', "Propuesta: {$proposal->id} / Invitación: {$token} / Proveedor: {$invitation->supplier_name}");
+        $this->logPublicAccess($request, 'proposal.submit', "Propuesta: {$proposal->id} / Invitación: {$token} / Proveedor: {$invitation->supplier_name}", $invitation->project);
 
-        return response()->json($this->formatProposal($proposal), 201);
+        return response()->json(new SupplierProposalResource($proposal), 201);
     }
 
     public function supplierMaterialProposals(Request $request)
@@ -231,31 +232,18 @@ class SupportController extends Controller
             $query->where('project_id', $request->project_id);
         }
 
-        return response()->json($query->paginate($perPage)->through(fn ($p) => $this->formatProposal($p)));
-    }
-
-    private function formatProposal(SupplierMaterialProposal $p): array
-    {
-        return [
-            'id'                     => $p->id,
-            'projectId'              => $p->project_id,
-            'projectTitleSnapshot'   => $p->project_title_snapshot,
-            'supplierName'           => $p->supplier_name,
-            'supplierCompany'        => $p->supplier_company,
-            'supplierContact'        => $p->supplier_contact,
-            'items'                  => $p->items,
-            'generalNotes'           => $p->general_notes,
-            'estimatedDays'          => $p->estimated_days,
-            'durationUnit'           => $p->duration_unit,
-            'advancePercent'         => $p->advance_percent,
-            'submittedAt'            => optional($p->submitted_at)->format('Y-m-d H:i'),
-        ];
+        return response()->json($query->paginate($perPage)->through(fn ($p) => (new SupplierProposalResource($p))->resolve()));
     }
 
     /**
      * Log public endpoint access for audit trail.
+     *
+     * Además del log de texto (Log::info), persiste el acceso en AuditLog
+     * cuando hay un proyecto asociado, para tener un único historial de
+     * auditoría consistente y consultable (antes solo quedaba en el log de
+     * archivo). Aditivo: no reemplaza el Log::info existente.
      */
-    private function logPublicAccess(Request $request, string $action, ?string $detail = null): void
+    private function logPublicAccess(Request $request, string $action, ?string $detail = null, ?Project $project = null): void
     {
         Log::info('PUBLIC_ACCESS', [
             'action'    => $action,
@@ -264,6 +252,12 @@ class SupportController extends Controller
             'detail'    => $detail,
             'timestamp' => now()->toIso8601String(),
         ]);
+
+        if ($project !== null) {
+            // 'role' es un enum de BD sin valor "PUBLIC"; se usa 'SISTEMA'
+            // para accesos públicos no autenticados (ver audit_logs migration).
+            AuditLog::record($project, 'SISTEMA', $action, $detail);
+        }
     }
 
 }

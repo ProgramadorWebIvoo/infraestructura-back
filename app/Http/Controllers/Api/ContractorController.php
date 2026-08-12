@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ContractorResource;
 use App\Models\Contractor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,17 +17,7 @@ class ContractorController extends Controller
     {
         $contractors = Contractor::orderBy('name')->get();
 
-        return response()->json($contractors->map(fn ($c) => [
-            'code'               => $c->code,
-            'name'               => $c->name,
-            'specialty'          => $c->specialty,
-            'rating'             => $c->rating,
-            'contact'            => $c->contact,
-            'registrationSource' => $c->registration_source,
-            'status'             => $c->status,
-            'createdAt'          => optional($c->created_at)->format('Y-m-d H:i'),
-            'updatedAt'          => optional($c->updated_at)->format('Y-m-d H:i'),
-        ]));
+        return response()->json(ContractorResource::collection($contractors));
     }
 
     public function store(Request $request)
@@ -52,32 +43,12 @@ class ContractorController extends Controller
             return Contractor::create($data);
         });
 
-        return response()->json([
-            'code'               => $contractor->code,
-            'name'               => $contractor->name,
-            'specialty'          => $contractor->specialty,
-            'rating'             => $contractor->rating,
-            'contact'            => $contractor->contact,
-            'registrationSource' => $contractor->registration_source,
-            'status'             => $contractor->status,
-            'createdAt'          => $contractor->created_at?->format('Y-m-d H:i'),
-            'updatedAt'          => $contractor->updated_at?->format('Y-m-d H:i'),
-        ], 201);
+        return response()->json(new ContractorResource($contractor), 201);
     }
 
     public function show(Contractor $contractor)
     {
-        return response()->json([
-            'code'               => $contractor->code,
-            'name'               => $contractor->name,
-            'specialty'          => $contractor->specialty,
-            'rating'             => $contractor->rating,
-            'contact'            => $contractor->contact,
-            'registrationSource' => $contractor->registration_source,
-            'status'             => $contractor->status,
-            'createdAt'          => optional($contractor->created_at)->format('Y-m-d H:i'),
-            'updatedAt'          => optional($contractor->updated_at)->format('Y-m-d H:i'),
-        ]);
+        return response()->json(new ContractorResource($contractor));
     }
 
     public function update(Request $request, Contractor $contractor)
@@ -97,17 +68,7 @@ class ContractorController extends Controller
 
         $contractor->update($data);
 
-        return response()->json([
-            'code'               => $contractor->code,
-            'name'               => $contractor->name,
-            'specialty'          => $contractor->specialty,
-            'rating'             => $contractor->rating,
-            'contact'            => $contractor->contact,
-            'registrationSource' => $contractor->registration_source,
-            'status'             => $contractor->status,
-            'createdAt'          => optional($contractor->created_at)->format('Y-m-d H:i'),
-            'updatedAt'          => optional($contractor->updated_at)->format('Y-m-d H:i'),
-        ]);
+        return response()->json(new ContractorResource($contractor));
     }
 
     public function toggleStatus(Contractor $contractor)

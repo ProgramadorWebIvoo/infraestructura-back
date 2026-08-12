@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\MaterialResource;
 use App\Models\MaterialCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,7 +13,15 @@ class MaterialController extends Controller
     {
         $materials = MaterialCatalog::orderBy('name')->get();
 
-        return response()->json(MaterialResource::collection($materials));
+        return response()->json($materials->map(fn ($m) => [
+            'id'                 => $m->id,
+            'name'               => $m->name,
+            'unit'               => $m->unit,
+            'estimatedUnitPrice' => (float) $m->estimated_unit_price,
+            'isActive'           => $m->is_active,
+            'createdAt'          => optional($m->created_at)->format('Y-m-d H:i'),
+            'updatedAt'          => optional($m->updated_at)->format('Y-m-d H:i'),
+        ]));
     }
 
     public function store(Request $request)
@@ -47,12 +54,28 @@ class MaterialController extends Controller
             'is_active'           => $data['isActive'] ?? true,
         ]);
 
-        return response()->json(new MaterialResource($material), 201);
+        return response()->json([
+            'id'                 => $material->id,
+            'name'               => $material->name,
+            'unit'               => $material->unit,
+            'estimatedUnitPrice' => (float) $material->estimated_unit_price,
+            'isActive'           => $material->is_active,
+            'createdAt'          => $material->created_at?->format('Y-m-d H:i'),
+            'updatedAt'          => $material->updated_at?->format('Y-m-d H:i'),
+        ], 201);
     }
 
     public function show(MaterialCatalog $material)
     {
-        return response()->json(new MaterialResource($material));
+        return response()->json([
+            'id'                 => $material->id,
+            'name'               => $material->name,
+            'unit'               => $material->unit,
+            'estimatedUnitPrice' => (float) $material->estimated_unit_price,
+            'isActive'           => $material->is_active,
+            'createdAt'          => optional($material->created_at)->format('Y-m-d H:i'),
+            'updatedAt'          => optional($material->updated_at)->format('Y-m-d H:i'),
+        ]);
     }
 
     public function update(Request $request, MaterialCatalog $material)
@@ -92,7 +115,15 @@ class MaterialController extends Controller
 
         $material->update($updateData);
 
-        return response()->json(new MaterialResource($material));
+        return response()->json([
+            'id'                 => $material->id,
+            'name'               => $material->name,
+            'unit'               => $material->unit,
+            'estimatedUnitPrice' => (float) $material->estimated_unit_price,
+            'isActive'           => $material->is_active,
+            'createdAt'          => optional($material->created_at)->format('Y-m-d H:i'),
+            'updatedAt'          => optional($material->updated_at)->format('Y-m-d H:i'),
+        ]);
     }
 
     public function toggleStatus(MaterialCatalog $material)

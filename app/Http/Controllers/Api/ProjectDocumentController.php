@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProjectDocumentRequest;
-use App\Http\Resources\ProjectDocumentResource;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\ProjectDocument;
@@ -18,7 +17,7 @@ class ProjectDocumentController extends Controller
         $documents = $project->documents()->orderBy('document_type')->orderBy('created_at')->get();
 
         return response()->json([
-            'data' => ProjectDocumentResource::collection($documents),
+            'data' => $documents->map(fn ($d) => $this->formatDocument($d)),
         ]);
     }
 
@@ -46,7 +45,7 @@ class ProjectDocumentController extends Controller
                 'uploaded_by'   => auth()->id(),
             ]);
 
-            $saved[] = (new ProjectDocumentResource($doc))->resolve();
+            $saved[] = $this->formatDocument($doc);
         }
 
         $label = $type === 'CALC' ? 'hojas de calculo/cubicaciones' : 'planos de ingenieria';
@@ -150,5 +149,18 @@ class ProjectDocumentController extends Controller
             'calculations_added' => $project->documents()->where('document_type', 'CALC')->exists(),
             'blueprints_count'   => $project->documents()->where('document_type', 'PLANO')->count(),
         ]);
+    }
+
+    private function formatDocument(ProjectDocument $doc): array
+    {
+        return [
+            'id'           => $doc->id,
+            'documentType' => $doc->document_type,
+            'originalName' => $doc->original_name,
+            'mimeType'     => $doc->mime_type,
+            'sizeBytes'    => $doc->size_bytes,
+            'uploadedBy'   => $doc->uploaded_by,
+            'uploadedAt'   => $doc->created_at?->toIso8601String(),
+        ];
     }
 }

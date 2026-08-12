@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\AiConfigurationResource;
 use App\Models\AiConfiguration;
 use App\Models\AiUsageLog;
 use App\Services\AI\AiConfigurationService;
@@ -41,7 +40,7 @@ class AiConfigController extends Controller
     {
         $configs = AiConfiguration::orderBy('sort_order')->orderBy('id')->get();
 
-        return response()->json(AiConfigurationResource::collection($configs));
+        return response()->json($configs->map(fn ($c) => $c->toArray()));
     }
 
     /**
@@ -63,7 +62,7 @@ class AiConfigController extends Controller
             'provider'   => ['required', 'string', Rule::in(['openai', 'anthropic', 'gemini'])],
             'model'      => ['required', 'string', 'max:100'],
             'apiKey'     => ['required', 'string', 'min:8'],
-            'baseUrl'    => ['nullable', 'string', 'max:255', new \App\Rules\SsrfSafeUrl()],
+            'baseUrl'    => ['nullable', 'string', 'max:255', $this->ssrfSafeUrl()],
             'maxTokens'  => ['nullable', 'integer', 'min:1', 'max:100000'],
             'isActive'   => ['sometimes', 'boolean'],
             'isFallback' => ['sometimes', 'boolean'],
@@ -94,7 +93,7 @@ class AiConfigController extends Controller
 
         $this->configService->syncToCache();
 
-        return response()->json(new AiConfigurationResource($config), 201);
+        return response()->json($config->toArray(), 201);
     }
 
     /**
@@ -104,7 +103,7 @@ class AiConfigController extends Controller
     public function show(int $id)
     {
         $config = AiConfiguration::findOrFail($id);
-        return response()->json(new AiConfigurationResource($config));
+        return response()->json($config->toArray());
     }
 
     /**
@@ -118,7 +117,7 @@ class AiConfigController extends Controller
         $data = $request->validate([
             'model'      => ['sometimes', 'string', 'max:100'],
             'apiKey'     => ['sometimes', 'string', 'min:8'],
-            'baseUrl'    => ['nullable', 'string', 'max:255', new \App\Rules\SsrfSafeUrl()],
+            'baseUrl'    => ['nullable', 'string', 'max:255', $this->ssrfSafeUrl()],
             'maxTokens'  => ['nullable', 'integer', 'min:1', 'max:100000'],
             'isActive'   => ['sometimes', 'boolean'],
             'isFallback' => ['sometimes', 'boolean'],
@@ -152,7 +151,7 @@ class AiConfigController extends Controller
 
         $this->configService->syncToCache();
 
-        return response()->json(new AiConfigurationResource($config->fresh()));
+        return response()->json($config->fresh()->toArray());
     }
 
     /**
@@ -372,5 +371,81 @@ class AiConfigController extends Controller
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => "Gemini: {$e->getMessage()}"];
         }
+    }
+
+    // ── SSRF protection ──
+
+    /**
+     * Valida que la URL no apunte a direcciones internas (SSRF prevention).
+     * Solo permite URLs HTTPS a dominios públicos.
+     */
+    private function ssrfSafeUrl(): callable
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if ($value === null || $value === '') {
+                return;
+            }
+
+            // Debe comenzar con https://
+            if (!str_starts_with($value, 'https://')) {
+                $fail($attribute, 'La URL debe usar HTTPS (conexión segura).');
+                return;
+            }
+
+            $host = parse_url($value, PHP_URL_HOST);
+
+            if ($host === false || $host === null || $host === '') {
+                $fail($attribute, 'La URL no tiene un host válido.');
+                return;
+            }
+
+            // Rejectar localhost / 127.0.0.1 / 0.0.0.0 / [::1]
+            $localHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'];
+            if (in_array(strtolower($host), $localHosts, true)) {
+                $fail($attribute, 'No se permite usar direcciones locales (localhost/127.0.0.1).');
+                return;
+            }
+
+            // Rejectar IPs privadas (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
+            if (filter_var($host, FILTER_VALIDATE_IP)) {
+                if (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    $fail($attribute, 'No se permite usar IPs privadas o de rangos reservados.');
+                    return;
+                }
+                return;
+            }
+
+            // El host es un dominio, no una IP literal: resolverlo y validar
+            // TODAS las IPs que devuelve. Esto bloquea el caso obvio de un
+            // dominio público apuntando a una IP privada/metadata de nube
+            // (169.254.169.254, etc.). No protege contra "DNS rebinding" en
+            // sentido estricto (TTL≈0, la IP cambia entre esta validación y
+            // la request real del provider) — eso requeriría fijar la IP
+            // resuelta a nivel de conexión HTTP (handler cURL/Guzzle custom),
+            // fuera de alcance de esta validación de formulario.
+            $resolvedIps = [];
+
+            $aRecords = @dns_get_record($host, DNS_A);
+            foreach ($aRecords ?: [] as $record) {
+                if (!empty($record['ip'])) $resolvedIps[] = $record['ip'];
+            }
+
+            $aaaaRecords = @dns_get_record($host, DNS_AAAA);
+            foreach ($aaaaRecords ?: [] as $record) {
+                if (!empty($record['ipv6'])) $resolvedIps[] = $record['ipv6'];
+            }
+
+            if (empty($resolvedIps)) {
+                $fail($attribute, 'No se pudo resolver el host de la URL.');
+                return;
+            }
+
+            foreach (array_unique($resolvedIps) as $ip) {
+                if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    $fail($attribute, 'El host de la URL resuelve a una dirección IP privada o reservada.');
+                    return;
+                }
+            }
+        };
     }
 }

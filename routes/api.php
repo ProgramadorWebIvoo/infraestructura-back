@@ -121,10 +121,10 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
             Route::post('/sync', [AiConfigController::class, 'sync']);
             Route::get('/', [AiConfigController::class, 'index']);
             Route::post('/', [AiConfigController::class, 'store']);
-            Route::get('/{id}', [AiConfigController::class, 'show']);
-            Route::patch('/{id}', [AiConfigController::class, 'update']);
-            Route::delete('/{id}', [AiConfigController::class, 'destroy']);
-            Route::post('/{id}/test', [AiConfigController::class, 'test']);
+            Route::get('/{aiConfig}', [AiConfigController::class, 'show']);
+            Route::patch('/{aiConfig}', [AiConfigController::class, 'update']);
+            Route::delete('/{aiConfig}', [AiConfigController::class, 'destroy']);
+            Route::post('/{aiConfig}/test', [AiConfigController::class, 'test']);
         });
     });
 });

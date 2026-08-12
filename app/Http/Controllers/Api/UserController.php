@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Rules\StrongPassword;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class UserController extends Controller
 {
@@ -19,16 +19,6 @@ class UserController extends Controller
     ];
 
     private const VALID_STATUSES = ['Active', 'Inactive'];
-
-    /**
-     * Política de contraseña: mínimo 8, mayúscula+minúscula y número.
-     * Sin `->uncompromised()` (llamada de red a HaveIBeenPwned) para no
-     * introducir una dependencia externa en cada alta de usuario/test.
-     */
-    private static function passwordRule(): PasswordRule
-    {
-        return PasswordRule::min(8)->mixedCase()->numbers();
-    }
 
     public function roles(Request $request)
     {
@@ -51,7 +41,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name'                  => ['required', 'string', 'max:255'],
             'email'                 => ['required', 'email', 'unique:users,email'],
-            'password'              => ['required', 'string', 'confirmed', self::passwordRule()],
+            'password'              => ['required', 'string', 'confirmed', StrongPassword::rule()],
             'role'                  => ['required', Rule::in(self::VALID_ROLES)],
             'status'                => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);

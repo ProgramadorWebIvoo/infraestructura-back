@@ -92,19 +92,18 @@ class AiConfigController extends Controller
      * GET /api/ai/config/{id}
      * Show a single configuration (API key masked).
      */
-    public function show(int $id)
+    public function show(AiConfiguration $aiConfig)
     {
-        $config = AiConfiguration::findOrFail($id);
-        return response()->json(new AiConfigurationResource($config));
+        return response()->json(new AiConfigurationResource($aiConfig));
     }
 
     /**
-     * PATCH /api/ai/config/{id}
+     * PATCH /api/ai/config/{aiConfig}
      * Update a configuration.
      */
-    public function update(UpdateAiConfigurationRequest $request, int $id)
+    public function update(UpdateAiConfigurationRequest $request, AiConfiguration $aiConfig)
     {
-        $config = AiConfiguration::findOrFail($id);
+        $config = $aiConfig;
 
         $data = $request->validated();
 
@@ -112,7 +111,7 @@ class AiConfigController extends Controller
         if (isset($data['model']) && $data['model'] !== $config->model) {
             $conflict = AiConfiguration::where('provider', $config->provider)
                 ->where('model', $data['model'])
-                ->where('id', '!=', $id)
+                ->where('id', '!=', $config->id)
                 ->exists();
 
             if ($conflict) {
@@ -142,10 +141,9 @@ class AiConfigController extends Controller
      * DELETE /api/ai/config/{id}
      * Delete a configuration.
      */
-    public function destroy(int $id)
+    public function destroy(AiConfiguration $aiConfig)
     {
-        $config = AiConfiguration::findOrFail($id);
-        $config->delete();
+        $aiConfig->delete();
 
         $this->configService->syncToCache();
 
@@ -153,12 +151,12 @@ class AiConfigController extends Controller
     }
 
     /**
-     * POST /api/ai/config/{id}/test
+     * POST /api/ai/config/{aiConfig}/test
      * Health check: make a lightweight API call to validate credentials.
      */
-    public function test(int $id)
+    public function test(AiConfiguration $aiConfig)
     {
-        $config = AiConfiguration::findOrFail($id);
+        $config = $aiConfig;
         $apiKey = $config->api_key; // decrypted by accessor
 
         if (empty($apiKey)) {

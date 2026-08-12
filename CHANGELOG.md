@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-08-12] — Refactor SOLID/CleanCode Fase 4: route-model binding en AiConfigController + regla de password unificada
+- Tipo: refactor
+- Qué:
+  - `AiConfigController::show/update/destroy/test` pasaron de `int $id` + `AiConfiguration::findOrFail($id)` a route-model binding (`AiConfiguration $aiConfig`), consistente con el resto de controllers. Rutas en `routes/api.php` actualizadas de `{id}` a `{aiConfig}` (mismo path público, solo cambia el nombre interno del parámetro).
+  - Se creó `App\Rules\StrongPassword::rule()` (mismas reglas: `min(8)->mixedCase()->numbers()`) y se reemplazó la definición duplicada que vivía como `UserController::passwordRule()` y directamente inline en `AuthController::resetPassword`.
+- Por qué / causa raíz: Fase 4 (consistencia menor) del refactor SOLID/CleanCode — alinear `AiConfigController` con el patrón de route-model binding ya usado en el resto de la app, y eliminar la duplicación de la política de contraseña entre `AuthController` y `UserController`.
+- Archivos: `app/Rules/StrongPassword.php` [NUEVO]; modificados `AiConfigController`, `UserController`, `AuthController`, `routes/api.php`.
+- Verificación: 189/189 tests, 67/67 rutas (mismos paths públicos). **Pendiente de commit por el usuario.**
+
 ## [2026-08-12] — Refactor SOLID/CleanCode Fase 3: extracción de servicios de dominio + split de SupportController
 - Tipo: refactor
 - Qué:

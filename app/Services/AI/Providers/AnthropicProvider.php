@@ -70,4 +70,33 @@ class AnthropicProvider extends BaseAIProvider
 
         return $result;
     }
+
+    public function healthCheck(): array
+    {
+        try {
+            $response = Http::timeout(10)
+                ->withHeaders([
+                    'x-api-key'         => $this->apiKey,
+                    'anthropic-version' => self::API_VERSION,
+                ])
+                ->post('https://api.anthropic.com/v1/messages', [
+                    'model'      => $this->model,
+                    'messages'   => [
+                        ['role' => 'user', 'content' => 'Respond with "ok"'],
+                    ],
+                    'max_tokens' => 5,
+                ]);
+
+            if ($response->successful()) {
+                return ['success' => true, 'message' => 'Conexión exitosa con Anthropic.'];
+            }
+
+            $body = $response->json();
+            $error = $body['error']['message'] ?? $response->body();
+
+            return ['success' => false, 'message' => "Anthropic: {$error}"];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => "Anthropic: {$e->getMessage()}"];
+        }
+    }
 }

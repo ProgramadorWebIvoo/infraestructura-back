@@ -19,4 +19,11 @@ interface AIProviderInterface
      * @throws \RuntimeException Si la API falla o rate-limited
      */
     public function evaluate(array $payload): array;
+
+    /**
+     * Chequeo liviano de conectividad/credenciales contra el proveedor.
+     *
+     * @return array{success: bool, message: string}
+     */
+    public function healthCheck(): array;
 }

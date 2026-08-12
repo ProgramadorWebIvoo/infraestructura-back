@@ -66,4 +66,30 @@ class OpenAIProvider extends BaseAIProvider
 
         return $result;
     }
+
+    public function healthCheck(): array
+    {
+        try {
+            $response = Http::timeout(10)
+                ->withToken($this->apiKey)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                    'model'    => $this->model,
+                    'messages' => [
+                        ['role' => 'user', 'content' => 'Respond with "ok"'],
+                    ],
+                    'max_completion_tokens' => 5,
+                ]);
+
+            if ($response->successful()) {
+                return ['success' => true, 'message' => 'Conexión exitosa con OpenAI.'];
+            }
+
+            $body = $response->json();
+            $error = $body['error']['message'] ?? $response->body();
+
+            return ['success' => false, 'message' => "OpenAI: {$error}"];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => "OpenAI: {$e->getMessage()}"];
+        }
+    }
 }

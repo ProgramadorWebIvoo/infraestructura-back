@@ -7,12 +7,11 @@ use App\Http\Requests\StoreAiConfigurationRequest;
 use App\Http\Requests\UpdateAiConfigurationRequest;
 use App\Http\Resources\AiConfigurationResource;
 use App\Models\AiConfiguration;
-use App\Models\AiUsageLog;
 use App\Services\AI\AiConfigurationService;
 use App\Services\AI\AIEvaluationService;
-use App\Services\AI\Providers\AnthropicProvider;
+use App\Services\AI\AiUsageAnalyticsService;
+use App\Services\AI\Providers\AIProviderFactory;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 
 class AiConfigController extends Controller
 {
@@ -166,12 +165,16 @@ class AiConfigController extends Controller
             return response()->json(['success' => false, 'message' => 'API Key no configurada.'], 400);
         }
 
-        $result = match ($config->provider) {
-            'openai'    => $this->testOpenAI($apiKey, $config->model),
-            'anthropic' => $this->testAnthropic($apiKey, $config->model),
-            'gemini'    => $this->testGemini($apiKey, $config->model),
-            default     => ['success' => false, 'message' => 'Proveedor no soportado.'],
-        };
+        if (!AIProviderFactory::supports($config->provider)) {
+            return response()->json(['success' => false, 'message' => 'Proveedor no soportado.'], 400);
+        }
+
+        $provider = AIProviderFactory::make($config->provider, [
+            'api_key' => $apiKey,
+            'model'   => $config->model,
+        ]);
+
+        $result = $provider->healthCheck();
 
         return response()->json($result, $result['success'] ? 200 : 400);
     }
@@ -180,75 +183,12 @@ class AiConfigController extends Controller
      * GET /api/ai/config/usage
      * Aggregated usage analytics.
      */
-    public function usage(Request $request)
+    public function usage(Request $request, AiUsageAnalyticsService $analytics)
     {
         $days = (int) $request->query('days', 30);
         $days = max(1, min(365, $days));
 
-        $since = now()->subDays($days);
-
-        // Daily aggregation
-        $daily = AiUsageLog::where('created_at', '>=', $since)
-            ->selectRaw("DATE(created_at) as date")
-            ->selectRaw("SUM(prompt_tokens) as prompt_tokens")
-            ->selectRaw("SUM(completion_tokens) as completion_tokens")
-            ->selectRaw("SUM(total_tokens) as total_tokens")
-            ->selectRaw("SUM(cost_estimate) as cost")
-            ->selectRaw("COUNT(*) as requests")
-            ->selectRaw("SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_requests")
-            ->selectRaw("SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed_requests")
-            ->groupByRaw("DATE(created_at)")
-            ->orderBy('date')
-            ->get();
-
-        // By provider
-        $byProvider = AiUsageLog::where('created_at', '>=', $since)
-            ->selectRaw("provider")
-            ->selectRaw("SUM(prompt_tokens) as prompt_tokens")
-            ->selectRaw("SUM(completion_tokens) as completion_tokens")
-            ->selectRaw("SUM(total_tokens) as total_tokens")
-            ->selectRaw("SUM(cost_estimate) as cost")
-            ->selectRaw("COUNT(*) as requests")
-            ->groupBy('provider')
-            ->get();
-
-        // By provider + model
-        $byModel = AiUsageLog::where('created_at', '>=', $since)
-            ->selectRaw("provider, model")
-            ->selectRaw("SUM(prompt_tokens) as prompt_tokens")
-            ->selectRaw("SUM(completion_tokens) as completion_tokens")
-            ->selectRaw("SUM(total_tokens) as total_tokens")
-            ->selectRaw("SUM(cost_estimate) as cost")
-            ->selectRaw("COUNT(*) as requests")
-            ->groupByRaw("provider, model")
-            ->orderBy('provider')
-            ->get();
-
-        // Totals
-        $totals = AiUsageLog::where('created_at', '>=', $since)
-            ->selectRaw("COALESCE(SUM(prompt_tokens), 0) as prompt_tokens")
-            ->selectRaw("COALESCE(SUM(completion_tokens), 0) as completion_tokens")
-            ->selectRaw("COALESCE(SUM(total_tokens), 0) as total_tokens")
-            ->selectRaw("COALESCE(SUM(cost_estimate), 0) as total_cost")
-            ->selectRaw("COUNT(*) as total_requests")
-            ->selectRaw("COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0) as successful_requests")
-            ->selectRaw("COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0) as failed_requests")
-            ->first();
-
-        return response()->json([
-            'daily'      => $daily ?? [],
-            'byProvider' => $byProvider ?? [],
-            'byModel'    => $byModel ?? [],
-            'totals'     => $totals ?? [
-                'prompt_tokens'     => 0,
-                'completion_tokens' => 0,
-                'total_tokens'      => 0,
-                'total_cost'        => 0,
-                'total_requests'    => 0,
-                'successful_requests' => 0,
-                'failed_requests'   => 0,
-            ],
-        ]);
+        return response()->json($analytics->getUsageSummary($days));
     }
 
     /**
@@ -268,93 +208,4 @@ class AiConfigController extends Controller
         ]);
     }
 
-    // ── Health check helpers ──
-
-    private function testOpenAI(string $apiKey, string $model): array
-    {
-        try {
-            $response = Http::timeout(10)
-                ->withToken($apiKey)
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model'    => $model,
-                    'messages' => [
-                        ['role' => 'user', 'content' => 'Respond with "ok"'],
-                    ],
-                    'max_completion_tokens' => 5,
-                ]);
-
-            if ($response->successful()) {
-                return ['success' => true, 'message' => 'Conexión exitosa con OpenAI.'];
-            }
-
-            $body = $response->json();
-            $error = $body['error']['message'] ?? $response->body();
-
-            return ['success' => false, 'message' => "OpenAI: {$error}"];
-        } catch (\Throwable $e) {
-            return ['success' => false, 'message' => "OpenAI: {$e->getMessage()}"];
-        }
-    }
-
-    private function testAnthropic(string $apiKey, string $model): array
-    {
-        try {
-            $response = Http::timeout(10)
-                ->withHeaders([
-                    'x-api-key'         => $apiKey,
-                    'anthropic-version' => AnthropicProvider::API_VERSION,
-                ])
-                ->post('https://api.anthropic.com/v1/messages', [
-                    'model'      => $model,
-                    'messages'   => [
-                        ['role' => 'user', 'content' => 'Respond with "ok"'],
-                    ],
-                    'max_tokens' => 5,
-                ]);
-
-            if ($response->successful()) {
-                return ['success' => true, 'message' => 'Conexión exitosa con Anthropic.'];
-            }
-
-            $body = $response->json();
-            $error = $body['error']['message'] ?? $response->body();
-
-            return ['success' => false, 'message' => "Anthropic: {$error}"];
-        } catch (\Throwable $e) {
-            return ['success' => false, 'message' => "Anthropic: {$e->getMessage()}"];
-        }
-    }
-
-    private function testGemini(string $apiKey, string $model): array
-    {
-        try {
-            $url = "https://generativelanguage.googleapis.com/v1/models/{$model}:generateContent";
-
-            $response = Http::timeout(10)
-                ->withHeaders(['x-goog-api-key' => $apiKey])
-                ->post($url, [
-                    'contents' => [
-                        [
-                            'parts' => [
-                                ['text' => 'Respond with "ok"'],
-                            ],
-                        ],
-                    ],
-                    'generationConfig' => [
-                        'maxOutputTokens' => 5,
-                    ],
-                ]);
-
-            if ($response->successful()) {
-                return ['success' => true, 'message' => 'Conexión exitosa con Gemini.'];
-            }
-
-            $body = $response->json();
-            $error = $body['error']['message'] ?? $response->body();
-
-            return ['success' => false, 'message' => "Gemini: {$error}"];
-        } catch (\Throwable $e) {
-            return ['success' => false, 'message' => "Gemini: {$e->getMessage()}"];
-        }
-    }
 }

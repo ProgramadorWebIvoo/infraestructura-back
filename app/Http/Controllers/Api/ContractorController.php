@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Concerns\LogsPublicAccess;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreContractorRequest;
 use App\Http\Requests\UpdateContractorRequest;
 use App\Http\Resources\ContractorResource;
 use App\Models\Contractor;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ContractorController extends Controller
 {
+    use LogsPublicAccess;
+
     public const CONTRACTOR_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'INACTIVE'];
 
     public function index()
@@ -73,6 +77,65 @@ class ContractorController extends Controller
         return response()->json([
             'code'   => $contractor->code,
             'status' => $contractor->status,
+        ]);
+    }
+
+    /**
+     * GET /api/contractors (autenticado) — catálogo resumido de contratistas activos.
+     */
+    public function activeList()
+    {
+        return Contractor::where('status', 'ACTIVE')
+            ->orderBy('name')
+            ->get(['code', 'name', 'specialty', 'rating', 'contact', 'status']);
+    }
+
+    /**
+     * POST /api/contractors (público) — autoregistro de proveedor desde el portal público.
+     */
+    public function registerPublic(Request $request)
+    {
+        $data = $request->validate([
+            'code' => ['nullable', 'string', 'max:30', 'unique:contractors,code'],
+            'name' => ['required', 'string', 'max:180'],
+            'specialty' => ['required', 'string', 'max:180'],
+            'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
+            'contact' => ['required', 'string', 'max:180'],
+        ]);
+
+        // Sanitización server-side: eliminar etiquetas HTML/XML de campos de texto
+        $data['name'] = strip_tags($data['name']);
+        $data['specialty'] = strip_tags($data['specialty']);
+        $data['contact'] = strip_tags($data['contact']);
+
+        $contractor = DB::transaction(function () use ($data) {
+            $data['code'] ??= Contractor::nextCode();
+            $data['rating'] ??= 4.0;
+            $data['registration_source'] = 'PUBLIC_PORTAL';
+            $data['status'] = 'PENDING_REVIEW';
+
+            return Contractor::create($data);
+        });
+
+        $this->logPublicAccess($request, 'contractor.register', "Proveedor: {$contractor->name} / Código: {$contractor->code}");
+
+        return response()->json($contractor, 201);
+    }
+
+    /**
+     * POST /api/contractors/{contractor}/rating (autenticado) — actualiza el rating manualmente.
+     */
+    public function updateRating(Request $request, Contractor $contractor)
+    {
+        $data = $request->validate([
+            'rating' => ['required', 'numeric', 'min:0', 'max:5'],
+        ]);
+
+        $contractor->update(['rating' => round($data['rating'], 1)]);
+
+        return response()->json([
+            'code'   => $contractor->code,
+            'rating' => $contractor->rating,
         ]);
     }
 }

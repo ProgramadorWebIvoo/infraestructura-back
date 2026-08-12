@@ -8,6 +8,7 @@ use App\Http\Resources\ProjectDocumentResource;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\ProjectDocument;
+use App\Services\DocumentStorageService;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -22,7 +23,7 @@ class ProjectDocumentController extends Controller
         ]);
     }
 
-    public function upload(StoreProjectDocumentRequest $request, Project $project)
+    public function upload(StoreProjectDocumentRequest $request, Project $project, DocumentStorageService $storage)
     {
         $type  = $request->input('document_type');
         $directory = "project-documents/{$project->id}/{$type}";
@@ -32,8 +33,8 @@ class ProjectDocumentController extends Controller
             $mime = $file->getMimeType() ?? $file->getClientMimeType();
 
             // Sanitize filename to prevent path traversal
-            $safeName = $this->sanitizeFilename($file->getClientOriginalName());
-            $uniqueName = $this->uniqueFilename($directory, $safeName);
+            $safeName = $storage->sanitizeFilename($file->getClientOriginalName());
+            $uniqueName = $storage->uniqueFilename($directory, $safeName);
 
             $storedPath = $file->storeAs($directory, $uniqueName, 'local');
 
@@ -85,63 +86,6 @@ class ProjectDocumentController extends Controller
             $document->original_name,
             ['Content-Type' => $document->mime_type ?? 'application/octet-stream']
         );
-    }
-
-    /**
-     * Sanitize filename to prevent path traversal and remove dangerous characters.
-     *
-     * - Strips directory components (basename only)
-     * - Removes null bytes
-     * - Keeps only alphanumeric, dash, underscore, dot, space
-     * - Collapses repeated separators
-     */
-    private function sanitizeFilename(string $filename): string
-    {
-        // Remove path traversal
-        $filename = basename($filename);
-
-        // Remove null bytes
-        $filename = str_replace("\0", '', $filename);
-
-        // Normalize UTF-8 (NFD -> NFC) to avoid composed/decomposed issues
-        if (class_exists('Normalizer')) {
-            $filename = normalizer_normalize($filename, \Normalizer::NFC);
-        }
-
-        // Replace any character that is not alphanumeric, dot, dash, underscore, or space
-        $filename = preg_replace('/[^\p{L}\p{N}\.\-_ ]/u', '_', $filename);
-
-        // Collapse multiple underscores/spaces into single underscore
-        $filename = preg_replace('/[ _]+/', '_', $filename);
-
-        // Trim dots, spaces, underscores from edges
-        $filename = trim($filename, ' ._');
-
-        // Fallback if name is empty after sanitization
-        if ($filename === '' || $filename === '.' || $filename === '..') {
-            $filename = 'file_' . now()->format('YmdHisv');
-        }
-
-        return $filename;
-    }
-
-    /**
-     * Ensure the filename is unique in the target directory to prevent overwrites.
-     * Appends a timestamp suffix if a file with the same name already exists.
-     */
-    private function uniqueFilename(string $directory, string $filename): string
-    {
-        $disk = Storage::disk('local');
-
-        if (!$disk->exists($directory . '/' . $filename)) {
-            return $filename;
-        }
-
-        $info = pathinfo($filename);
-        $base = $info['filename'];
-        $ext  = isset($info['extension']) ? '.' . $info['extension'] : '';
-
-        return $base . '_' . now()->format('YmdHisv') . $ext;
     }
 
     private function syncProjectCounts(Project $project): void

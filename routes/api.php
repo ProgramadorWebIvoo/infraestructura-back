@@ -2,11 +2,14 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContractorController;
+use App\Http\Controllers\Api\ModuleController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectDocumentController;
-use App\Http\Controllers\Api\SupportController;
+use App\Http\Controllers\Api\SupplierInvitationController;
+use App\Http\Controllers\Api\SupplierProposalController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AIEvaluationController;
 use App\Http\Controllers\Api\AiConfigController;
@@ -27,9 +30,9 @@ use App\Http\Controllers\Api\DashboardSummaryController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:public-api');
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:public-api');
-Route::post('/contractors', [SupportController::class, 'storeContractor'])->middleware('throttle:public-api');
-Route::get('/public/invitations/{token}', [SupportController::class, 'getInvitationPublicInfo'])->middleware('throttle:public-api');
-Route::post('/public/invitations/{token}/proposal', [SupportController::class, 'storeSupplierMaterialProposal'])->middleware('throttle:public-api');
+Route::post('/contractors', [ContractorController::class, 'registerPublic'])->middleware('throttle:public-api');
+Route::get('/public/invitations/{token}', [SupplierInvitationController::class, 'publicInfo'])->middleware('throttle:public-api');
+Route::post('/public/invitations/{token}/proposal', [SupplierProposalController::class, 'store'])->middleware('throttle:public-api');
 
     
 Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
@@ -41,13 +44,13 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::post('/push-tokens', [PushTokenController::class, 'store']);
     Route::delete('/push-tokens', [PushTokenController::class, 'destroy']);
 
-    Route::get('/modules', [SupportController::class, 'modules'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
-    Route::get('/contractors', [SupportController::class, 'contractors'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
-    Route::post('/contractors/{contractor}/rating', [SupportController::class, 'updateContractorRating']);
-    Route::get('/materials', [SupportController::class, 'materials'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
-    Route::get('/audit-logs', [SupportController::class, 'auditLogs'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
-    Route::post('/supplier-invitations', [SupportController::class, 'createSupplierInvitation']);
-    Route::get('/supplier-material-proposals', [SupportController::class, 'supplierMaterialProposals']);
+    Route::get('/modules', [ModuleController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::get('/contractors', [ContractorController::class, 'activeList'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::post('/contractors/{contractor}/rating', [ContractorController::class, 'updateRating']);
+    Route::get('/materials', [MaterialController::class, 'activeList'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::get('/audit-logs', [AuditLogController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::post('/supplier-invitations', [SupplierInvitationController::class, 'store']);
+    Route::get('/supplier-material-proposals', [SupplierProposalController::class, 'index']);
 
     // Resumen ejecutivo del dashboard de Presidencia (agregados exactos, sin paginación)
     Route::get('/dashboard/summary', DashboardSummaryController::class)

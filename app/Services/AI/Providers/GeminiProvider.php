@@ -71,4 +71,37 @@ class GeminiProvider extends BaseAIProvider
 
         return $result;
     }
+
+    public function healthCheck(): array
+    {
+        try {
+            $url = "https://generativelanguage.googleapis.com/v1/models/{$this->model}:generateContent";
+
+            $response = Http::timeout(10)
+                ->withHeaders(['x-goog-api-key' => $this->apiKey])
+                ->post($url, [
+                    'contents' => [
+                        [
+                            'parts' => [
+                                ['text' => 'Respond with "ok"'],
+                            ],
+                        ],
+                    ],
+                    'generationConfig' => [
+                        'maxOutputTokens' => 5,
+                    ],
+                ]);
+
+            if ($response->successful()) {
+                return ['success' => true, 'message' => 'Conexión exitosa con Gemini.'];
+            }
+
+            $body = $response->json();
+            $error = $body['error']['message'] ?? $response->body();
+
+            return ['success' => false, 'message' => "Gemini: {$error}"];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => "Gemini: {$e->getMessage()}"];
+        }
+    }
 }

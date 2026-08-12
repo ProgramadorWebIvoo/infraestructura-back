@@ -95,4 +95,20 @@ class MaterialController extends Controller
             'isActive' => $material->is_active,
         ]);
     }
+
+    /**
+     * GET /api/materials (catálogo) — materiales activos, shape resumido.
+     */
+    public function activeList()
+    {
+        return MaterialCatalog::where('is_active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($item) => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'unit' => $item->unit,
+                'estimatedUnitPrice' => $item->estimated_unit_price,
+            ]);
+    }
 }

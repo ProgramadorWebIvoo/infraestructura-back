@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -63,14 +64,7 @@ class UserController extends Controller
             'status'   => $data['status'] ?? 'Active',
         ]);
 
-        return response()->json([
-            'id'         => $user->id,
-            'name'       => $user->name,
-            'email'      => $user->email,
-            'role'       => $user->role,
-            'status'     => $user->status,
-            'created_at' => $user->created_at,
-        ], 201);
+        return response()->json(new UserResource($user), 201);
     }
 
     public function update(Request $request, User $user)
@@ -89,14 +83,7 @@ class UserController extends Controller
 
         $user->save();
 
-        return response()->json([
-            'id'         => $user->id,
-            'name'       => $user->name,
-            'email'      => $user->email,
-            'role'       => $user->role,
-            'status'     => $user->status,
-            'created_at' => $user->created_at,
-        ]);
+        return response()->json(new UserResource($user));
     }
 
     public function toggleStatus(User $user)

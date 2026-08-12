@@ -46,8 +46,9 @@ echo "│  IVOO Infraestructura — Backend                     │"
 echo "└─────────────────────────────────────────────────────┘"
 echo ""
 
-echo "[OK] Servidor:       http://localhost:${PORT}"
-php artisan serve --port="$PORT" > /dev/null 2>&1 &
+HOST=${INFRA_HOST:-0.0.0.0}
+echo "[OK] Servidor:       http://${HOST}:${PORT}  (accesible en red local vía IP del equipo)"
+php artisan serve --host="$HOST" --port="$PORT" > /dev/null 2>&1 &
 echo "$!" >> "$PID_FILE"
 
 echo "[OK] Scheduler:      corriendo cada minuto (Ctrl+C para salir)"

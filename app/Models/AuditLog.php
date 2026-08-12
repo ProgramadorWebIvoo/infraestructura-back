@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\NotificationDispatcher;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -43,7 +44,7 @@ class AuditLog extends Model
     {
         $user = auth()->user();
 
-        return static::create([
+        $log = static::create([
             'id' => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
             'project_id' => $project->id,
             'project_title_snapshot' => $project->title,
@@ -54,6 +55,10 @@ class AuditLog extends Model
             'logged_at' => now(),
             'details' => $details,
         ]);
+
+        NotificationDispatcher::notify($project, $role, $action, $details);
+
+        return $log;
     }
 
     protected $casts = [

@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\AiConfigController;
 use App\Http\Controllers\Api\MaterialController;
 use App\Http\Controllers\Api\PushTokenController;
 use App\Http\Controllers\Api\DashboardSummaryController;
+use App\Http\Controllers\Api\AppNotificationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,6 +44,12 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     // Push notifications
     Route::post('/push-tokens', [PushTokenController::class, 'store']);
     Route::delete('/push-tokens', [PushTokenController::class, 'destroy']);
+
+    // Bandeja de alertas internas persistentes
+    Route::get('/notifications', [AppNotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [AppNotificationController::class, 'unreadCount']);
+    Route::patch('/notifications/{notification}/read', [AppNotificationController::class, 'markRead']);
+    Route::patch('/notifications/read-all', [AppNotificationController::class, 'markAllRead']);
 
     Route::get('/modules', [ModuleController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
     Route::get('/contractors', [ContractorController::class, 'activeList'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');

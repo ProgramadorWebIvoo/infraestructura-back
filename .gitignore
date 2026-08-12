@@ -16,3 +16,7 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+
+# Plan interno de trabajo (no distribuir vía git)
+/docs/PLAN-MAESTRO-90-DIAS.md
+/docs/FASE0-AUDITORIA-TECNICA.md

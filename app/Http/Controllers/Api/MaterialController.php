@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreMaterialRequest;
+use App\Http\Requests\UpdateMaterialRequest;
 use App\Http\Resources\MaterialResource;
 use App\Models\MaterialCatalog;
-use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class MaterialController extends Controller
 {
@@ -17,14 +17,9 @@ class MaterialController extends Controller
         return response()->json(MaterialResource::collection($materials));
     }
 
-    public function store(Request $request)
+    public function store(StoreMaterialRequest $request)
     {
-        $data = $request->validate([
-            'name'               => ['required', 'string', 'max:180'],
-            'unit'               => ['required', 'string', 'max:80'],
-            'estimatedUnitPrice' => ['nullable', 'numeric', 'min:0'],
-            'isActive'           => ['sometimes', 'boolean'],
-        ]);
+        $data = $request->validated();
 
         $data['name'] = strip_tags($data['name']);
         $data['unit'] = strip_tags($data['unit']);
@@ -55,14 +50,9 @@ class MaterialController extends Controller
         return response()->json(new MaterialResource($material));
     }
 
-    public function update(Request $request, MaterialCatalog $material)
+    public function update(UpdateMaterialRequest $request, MaterialCatalog $material)
     {
-        $data = $request->validate([
-            'name'               => ['sometimes', 'string', 'max:180'],
-            'unit'               => ['sometimes', 'string', 'max:80'],
-            'estimatedUnitPrice' => ['sometimes', 'numeric', 'min:0'],
-            'isActive'           => ['sometimes', 'boolean'],
-        ]);
+        $data = $request->validated();
 
         if (isset($data['name'])) $data['name'] = strip_tags($data['name']);
         if (isset($data['unit'])) $data['unit'] = strip_tags($data['unit']);

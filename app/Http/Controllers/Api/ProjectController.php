@@ -3,6 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AddProjectProposalRequest;
+use App\Http\Requests\ApproveInvestmentRequest;
+use App\Http\Requests\PayProjectRequest;
+use App\Http\Requests\RejectProposalsRequest;
+use App\Http\Requests\ReviewProjectRequest;
+use App\Http\Requests\SelectContractorRequest;
+use App\Http\Requests\StoreProjectRequest;
+use App\Http\Requests\VerifyCompletionRequest;
 use App\Http\Resources\ProjectResource;
 use App\Models\AuditLog;
 use App\Models\Contractor;
@@ -13,7 +21,6 @@ use App\Models\ProjectProposal;
 use App\Models\SupplierMaterialProposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
@@ -51,22 +58,9 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
 
-    public function store(Request $request)
+    public function store(StoreProjectRequest $request)
     {
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:220'],
-            'type' => ['required', Rule::in(['INFRAESTRUCTURA', 'MANTENIMIENTO'])],
-            'description' => ['required', 'string'],
-            'location' => ['required', 'string', 'max:180'],
-            'materials' => ['required', 'array', 'min:1'],
-            'materials.*.id' => ['nullable', 'string', 'max:40'],
-            'materials.*.materialCatalogId' => ['nullable', 'integer', 'exists:material_catalog,id'],
-            'materials.*.name' => ['required', 'string', 'max:180'],
-            'materials.*.quantity' => ['required', 'numeric', 'min:0'],
-            'materials.*.unit' => ['required', 'string', 'max:80'],
-            'materials.*.estimatedUnitPrice' => ['required', 'numeric', 'min:0'],
-            'estimatedTotal' => ['nullable', 'numeric', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         $project = DB::transaction(function () use ($data) {
             $project = Project::create([
@@ -99,13 +93,9 @@ class ProjectController extends Controller
         return (new ProjectResource($project->load(['materials', 'proposals', 'payments'])))->response()->setStatusCode(201);
     }
 
-    public function review(Request $request, Project $project)
+    public function review(ReviewProjectRequest $request, Project $project)
     {
-        $data = $request->validate([
-            'notes' => ['required', 'string'],
-            'blueprintsCount' => ['required', 'integer', 'min:0'],
-            'calculationsAdded' => ['required', 'boolean'],
-        ]);
+        $data = $request->validated();
 
         $project->update([
             'status' => self::STATUSES['REVISADO_CIERRE'],
@@ -119,12 +109,9 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
 
-    public function approveInvestment(Request $request, Project $project)
+    public function approveInvestment(ApproveInvestmentRequest $request, Project $project)
     {
-        $data = $request->validate([
-            'notes' => ['required', 'string'],
-            'approvedInvestmentAmount' => ['required', 'numeric', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         $project->update([
             'status' => self::STATUSES['CONFIRMADO_PROCURA'],
@@ -137,17 +124,9 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
 
-    public function addProposal(Request $request, Project $project)
+    public function addProposal(AddProjectProposalRequest $request, Project $project)
     {
-        $data = $request->validate([
-            'contractorCode' => ['required', 'exists:contractors,code'],
-            'materialCost' => ['required', 'numeric', 'min:0'],
-            'laborCost' => ['required', 'numeric', 'min:0'],
-            'totalCost' => ['required', 'numeric', 'min:0'],
-            'deliveryWeeks' => ['required', 'integer', 'min:0'],
-            'negotiatedAdvancePercent' => ['required', 'numeric', 'min:0', 'max:100'],
-            'description' => ['required', 'string'],
-        ]);
+        $data = $request->validated();
 
         $contractor = Contractor::findOrFail($data['contractorCode']);
 
@@ -275,13 +254,11 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
 
-    public function rejectProposals(Request $request, Project $project)
+    public function rejectProposals(RejectProposalsRequest $request, Project $project)
     {
         abort_unless($project->status === self::STATUSES['COMPARATIVA_ENVIADA'], 422, 'Solo se puede rechazar en estado COMPARATIVA_ENVIADA.');
 
-        $data = $request->validate([
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
+        $data = $request->validated();
 
         DB::transaction(function () use ($project, $data) {
             $project->proposals()->delete();
@@ -298,14 +275,11 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
 
-    public function selectContractor(Request $request, Project $project)
+    public function selectContractor(SelectContractorRequest $request, Project $project)
     {
         abort_unless($project->status === self::STATUSES['COMPARATIVA_ENVIADA'], 422, 'Solo se puede adjudicar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
 
-        $data = $request->validate([
-            'contractorCode' => ['required', 'exists:contractors,code'],
-            'proposalId' => ['required', 'exists:project_proposals,id'],
-        ]);
+        $data = $request->validated();
 
         abort_unless($project->proposals()->whereKey($data['proposalId'])->exists(), 422, 'La propuesta no pertenece al proyecto.');
 
@@ -320,14 +294,9 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
 
-    public function pay(Request $request, Project $project)
+    public function pay(PayProjectRequest $request, Project $project)
     {
-        $data = $request->validate([
-            'paymentType' => ['required', Rule::in(['ADVANCE', 'FINAL'])],
-            'amount' => ['required', 'numeric', 'min:0'],
-            'paidDate' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         // El anticipo solo procede recién adjudicado el contratista; el pago
         // final solo tras verificar calidad — sin esto, FINANZAS podía pagar
@@ -364,15 +333,11 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
     }
 
-    public function verifyCompletion(Request $request, Project $project)
+    public function verifyCompletion(VerifyCompletionRequest $request, Project $project)
     {
         abort_unless($project->status === self::STATUSES['VERIFICANDO_FINALIZACION'], 422, 'Solo se puede verificar la finalización de una obra reportada como terminada (VERIFICANDO_FINALIZACION).');
 
-        $data = $request->validate([
-            'qualityVerified' => ['required', 'boolean'],
-            'completionVerifiedDate' => ['nullable', 'date'],
-            'details' => ['nullable', 'string'],
-        ]);
+        $data = $request->validated();
 
         $project->update([
             'status' => $data['qualityVerified'] ? self::STATUSES['LISTO_PAGO_FINAL'] : self::STATUSES['EN_EJECUCION'],

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreAiConfigurationRequest;
+use App\Http\Requests\UpdateAiConfigurationRequest;
 use App\Http\Resources\AiConfigurationResource;
 use App\Models\AiConfiguration;
 use App\Models\AiUsageLog;
@@ -11,7 +13,6 @@ use App\Services\AI\AIEvaluationService;
 use App\Services\AI\Providers\AnthropicProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Validation\Rule;
 
 class AiConfigController extends Controller
 {
@@ -57,18 +58,9 @@ class AiConfigController extends Controller
      * POST /api/ai/config
      * Create a new AI configuration.
      */
-    public function store(Request $request)
+    public function store(StoreAiConfigurationRequest $request)
     {
-        $data = $request->validate([
-            'provider'   => ['required', 'string', Rule::in(['openai', 'anthropic', 'gemini'])],
-            'model'      => ['required', 'string', 'max:100'],
-            'apiKey'     => ['required', 'string', 'min:8'],
-            'baseUrl'    => ['nullable', 'string', 'max:255', new \App\Rules\SsrfSafeUrl()],
-            'maxTokens'  => ['nullable', 'integer', 'min:1', 'max:100000'],
-            'isActive'   => ['sometimes', 'boolean'],
-            'isFallback' => ['sometimes', 'boolean'],
-            'sortOrder'  => ['sometimes', 'integer', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         // Unique (provider, model)
         $exists = AiConfiguration::where('provider', $data['provider'])
@@ -111,19 +103,11 @@ class AiConfigController extends Controller
      * PATCH /api/ai/config/{id}
      * Update a configuration.
      */
-    public function update(Request $request, int $id)
+    public function update(UpdateAiConfigurationRequest $request, int $id)
     {
         $config = AiConfiguration::findOrFail($id);
 
-        $data = $request->validate([
-            'model'      => ['sometimes', 'string', 'max:100'],
-            'apiKey'     => ['sometimes', 'string', 'min:8'],
-            'baseUrl'    => ['nullable', 'string', 'max:255', new \App\Rules\SsrfSafeUrl()],
-            'maxTokens'  => ['nullable', 'integer', 'min:1', 'max:100000'],
-            'isActive'   => ['sometimes', 'boolean'],
-            'isFallback' => ['sometimes', 'boolean'],
-            'sortOrder'  => ['sometimes', 'integer', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         // Check unique if model changed
         if (isset($data['model']) && $data['model'] !== $config->model) {

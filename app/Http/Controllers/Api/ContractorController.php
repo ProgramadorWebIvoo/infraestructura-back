@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreContractorRequest;
+use App\Http\Requests\UpdateContractorRequest;
 use App\Http\Resources\ContractorResource;
 use App\Models\Contractor;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 
 class ContractorController extends Controller
 {
-    private const CONTRACTOR_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'INACTIVE'];
+    public const CONTRACTOR_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'INACTIVE'];
 
     public function index()
     {
@@ -20,15 +20,9 @@ class ContractorController extends Controller
         return response()->json(ContractorResource::collection($contractors));
     }
 
-    public function store(Request $request)
+    public function store(StoreContractorRequest $request)
     {
-        $data = $request->validate([
-            'name'       => ['required', 'string', 'max:180'],
-            'specialty'  => ['required', 'string', 'max:180'],
-            'contact'    => ['required', 'string', 'max:180'],
-            'rating'     => ['nullable', 'numeric', 'min:0', 'max:5'],
-            'status'     => ['sometimes', Rule::in(self::CONTRACTOR_STATUSES)],
-        ]);
+        $data = $request->validated();
 
         $data['name'] = strip_tags($data['name']);
         $data['specialty'] = strip_tags($data['specialty']);
@@ -51,15 +45,9 @@ class ContractorController extends Controller
         return response()->json(new ContractorResource($contractor));
     }
 
-    public function update(Request $request, Contractor $contractor)
+    public function update(UpdateContractorRequest $request, Contractor $contractor)
     {
-        $data = $request->validate([
-            'name'      => ['sometimes', 'string', 'max:180'],
-            'specialty' => ['sometimes', 'string', 'max:180'],
-            'contact'   => ['sometimes', 'string', 'max:180'],
-            'rating'    => ['sometimes', 'numeric', 'min:0', 'max:5'],
-            'status'    => ['sometimes', Rule::in(self::CONTRACTOR_STATUSES)],
-        ]);
+        $data = $request->validated();
 
         if (isset($data['name']))      $data['name'] = strip_tags($data['name']);
         if (isset($data['specialty']))  $data['specialty'] = strip_tags($data['specialty']);

@@ -4,20 +4,23 @@ namespace App\Services;
 
 use App\Models\AppNotification;
 use App\Models\Project;
-use App\Models\User;
-use App\Notifications\ProjectActionMail;
-use App\Notifications\ProjectActionNotification;
+use Illuminate\Support\Collection;
 
 /**
- * Punto único de notificación de eventos de negocio sobre un Project.
- * Invocado desde AuditLog::record() para que cada acción auditada (creación,
- * revisión, rechazo, adjudicación, pago, etc.) también notifique a los roles
- * interesados vía push + bandeja interna persistente, y por correo cuando la
- * acción es crítica, sin que cada controller tenga que dispararlo aparte.
+ * Punto único de notificación de eventos de negocio. Invocado desde
+ * AuditLog::record() (acciones con proyecto) y directamente desde
+ * controllers administrativos (acciones sin proyecto, ver ConfigAuditLog)
+ * para que cada acción auditada también notifique a los roles interesados
+ * vía push + bandeja interna persistente, y por correo cuando corresponde,
+ * sin que cada controller tenga que construir el envío aparte.
  *
- * Reemplaza a ProjectObserver::updated(), que solo cubría cambios de status
- * y quedaba desincronizado de las acciones que no cambiaban status pero sí
- * requerían notificar (ej. rechazos, carga de documentos).
+ * Destinatarios resueltos por NotificationRuleResolver (matriz
+ * configurable acción×rol×canal) detrás del flag `usar_matriz_notificaciones`
+ * — mientras esté en `false`, usa `recipientsFor()` legacy (match por
+ * ESTADO del proyecto, no por acción) para no alterar el comportamiento en
+ * producción hasta verificar la equivalencia exacta entre ambos caminos
+ * (ver comando `notifications:compare-recipients`). Reemplaza a
+ * ProjectObserver::updated(), que solo cubría cambios de status.
  */
 class NotificationDispatcher
 {
@@ -34,41 +37,75 @@ class NotificationDispatcher
     ];
 
     /**
-     * Acciones auditables sin proyecto asociado (ver AuditLog::record()) no
-     * tienen destinatarios que resolver por rol/status ni bandeja/push que
-     * poblar — quedan registradas en AuditLog para visibilidad, pero el
-     * envío de la notificación real (si aplica) lo decide el propio emisor
-     * consultando `isMailActionAllowed()`, no este método. Ej.: el correo de
-     * restablecimiento de contraseña lleva un token real que este
-     * dispatcher no puede construir — ver User::sendPasswordResetNotification().
+     * `$project = null` cubre acciones administrativas (usuarios,
+     * proveedores, materiales, config de IA) y otras sin proyecto asociado
+     * (ej. reset de password, que no pasa por acá — ver
+     * isMailActionAllowed()). Con la matriz activa, se resuelven
+     * destinatarios directamente por acción, sin depender de un status de
+     * proyecto que no existe para estos casos — antes esta rama simplemente
+     * no notificaba nada (`if ($project === null) return;`).
      */
     public static function notify(?Project $project, string $role, string $action, ?string $details = null): void
     {
+        if (!static::isAppNotificationAllowed($action)) {
+            return;
+        }
+
+        $sendMail = static::isMailActionAllowed($action);
+
+        if (static::useRuleMatrix()) {
+            static::notifyViaMatrix($project, $action, $details, $sendMail);
+            return;
+        }
+
         if ($project === null) {
             return;
         }
 
+        static::notifyViaLegacyStatusMatrix($project, $role, $action, $details, $sendMail);
+    }
+
+    private static function notifyViaMatrix(?Project $project, string $action, ?string $details, bool $sendMail): void
+    {
+        $appRecipients = NotificationRuleResolver::recipientsFor($action, 'app');
+
+        foreach ($appRecipients as $user) {
+            if ($project !== null) {
+                $user->notify(new \App\Notifications\ProjectActionNotification($project, $action, $project->status));
+            }
+
+            AppNotification::create([
+                'user_id' => $user->id,
+                'project_id' => $project?->id,
+                'project_title_snapshot' => $project?->title,
+                'action' => $action,
+                'details' => $details,
+            ]);
+        }
+
+        if (!$sendMail) {
+            return;
+        }
+
+        $mailRecipients = NotificationRuleResolver::recipientsFor($action, 'mail');
+
+        foreach ($mailRecipients as $user) {
+            if ($project !== null) {
+                $user->notify(new \App\Notifications\ProjectActionMail($project, $action, $details));
+            }
+        }
+    }
+
+    private static function notifyViaLegacyStatusMatrix(Project $project, string $role, string $action, ?string $details, bool $sendMail): void
+    {
         $recipients = static::recipientsFor($project->status, $role);
 
         if ($recipients->isEmpty()) {
             return;
         }
 
-        // Acciones que disparan push + bandeja interna — por defecto todas,
-        // editable desde CONFIG APP para silenciar acciones de bajo valor sin
-        // dejar de auditarlas (AuditLog::record() ya se hizo antes de llegar
-        // aquí). Si el setting no existe (BD sin migrar), no se filtra nada.
-        $notifyActions = SettingsService::get('acciones_con_notificacion_app');
-        $sendAppNotification = $notifyActions === null || in_array($action, $notifyActions, true);
-
-        if (!$sendAppNotification) {
-            return;
-        }
-
-        $sendMail = static::isMailActionAllowed($action);
-
         foreach ($recipients as $user) {
-            $user->notify(new ProjectActionNotification($project, $action, $project->status));
+            $user->notify(new \App\Notifications\ProjectActionNotification($project, $action, $project->status));
 
             AppNotification::create([
                 'user_id' => $user->id,
@@ -79,9 +116,27 @@ class NotificationDispatcher
             ]);
 
             if ($sendMail) {
-                $user->notify(new ProjectActionMail($project, $action, $details));
+                $user->notify(new \App\Notifications\ProjectActionMail($project, $action, $details));
             }
         }
+    }
+
+    private static function useRuleMatrix(): bool
+    {
+        return (bool) SettingsService::get('usar_matriz_notificaciones', false);
+    }
+
+    /**
+     * Acciones que disparan push + bandeja interna — por defecto todas,
+     * editable desde CONFIG APP para silenciar acciones de bajo valor sin
+     * dejar de auditarlas. Si el setting no existe (BD sin migrar), no se
+     * filtra nada.
+     */
+    private static function isAppNotificationAllowed(string $action): bool
+    {
+        $notifyActions = SettingsService::get('acciones_con_notificacion_app');
+
+        return $notifyActions === null || in_array($action, $notifyActions, true);
     }
 
     /**
@@ -98,32 +153,33 @@ class NotificationDispatcher
     }
 
     /**
-     * Eventos auditables sin proyecto: no hay destinatarios que resolver por
-     * rol/status, ni una "acción de proyecto" que mostrar en bandeja/push —
-     * solo correo directo al usuario indicado, sujeto al mismo filtro
-     * `acciones_con_correo` que el resto de acciones auditadas.
+     * Legacy: matriz rol→destinatarios indexada por el estado del proyecto,
+     * no por la acción. Se mantiene solo mientras `usar_matriz_notificaciones`
+     * esté en `false` — ver Fase D del plan de notificaciones configurables.
+     * Público únicamente para que el comando `notifications:compare-recipients`
+     * (el gate antes de activar el flag) pueda comparar ambos caminos; este
+     * método y el comando se eliminan juntos en el deploy de limpieza.
      */
-    private static function notifyWithoutProject(string $action, ?User $directRecipient): void
+    public static function recipientsFor(string $status, string $sourceRole): Collection
     {
-        if ($directRecipient === null) {
-            return;
+        $roles = static::rolesForStatus($status);
+
+        if (empty($roles)) {
+            return collect();
         }
 
-        $mailActions = SettingsService::get('acciones_con_correo', self::DEFAULT_MAIL_ACTIONS);
-        if (!in_array($action, $mailActions, true)) {
-            return;
-        }
-
-        $directRecipient->notify(new SystemActionMail($action));
+        return \App\Models\User::whereIn('role', $roles)->get();
     }
 
     /**
-     * Misma matriz rol→destinatarios que usaba ProjectObserver, ahora
-     * indexada por el estado actual del proyecto en el momento de la acción.
+     * Solo los roles configurados por status (sin hidratar usuarios) — para
+     * que `notifications:compare-recipients` compare configuración contra
+     * configuración, no "usuarios que existen hoy en esta BD por rol" (un
+     * rol sin ningún usuario activo no debería contar como "mismatch").
      */
-    private static function recipientsFor(string $status, string $sourceRole): \Illuminate\Support\Collection
+    public static function rolesForStatus(string $status): array
     {
-        $roles = match ($status) {
+        return match ($status) {
             'CREADO'                    => ['CIERRE_DE_OBRA', 'SUPERADMIN', 'ADMIN'],
             'REVISADO_CIERRE'           => ['PROCURA', 'SUPERADMIN', 'ADMIN'],
             'CONFIRMADO_PROCURA'        => ['ANALISTA', 'SUPERADMIN', 'ADMIN'],
@@ -135,11 +191,5 @@ class NotificationDispatcher
             'COMPLETADO_PAGADO'         => ['CIERRE_DE_OBRA', 'INFRAESTRUCTURA', 'PRESIDENCIA', 'SUPERADMIN', 'ADMIN'],
             default                     => [],
         };
-
-        if (empty($roles)) {
-            return collect();
-        }
-
-        return User::whereIn('role', $roles)->get();
     }
 }

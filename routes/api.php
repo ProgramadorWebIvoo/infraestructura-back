@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\DashboardSummaryController;
 use App\Http\Controllers\Api\AppNotificationController;
 use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\ConfigAuditLogController;
+use App\Http\Controllers\Api\NotificationRuleController;
 
 /*
 |--------------------------------------------------------------------------
@@ -63,6 +64,15 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     // Historial de cambios de CONFIG APP — exclusivo de SUPERADMIN, separado
     // de /audit-logs (visible para cualquier autenticado, incl. Presidencia).
     Route::get('/config-audit-logs', [ConfigAuditLogController::class, 'index'])
+        ->middleware('role:SUPERADMIN');
+
+    // Matriz configurable rol × acción × canal — exclusivo SUPERADMIN. `action`
+    // va en el body (no como path param) porque varias acciones del catálogo
+    // contienen espacios y hasta una barra literal (ej. "Carga de hojas de
+    // calculo/cubicaciones"), lo que haría frágil cualquier URL-encoding.
+    Route::get('/notification-rules', [NotificationRuleController::class, 'index'])
+        ->middleware('role:SUPERADMIN');
+    Route::put('/notification-rules', [NotificationRuleController::class, 'update'])
         ->middleware('role:SUPERADMIN');
 
     Route::get('/modules', [ModuleController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');

@@ -28,6 +28,11 @@ class NotificationRuleControllerTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonStructure(['data' => ['actions', 'roles', 'rules', 'unconfigured']]);
         $this->assertContains('SUPERADMIN', $response->json('data.roles'));
+
+        $actions = collect($response->json('data.actions'));
+        $criticalAction = $actions->firstWhere('value', 'Cambio de rol de usuario');
+        $this->assertTrue($criticalAction['critical']);
+        $this->assertSame('usuarios', $criticalAction['group']);
     }
 
     public function test_update_requires_superadmin(): void

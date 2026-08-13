@@ -117,4 +117,23 @@ class NotificationCatalog
             self::keys(),
         );
     }
+
+    /**
+     * Versión extendida para la matriz de notificaciones — agrega `group` y
+     * `critical`, que `toOptions()` no expone (usado también por el
+     * selector de tags de acciones_con_correo/acciones_con_notificacion_app,
+     * que no necesita esos campos).
+     */
+    public static function toDetailedOptions(): array
+    {
+        return array_map(
+            fn (string $action) => [
+                'value' => $action,
+                'label' => self::label($action),
+                'group' => self::group($action),
+                'critical' => self::isCritical($action),
+            ],
+            self::keys(),
+        );
+    }
 }

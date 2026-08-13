@@ -27,7 +27,7 @@ class NotificationRuleController extends Controller
     public function index(): JsonResponse
     {
         return response()->json(['data' => [
-            'actions' => NotificationCatalog::toOptions(),
+            'actions' => NotificationCatalog::toDetailedOptions(),
             'roles' => Roles::VALID,
             'rules' => NotificationRuleResolver::matrix(),
             'unconfigured' => NotificationRuleResolver::unconfiguredActions(),

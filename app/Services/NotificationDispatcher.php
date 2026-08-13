@@ -33,6 +33,34 @@ class NotificationDispatcher
         'Liberacion total de fondos',
     ];
 
+    /**
+     * Catálogo único de acciones auditadas que efectivamente puede generar
+     * la app vía AuditLog::record() con destinatarios reales (recipientsFor()
+     * las resuelve por status de proyecto). Fuente de verdad tanto para el
+     * default de `acciones_con_notificacion_app` (migración
+     * 2026_08_13_000001) como para el selector de tags en CONFIG APP
+     * (GET /settings/notification-actions) — así el frontend nunca muestra
+     * una acción que la app no dispara realmente.
+     */
+    public const AUDITABLE_ACTIONS = [
+        'Creacion de peticion de obra',
+        'Revision tecnica de calculos y planos',
+        'Confirmacion de presupuesto y envio a licitacion',
+        'Carga de propuesta',
+        'Carga de cuadro comparativo',
+        'Importación automática de propuestas de proveedores',
+        'Eliminacion de propuesta',
+        'Rechazo de cuadro comparativo',
+        'Confirmacion de contratacion',
+        'Liberacion de anticipo',
+        'Liberacion total de fondos',
+        'Reporte de obra finalizada',
+        'Verificacion de finalizacion y calidad de obra',
+        'Carga de hojas de calculo/cubicaciones',
+        'Carga de planos de ingenieria',
+        'Eliminacion de documento adjunto',
+    ];
+
     public static function notify(Project $project, string $role, string $action, ?string $details = null): void
     {
         $recipients = static::recipientsFor($project->status, $role);

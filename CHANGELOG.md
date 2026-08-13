@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [2026-08-13] — Catálogo real de acciones auditadas centralizado + endpoint para el selector de tags
+- Tipo: feature (UX) + refactor
+- Qué: `NotificationDispatcher::AUDITABLE_ACTIONS` centraliza las 16 acciones que la app efectivamente audita/notifica (antes duplicadas como array literal dentro de la migración `2026_08_13_000001`). Nuevo endpoint `GET /settings/notification-actions` (cualquier autenticado) devuelve ese catálogo, consumido por el selector de tags de `acciones_con_correo` / `acciones_con_notificacion_app` en CONFIG APP — así el frontend nunca ofrece una acción que la app no dispara realmente. La migración ahora usa la constante como default en vez de repetir la lista.
+- Por qué / causa raíz: el usuario pidió reemplazar el textarea JSON crudo de esas dos listas por un selector de tags, con la condición explícita de que las opciones fueran las acciones reales que la app dispara — no una lista inventada en el frontend. Centralizar en una constante evita que la migración y el endpoint diverjan con el tiempo.
+- Archivos: modificados `app/Services/NotificationDispatcher.php` (nueva constante `AUDITABLE_ACTIONS`), `app/Http/Controllers/Api/AppSettingController.php` (+`notificationActions()`), `database/migrations/2026_08_13_000001_rework_notification_settings.php` (usa la constante), `routes/api.php`; test nuevo en `tests/Feature/AppSettingTest.php`.
+- Verificación: **231/231 tests backend.**
+
+## [2026-08-13] — GET /config-audit-logs pasa a paginación numerada server-side
+- Tipo: feature (escalabilidad)
+- Qué: `ConfigAuditLogController::index()` ahora acepta `page` y `per_page` (default 20, tope 200) y devuelve `{items, currentPage, lastPage, total, perPage}` anidado dentro de `data` (mismo motivo que `auditLog` en el PATCH de settings: `apiFetch` desenvuelve `json.data` automáticamente, así que la metadata de paginación no puede ir como hermana de `data`).
+- Por qué / causa raíz: el endpoint ya usaba `paginate()` de Laravel pero el controlador devolvía el objeto paginador completo sin envolver en `data`, y el frontend descartaba toda la metadata quedándose solo con el array de la página — funcionaba porque el historial todavía tenía pocos registros, pero no escala: con cientos o miles de cambios de configuración acumulados, cargar todo de una vez en el panel sería inviable.
+- Archivos: modificado `app/Http/Controllers/Api/ConfigAuditLogController.php`; tests en `tests/Feature/ConfigAuditLogTest.php` actualizados al nuevo shape (`data.items.*`, `data.currentPage`, `data.total`, `data.perPage`) + nuevo test de paginación con 25 registros en 2 páginas.
+- Verificación: **230/230 tests backend.**
+
 ## [2026-08-13] — Notificaciones: acciones configurables, retención con purga automática, y auditoría de CONFIG APP exclusiva de SUPERADMIN
 - Tipo: feature
 - Qué:

@@ -68,8 +68,39 @@ class ConfigAuditLogTest extends TestCase
         $response = $this->actingAs($superadmin)->getJson('/api/config-audit-logs');
 
         $response->assertStatus(200);
-        $response->assertJsonPath('data.0.settingKey', 'anticipo_maximo_porcentaje');
-        $response->assertJsonPath('data.0.newValue', '50');
+        $response->assertJsonPath('data.items.0.settingKey', 'anticipo_maximo_porcentaje');
+        $response->assertJsonPath('data.items.0.newValue', '50');
+        $response->assertJsonPath('data.currentPage', 1);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.perPage', 20);
+    }
+
+    public function test_config_audit_logs_endpoint_paginates(): void
+    {
+        // Anidado bajo `data` (no como hermanos de `data`) por el mismo
+        // motivo que el auditLog del update: apiFetch desenvuelve
+        // automáticamente `json.data`, así que la metadata de paginación
+        // debe vivir dentro de `data` junto a `items`.
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'anticipo_maximo_porcentaje')->firstOrFail();
+
+        for ($i = 0; $i < 25; $i++) {
+            $this->actingAs($superadmin)
+                ->patchJson("/api/settings/{$setting->id}", ['value' => (string) (10 + $i)])
+                ->assertStatus(200);
+        }
+
+        $firstPage = $this->actingAs($superadmin)->getJson('/api/config-audit-logs?per_page=20');
+        $firstPage->assertStatus(200);
+        $firstPage->assertJsonPath('data.total', 25);
+        $firstPage->assertJsonPath('data.currentPage', 1);
+        $firstPage->assertJsonPath('data.lastPage', 2);
+        $this->assertCount(20, $firstPage->json('data.items'));
+
+        $secondPage = $this->actingAs($superadmin)->getJson('/api/config-audit-logs?per_page=20&page=2');
+        $secondPage->assertStatus(200);
+        $secondPage->assertJsonPath('data.currentPage', 2);
+        $this->assertCount(5, $secondPage->json('data.items'));
     }
 
     public function test_non_superadmin_role_cannot_see_config_audit_logs(): void

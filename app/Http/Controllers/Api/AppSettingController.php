@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Models\ConfigAuditLog;
+use App\Services\NotificationDispatcher;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,17 @@ class AppSettingController extends Controller
         $settings = AppSetting::orderBy('group')->orderBy('key')->get();
 
         return response()->json(['data' => $settings->groupBy('group')]);
+    }
+
+    /**
+     * Catálogo real de acciones auditadas disponibles para los selectores de
+     * `acciones_con_correo` / `acciones_con_notificacion_app` en CONFIG
+     * APP — misma fuente que usa NotificationDispatcher al filtrar, así el
+     * frontend nunca ofrece una acción que la app no dispara de verdad.
+     */
+    public function notificationActions(): JsonResponse
+    {
+        return response()->json(['data' => NotificationDispatcher::AUDITABLE_ACTIONS]);
     }
 
     public function update(Request $request, AppSetting $setting): JsonResponse

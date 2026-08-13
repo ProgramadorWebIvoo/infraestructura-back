@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AppSetting;
 use App\Models\User;
+use App\Services\NotificationDispatcher;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -116,5 +117,18 @@ class AppSettingTest extends TestCase
             ->assertStatus(200);
 
         $this->assertSame(60, SettingsService::get('anticipo_maximo_porcentaje'));
+    }
+
+    public function test_notification_actions_endpoint_returns_the_real_auditable_actions_catalog(): void
+    {
+        // Misma fuente que usa NotificationDispatcher al filtrar — el
+        // selector de tags en CONFIG APP nunca debe mostrar una acción que
+        // la app no dispare realmente.
+        $user = User::factory()->create(['role' => 'ANALISTA']);
+
+        $response = $this->actingAs($user)->getJson('/api/settings/notification-actions');
+
+        $response->assertStatus(200);
+        $response->assertJson(['data' => NotificationDispatcher::AUDITABLE_ACTIONS]);
     }
 }

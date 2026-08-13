@@ -56,6 +56,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     // CONFIG APP — lectura abierta a cualquier autenticado (varias features
     // consumen settings), edición restringida a administración.
     Route::get('/settings', [AppSettingController::class, 'index']);
+    Route::get('/settings/notification-actions', [AppSettingController::class, 'notificationActions']);
     Route::patch('/settings/{setting}', [AppSettingController::class, 'update'])
         ->middleware('role:SUPERADMIN,ADMIN');
 

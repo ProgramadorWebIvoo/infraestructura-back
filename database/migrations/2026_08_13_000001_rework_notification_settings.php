@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\NotificationDispatcher;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
@@ -31,30 +32,11 @@ return new class extends Migration
 
         $now = now();
 
-        $allActions = [
-            'Creacion de peticion de obra',
-            'Revision tecnica de calculos y planos',
-            'Confirmacion de presupuesto y envio a licitacion',
-            'Carga de propuesta',
-            'Carga de cuadro comparativo',
-            'Importación automática de propuestas de proveedores',
-            'Eliminacion de propuesta',
-            'Rechazo de cuadro comparativo',
-            'Confirmacion de contratacion',
-            'Liberacion de anticipo',
-            'Liberacion total de fondos',
-            'Reporte de obra finalizada',
-            'Verificacion de finalizacion y calidad de obra',
-            'Carga de hojas de calculo/cubicaciones',
-            'Carga de planos de ingenieria',
-            'Eliminacion de documento adjunto',
-        ];
-
         DB::table('app_settings')->insert([
             [
                 'group' => 'notificaciones',
                 'key' => 'acciones_con_notificacion_app',
-                'value' => json_encode($allActions),
+                'value' => json_encode(NotificationDispatcher::AUDITABLE_ACTIONS),
                 'type' => 'json',
                 'min_value' => null,
                 'max_value' => null,

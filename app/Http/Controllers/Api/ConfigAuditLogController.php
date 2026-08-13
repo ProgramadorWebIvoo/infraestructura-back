@@ -16,19 +16,29 @@ class ConfigAuditLogController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $perPage = min((int) $request->get('per_page', 50), 200);
+        $perPage = min((int) $request->get('per_page', 20), 200);
+        $page = max((int) $request->get('page', 1), 1);
 
-        $logs = ConfigAuditLog::latest('changed_at')
-            ->paginate($perPage)
-            ->through(fn (ConfigAuditLog $log) => [
+        $logs = ConfigAuditLog::latest('changed_at')->paginate($perPage, ['*'], 'page', $page);
+
+        // El frontend (apiFetch) desenvuelve automáticamente `json.data`, así
+        // que la metadata de paginación no puede vivir como hermana de
+        // `data` (se perdería) — va anidada dentro de `data` junto a los
+        // items, con `items` como clave separada para no chocar con `data`
+        // del paginador de Laravel.
+        return response()->json(['data' => [
+            'items' => $logs->getCollection()->map(fn (ConfigAuditLog $log) => [
                 'id' => $log->id,
                 'settingKey' => $log->setting_key,
                 'oldValue' => $log->old_value,
                 'newValue' => $log->new_value,
                 'userName' => $log->user_name_snapshot,
                 'changedAt' => optional($log->changed_at)->format('Y-m-d H:i'),
-            ]);
-
-        return response()->json($logs);
+            ]),
+            'currentPage' => $logs->currentPage(),
+            'lastPage' => $logs->lastPage(),
+            'total' => $logs->total(),
+            'perPage' => $logs->perPage(),
+        ]]);
     }
 }

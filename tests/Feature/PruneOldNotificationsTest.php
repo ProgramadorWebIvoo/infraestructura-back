@@ -18,11 +18,13 @@ class PruneOldNotificationsTest extends TestCase
         $user = User::factory()->create();
 
         $old = AppNotification::create(['user_id' => $user->id, 'action' => 'Vieja']);
-        $old->forceFill(['created_at' => now()->subDays(100)])->save();
+        $old->forceFill(['created_at' => now()->subDays(10)])->save();
 
         $recent = AppNotification::create(['user_id' => $user->id, 'action' => 'Reciente']);
 
-        AppSetting::where('key', 'retencion_notificaciones_dias')->update(['value' => '90']);
+        // Rango real del setting: 1-7 días (purgado destructivo, no amerita
+        // retención de meses/años — ver migración 2026_08_14_000007).
+        AppSetting::where('key', 'retencion_notificaciones_dias')->update(['value' => '7']);
         SettingsService::forget();
 
         $this->artisan('notifications:prune')->assertExitCode(0);
@@ -35,14 +37,22 @@ class PruneOldNotificationsTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $notification = AppNotification::create(['user_id' => $user->id, 'action' => 'Diez dias']);
-        $notification->forceFill(['created_at' => now()->subDays(10)])->save();
+        $notification = AppNotification::create(['user_id' => $user->id, 'action' => 'Dos dias']);
+        $notification->forceFill(['created_at' => now()->subDays(2)])->save();
 
-        AppSetting::where('key', 'retencion_notificaciones_dias')->update(['value' => '7']);
+        AppSetting::where('key', 'retencion_notificaciones_dias')->update(['value' => '1']);
         SettingsService::forget();
 
         $this->artisan('notifications:prune');
 
         $this->assertDatabaseMissing('app_notifications', ['id' => $notification->id]);
+    }
+
+    public function test_setting_range_is_narrow_for_a_destructive_purge(): void
+    {
+        $setting = AppSetting::where('key', 'retencion_notificaciones_dias')->firstOrFail();
+
+        $this->assertSame(1, (int) $setting->min_value);
+        $this->assertSame(7, (int) $setting->max_value);
     }
 }

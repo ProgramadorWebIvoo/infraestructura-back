@@ -105,6 +105,64 @@ class AppSettingTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_update_rejects_notification_retention_above_one_week(): void
+    {
+        // Purgado destructivo (notifications:prune elimina filas sin
+        // posibilidad de recuperación) — rango acotado a 1-7 días.
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'retencion_notificaciones_dias')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => '30'])
+            ->assertStatus(422);
+    }
+
+    public function test_update_rejects_notification_retention_below_one_day(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'retencion_notificaciones_dias')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => '0'])
+            ->assertStatus(422);
+    }
+
+    public function test_label_and_description_are_resolved_from_the_code_catalog_not_the_database(): void
+    {
+        // label/description no son columnas de app_settings — vienen de
+        // App\Support\AppSettingCatalog (código versionado), expuestas vía
+        // accessors para no cambiar el shape de la API.
+        $setting = AppSetting::where('key', 'moneda_base')->firstOrFail();
+
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('app_settings', 'label'));
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('app_settings', 'description'));
+        $this->assertSame('Moneda base', $setting->label);
+        $this->assertSame('Moneda en la que se registran los montos por defecto.', $setting->description);
+    }
+
+    public function test_settings_endpoint_response_still_includes_label_and_description(): void
+    {
+        $user = User::factory()->create(['role' => 'ANALISTA']);
+
+        $response = $this->actingAs($user)->getJson('/api/settings');
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['data' => ['presupuesto' => [['label', 'description']]]]);
+    }
+
+    public function test_unknown_setting_key_falls_back_to_key_as_label(): void
+    {
+        $setting = AppSetting::create([
+            'group' => 'app',
+            'key' => 'clave_inventada_sin_catalogo',
+            'value' => 'x',
+            'type' => 'string',
+        ]);
+
+        $this->assertSame('clave_inventada_sin_catalogo', $setting->label);
+        $this->assertNull($setting->description);
+    }
+
     public function test_update_invalidates_the_settings_cache(): void
     {
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);

@@ -14,10 +14,21 @@ return new class extends Migration
             return;
         }
 
-        // La FK project_documents_project_id_foreign puede no existir si la migración original
-        // falló al crearla por el mismatch de tipos. Se modifica la columna y se recrea la FK.
         DB::statement('ALTER TABLE `project_documents` MODIFY `project_id` VARCHAR(40) NOT NULL');
-        DB::statement('ALTER TABLE `project_documents` ADD CONSTRAINT `project_documents_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE');
+
+        // La FK project_documents_project_id_foreign puede no existir si la migración original
+        // falló al crearla por el mismatch de tipos (caso histórico) — o SÍ existir si se corre
+        // sobre un schema recién creado desde cero (migrate:fresh), donde la migración original
+        // ya la crea correctamente. Idempotente: solo la agrega si todavía no está.
+        $exists = DB::table('information_schema.TABLE_CONSTRAINTS')
+            ->where('CONSTRAINT_SCHEMA', DB::getDatabaseName())
+            ->where('TABLE_NAME', 'project_documents')
+            ->where('CONSTRAINT_NAME', 'project_documents_project_id_foreign')
+            ->exists();
+
+        if (!$exists) {
+            DB::statement('ALTER TABLE `project_documents` ADD CONSTRAINT `project_documents_project_id_foreign` FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE');
+        }
     }
 
     public function down(): void

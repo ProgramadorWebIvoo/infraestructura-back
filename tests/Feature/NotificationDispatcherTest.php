@@ -9,8 +9,10 @@ use App\Models\Project;
 use App\Models\User;
 use App\Notifications\ProjectActionMail;
 use App\Notifications\ProjectActionNotification;
+use App\Models\NotificationRule;
 use App\Notifications\UserPasswordReset;
 use App\Services\NotificationDispatcher;
+use App\Services\NotificationRuleResolver;
 use App\Services\SettingsService;
 use App\Support\NotificationCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -115,13 +117,17 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
-        $project = Project::factory()->create(['status' => 'LISTO_PAGO_FINAL']);
+        // "Liberacion total de fondos" ocurre con el proyecto en
+        // COMPLETADO_PAGADO (después del pago) — status real donde la
+        // matriz sembrada tiene destinatarios de correo (CIERRE_DE_OBRA,
+        // INFRAESTRUCTURA, PRESIDENCIA), no LISTO_PAGO_FINAL (antes del pago).
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->create(['status' => 'COMPLETADO_PAGADO']);
 
         AuditLog::record($project, 'CIERRE_DE_OBRA', 'Liberacion total de fondos', 'Pago final liberado');
 
         Notification::assertSentTo(
-            $finanzas,
+            $cierre,
             ProjectActionMail::class,
             fn (ProjectActionMail $mail) => $mail->project->id === $project->id
                 && $mail->action === 'Liberacion total de fondos'
@@ -305,5 +311,61 @@ class NotificationDispatcherTest extends TestCase
             'role' => 'SISTEMA',
             'project_id' => null,
         ]);
+    }
+
+    public function test_rule_matrix_resolves_recipients_by_action_ignoring_project_status(): void
+    {
+        Notification::fake();
+
+        // La matriz por acción manda, no el status del proyecto — un status
+        // que en el mapeo original correspondía a otro rol no cambia esto.
+        NotificationRule::where('action', 'Rechazo de cuadro comparativo')->delete();
+        NotificationRule::create(['action' => 'Rechazo de cuadro comparativo', 'role' => 'FINANZAS', 'channel' => 'app', 'enabled' => true]);
+        NotificationRuleResolver::forget();
+
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $procura = User::factory()->create(['role' => 'PROCURA']);
+        $project = Project::factory()->create(['status' => 'COMPARATIVA_ENVIADA']);
+
+        AuditLog::record($project, 'PROCURA', 'Rechazo de cuadro comparativo', 'motivo');
+
+        Notification::assertSentTo($finanzas, ProjectActionNotification::class);
+        Notification::assertNotSentTo($procura, ProjectActionNotification::class);
+    }
+
+    public function test_admin_action_without_project_notifies_via_rule_matrix(): void
+    {
+        Notification::fake();
+
+        // "Alta de material" ya viene sembrada con CATALOGOS.
+        $catalogos = User::factory()->create(['role' => 'CATALOGOS']);
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+
+        $this->postJson('/api/materials/config', ['name' => 'Cemento', 'unit' => 'saco'])->assertStatus(201);
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $catalogos->id,
+            'project_id' => null,
+            'action' => 'Alta de material',
+        ]);
+    }
+
+    public function test_mail_channel_resolved_via_rule_matrix_independent_of_app_channel(): void
+    {
+        Notification::fake();
+
+        NotificationRule::firstOrCreate(['action' => 'Liberacion de anticipo', 'role' => 'FINANZAS', 'channel' => 'mail'], ['enabled' => true]);
+        NotificationRuleResolver::forget();
+
+        AppSetting::where('key', 'acciones_con_correo')->update(['value' => json_encode(['Liberacion de anticipo'])]);
+        SettingsService::forget();
+
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $project = Project::factory()->create(['status' => 'EN_EJECUCION']);
+
+        AuditLog::record($project, 'FINANZAS', 'Liberacion de anticipo', 'anticipo liberado');
+
+        Notification::assertSentTo($finanzas, ProjectActionMail::class);
     }
 }

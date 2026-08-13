@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AppSettingCatalog;
 use Illuminate\Database\Eloquent\Model;
 
 class AppSetting extends Model
@@ -13,9 +14,26 @@ class AppSetting extends Model
         'type',
         'min_value',
         'max_value',
-        'label',
-        'description',
     ];
+
+    /**
+     * `label`/`description` no son columnas de la tabla — se resuelven desde
+     * `AppSettingCatalog` (código, no BD) y se agregan a `toArray()`/JSON
+     * automáticamente vía `$appends`, para que el shape de la API no cambie
+     * (frontend, tipos y tests siguen recibiendo `label`/`description` como
+     * antes).
+     */
+    protected $appends = ['label', 'description'];
+
+    public function getLabelAttribute(): string
+    {
+        return AppSettingCatalog::label($this->key);
+    }
+
+    public function getDescriptionAttribute(): ?string
+    {
+        return AppSettingCatalog::description($this->key);
+    }
 
     /**
      * Valor casteado según `type` (string|integer|float|boolean|json).

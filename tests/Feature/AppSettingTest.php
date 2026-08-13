@@ -123,12 +123,21 @@ class AppSettingTest extends TestCase
     {
         // Misma fuente que usa NotificationDispatcher al filtrar — el
         // selector de tags en CONFIG APP nunca debe mostrar una acción que
-        // la app no dispare realmente.
+        // la app no dispare realmente. `value` es el string persistido en
+        // AuditLog/settings; `label` es el texto legible mostrado en la UI.
         $user = User::factory()->create(['role' => 'ANALISTA']);
 
         $response = $this->actingAs($user)->getJson('/api/settings/notification-actions');
 
         $response->assertStatus(200);
-        $response->assertJson(['data' => NotificationDispatcher::AUDITABLE_ACTIONS]);
+        $data = $response->json('data');
+        $this->assertCount(count(NotificationDispatcher::AUDITABLE_ACTIONS), $data);
+        $this->assertSame(NotificationDispatcher::AUDITABLE_ACTIONS, array_column($data, 'value'));
+
+        $contractorRegisterEntry = collect($data)->firstWhere('value', 'contractor.register');
+        $this->assertSame('Registro público de proveedor', $contractorRegisterEntry['label']);
+
+        $scalarActionEntry = collect($data)->firstWhere('value', 'Carga de propuesta');
+        $this->assertSame('Carga de propuesta', $scalarActionEntry['label']);
     }
 }

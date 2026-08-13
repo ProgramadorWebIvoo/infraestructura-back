@@ -9,6 +9,8 @@ use App\Models\Project;
 use App\Models\User;
 use App\Notifications\ProjectActionMail;
 use App\Notifications\ProjectActionNotification;
+use App\Notifications\UserPasswordReset;
+use App\Services\NotificationDispatcher;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -211,5 +213,96 @@ class NotificationDispatcherTest extends TestCase
             ->getJson('/api/notifications/unread-count')
             ->assertStatus(200)
             ->assertJson(['count' => 1]);
+    }
+
+    public function test_audit_log_record_accepts_null_project_and_does_not_notify_recipients(): void
+    {
+        Notification::fake();
+
+        $someUser = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $log = AuditLog::record(null, 'SISTEMA', 'contractor.register', 'detalle');
+
+        $this->assertNull($log->project_id);
+        $this->assertDatabaseHas('audit_logs', ['id' => $log->id, 'project_id' => null, 'action' => 'contractor.register']);
+        Notification::assertNotSentTo($someUser, ProjectActionNotification::class);
+    }
+
+    public function test_is_mail_action_allowed_reflects_acciones_con_correo_setting(): void
+    {
+        AppSetting::where('key', 'acciones_con_correo')->update([
+            'value' => json_encode(['Solicitud de restablecimiento de contrasena']),
+        ]);
+        SettingsService::forget();
+
+        $this->assertTrue(NotificationDispatcher::isMailActionAllowed('Solicitud de restablecimiento de contrasena'));
+        $this->assertFalse(NotificationDispatcher::isMailActionAllowed('Otra accion cualquiera'));
+    }
+
+    public function test_password_reset_is_audited_and_sends_mail_when_action_allowed(): void
+    {
+        Notification::fake();
+
+        AppSetting::where('key', 'acciones_con_correo')->update([
+            'value' => json_encode(['Solicitud de restablecimiento de contrasena']),
+        ]);
+        SettingsService::forget();
+
+        $user = User::factory()->create();
+
+        $user->sendPasswordResetNotification('token-123');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'Solicitud de restablecimiento de contrasena',
+            'project_id' => null,
+        ]);
+        Notification::assertSentTo($user, UserPasswordReset::class);
+    }
+
+    public function test_password_reset_is_audited_but_mail_is_suppressed_when_action_not_allowed(): void
+    {
+        Notification::fake();
+
+        AppSetting::where('key', 'acciones_con_correo')->update([
+            'value' => json_encode(['Otra accion cualquiera']),
+        ]);
+        SettingsService::forget();
+
+        $user = User::factory()->create();
+
+        $user->sendPasswordResetNotification('token-123');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'Solicitud de restablecimiento de contrasena',
+        ]);
+        Notification::assertNotSentTo($user, UserPasswordReset::class);
+    }
+
+    public function test_contractor_register_action_is_now_auditable_and_included_in_catalog(): void
+    {
+        $this->assertContains('contractor.register', NotificationDispatcher::AUDITABLE_ACTIONS);
+        $this->assertContains('invitation.view', NotificationDispatcher::AUDITABLE_ACTIONS);
+        $this->assertContains('proposal.submit', NotificationDispatcher::AUDITABLE_ACTIONS);
+        $this->assertContains('Solicitud de restablecimiento de contrasena', NotificationDispatcher::AUDITABLE_ACTIONS);
+    }
+
+    public function test_public_contractor_registration_is_now_audited(): void
+    {
+        // Antes de esta integración, LogsPublicAccess::logPublicAccess() solo
+        // llamaba a AuditLog::record() cuando había un $project asociado —
+        // el registro público de proveedor (sin proyecto) nunca quedaba
+        // auditado. Con AuditLog::record() aceptando ?Project, ahora sí.
+        $response = $this->postJson('/api/contractors', [
+            'name' => 'Constructora XYZ',
+            'specialty' => 'Electricidad',
+            'contact' => 'contacto@xyz.com',
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'contractor.register',
+            'role' => 'SISTEMA',
+            'project_id' => null,
+        ]);
     }
 }

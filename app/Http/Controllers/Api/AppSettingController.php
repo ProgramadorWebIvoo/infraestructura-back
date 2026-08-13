@@ -30,10 +30,24 @@ class AppSettingController extends Controller
      * `acciones_con_correo` / `acciones_con_notificacion_app` en CONFIG
      * APP — misma fuente que usa NotificationDispatcher al filtrar, así el
      * frontend nunca ofrece una acción que la app no dispara de verdad.
+     *
+     * `value` es el string técnico que realmente se guarda en el setting
+     * (debe coincidir exactamente con lo que AuditLog::record() recibe como
+     * $action); `label` es el texto legible a mostrar — para la mayoría de
+     * las acciones ambos son iguales (ya son frases en español), salvo las
+     * cubiertas por NotificationDispatcher::ACTION_LABELS.
      */
     public function notificationActions(): JsonResponse
     {
-        return response()->json(['data' => NotificationDispatcher::AUDITABLE_ACTIONS]);
+        $actions = array_map(
+            fn (string $action) => [
+                'value' => $action,
+                'label' => NotificationDispatcher::ACTION_LABELS[$action] ?? $action,
+            ],
+            NotificationDispatcher::AUDITABLE_ACTIONS,
+        );
+
+        return response()->json(['data' => $actions]);
     }
 
     public function update(Request $request, AppSetting $setting): JsonResponse

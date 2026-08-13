@@ -59,10 +59,44 @@ class NotificationDispatcher
         'Carga de hojas de calculo/cubicaciones',
         'Carga de planos de ingenieria',
         'Eliminacion de documento adjunto',
+        'contractor.register',
+        'invitation.view',
+        'proposal.submit',
+        'Solicitud de restablecimiento de contrasena',
     ];
 
-    public static function notify(Project $project, string $role, string $action, ?string $details = null): void
+    /**
+     * Labels legibles para las acciones cuyo string técnico (el que se
+     * guarda en AuditLog/los settings) no es autoexplicativo para un
+     * usuario — hoy, los 3 identificadores de acceso público heredados de
+     * LogsPublicAccess ('contractor.register', etc.), que nunca fueron
+     * pensados para mostrarse en una UI. El resto de AUDITABLE_ACTIONS ya es
+     * una frase en español y se muestra tal cual (sin entrada acá).
+     * Consumido por GET /settings/notification-actions — el valor que
+     * viaja y se persiste en los settings sigue siendo el string técnico;
+     * esto es solo para la etiqueta visible en el selector de tags.
+     */
+    public const ACTION_LABELS = [
+        'contractor.register' => 'Registro público de proveedor',
+        'invitation.view' => 'Visualización de invitación (proveedor)',
+        'proposal.submit' => 'Envío de propuesta pública (proveedor)',
+    ];
+
+    /**
+     * Acciones auditables sin proyecto asociado (ver AuditLog::record()) no
+     * tienen destinatarios que resolver por rol/status ni bandeja/push que
+     * poblar — quedan registradas en AuditLog para visibilidad, pero el
+     * envío de la notificación real (si aplica) lo decide el propio emisor
+     * consultando `isMailActionAllowed()`, no este método. Ej.: el correo de
+     * restablecimiento de contraseña lleva un token real que este
+     * dispatcher no puede construir — ver User::sendPasswordResetNotification().
+     */
+    public static function notify(?Project $project, string $role, string $action, ?string $details = null): void
     {
+        if ($project === null) {
+            return;
+        }
+
         $recipients = static::recipientsFor($project->status, $role);
 
         if ($recipients->isEmpty()) {
@@ -80,10 +114,7 @@ class NotificationDispatcher
             return;
         }
 
-        // Acciones que además disparan correo — no todas las auditadas
-        // ameritan correo (sería spam). Editable desde CONFIG APP (Fase 1.4).
-        $mailActions = SettingsService::get('acciones_con_correo', self::DEFAULT_MAIL_ACTIONS);
-        $sendMail = in_array($action, $mailActions, true);
+        $sendMail = static::isMailActionAllowed($action);
 
         foreach ($recipients as $user) {
             $user->notify(new ProjectActionNotification($project, $action, $project->status));
@@ -100,6 +131,39 @@ class NotificationDispatcher
                 $user->notify(new ProjectActionMail($project, $action, $details));
             }
         }
+    }
+
+    /**
+     * Expone el filtro `acciones_con_correo` para emisores que no pasan por
+     * `notify()` (correos con contenido que este dispatcher no puede
+     * construir, ej. el token de restablecimiento de contraseña) pero sí
+     * quieren respetar el mismo control de CONFIG APP antes de enviar.
+     */
+    public static function isMailActionAllowed(string $action): bool
+    {
+        $mailActions = SettingsService::get('acciones_con_correo', self::DEFAULT_MAIL_ACTIONS);
+
+        return in_array($action, $mailActions, true);
+    }
+
+    /**
+     * Eventos auditables sin proyecto: no hay destinatarios que resolver por
+     * rol/status, ni una "acción de proyecto" que mostrar en bandeja/push —
+     * solo correo directo al usuario indicado, sujeto al mismo filtro
+     * `acciones_con_correo` que el resto de acciones auditadas.
+     */
+    private static function notifyWithoutProject(string $action, ?User $directRecipient): void
+    {
+        if ($directRecipient === null) {
+            return;
+        }
+
+        $mailActions = SettingsService::get('acciones_con_correo', self::DEFAULT_MAIL_ACTIONS);
+        if (!in_array($action, $mailActions, true)) {
+            return;
+        }
+
+        $directRecipient->notify(new SystemActionMail($action));
     }
 
     /**

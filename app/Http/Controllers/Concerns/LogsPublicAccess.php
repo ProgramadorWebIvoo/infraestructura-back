@@ -10,10 +10,12 @@ use Illuminate\Support\Facades\Log;
 /**
  * Log de acceso a endpoints públicos (sin autenticación).
  *
- * Además del log de texto (Log::info), persiste el acceso en AuditLog
- * cuando hay un proyecto asociado, para tener un único historial de
- * auditoría consistente y consultable (antes solo quedaba en el log de
- * archivo). Aditivo: no reemplaza el Log::info existente.
+ * Además del log de texto (Log::info), persiste el acceso en AuditLog —
+ * con o sin proyecto asociado (`AuditLog::record()` acepta `?Project`) —
+ * para tener un único historial de auditoría consistente y consultable
+ * (antes, sin proyecto, el evento no quedaba auditado en absoluto: solo en
+ * el log de archivo, invisible para CONFIG APP). Aditivo: no reemplaza el
+ * Log::info existente.
  */
 trait LogsPublicAccess
 {
@@ -27,10 +29,8 @@ trait LogsPublicAccess
             'timestamp' => now()->toIso8601String(),
         ]);
 
-        if ($project !== null) {
-            // 'role' es un enum de BD sin valor "PUBLIC"; se usa 'SISTEMA'
-            // para accesos públicos no autenticados (ver audit_logs migration).
-            AuditLog::record($project, 'SISTEMA', $action, $detail);
-        }
+        // 'role' es un enum de BD sin valor "PUBLIC"; se usa 'SISTEMA' para
+        // accesos públicos no autenticados (ver audit_logs migration).
+        AuditLog::record($project, 'SISTEMA', $action, $detail);
     }
 }

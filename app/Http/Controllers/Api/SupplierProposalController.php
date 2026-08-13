@@ -24,6 +24,10 @@ class SupplierProposalController extends Controller
         $data = $request->validate([
             'estimatedDays'         => ['nullable', 'integer', 'min:1'],
             'durationUnit'          => ['nullable', 'string', 'in:dias,semanas,meses'],
+            // Tope fijo (no el configurable de CONFIG APP): el proveedor externo
+            // cotiza libremente su condición real de anticipo, sin conocer ni
+            // estar limitado por la política interna de la empresa. El 100 es
+            // solo una cota de sanidad contra valores absurdos (ej. 500%).
             'advancePercent'        => ['nullable', 'integer', 'min:0', 'max:100'],
             'items'                 => ['required', 'array', 'min:1'],
             'items.*.materialName'  => ['required', 'string', 'max:220'],

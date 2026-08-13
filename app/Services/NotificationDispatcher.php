@@ -22,12 +22,11 @@ use App\Notifications\ProjectActionNotification;
 class NotificationDispatcher
 {
     /**
-     * Acciones que además de push + bandeja interna disparan correo.
-     * No todas las ~16 acciones auditadas ameritan correo (sería spam);
-     * esta lista arranca corta y se pretende mover a CONFIG APP (Fase 1.4)
-     * para que sea editable sin deploy.
+     * Fallback si el setting "acciones_con_correo" no existe/está vacío
+     * (BD sin migrar, o borrado por error) — mismas 4 acciones que antes
+     * vivían hardcodeadas aquí.
      */
-    private const MAIL_ACTIONS = [
+    private const DEFAULT_MAIL_ACTIONS = [
         'Rechazo de cuadro comparativo',
         'Confirmacion de contratacion',
         'Liberacion de anticipo',
@@ -42,7 +41,21 @@ class NotificationDispatcher
             return;
         }
 
-        $sendMail = in_array($action, self::MAIL_ACTIONS, true);
+        // Acciones que disparan push + bandeja interna — por defecto todas,
+        // editable desde CONFIG APP para silenciar acciones de bajo valor sin
+        // dejar de auditarlas (AuditLog::record() ya se hizo antes de llegar
+        // aquí). Si el setting no existe (BD sin migrar), no se filtra nada.
+        $notifyActions = SettingsService::get('acciones_con_notificacion_app');
+        $sendAppNotification = $notifyActions === null || in_array($action, $notifyActions, true);
+
+        if (!$sendAppNotification) {
+            return;
+        }
+
+        // Acciones que además disparan correo — no todas las auditadas
+        // ameritan correo (sería spam). Editable desde CONFIG APP (Fase 1.4).
+        $mailActions = SettingsService::get('acciones_con_correo', self::DEFAULT_MAIL_ACTIONS);
+        $sendMail = in_array($action, $mailActions, true);
 
         foreach ($recipients as $user) {
             $user->notify(new ProjectActionNotification($project, $action, $project->status));

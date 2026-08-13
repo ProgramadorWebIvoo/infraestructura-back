@@ -1,5 +1,63 @@
 # CHANGELOG
 
+## [2026-08-13] — Notificaciones: acciones configurables, retención con purga automática, y auditoría de CONFIG APP exclusiva de SUPERADMIN
+- Tipo: feature
+- Qué:
+  - Eliminados los 4 settings "correo por departamento" (`correo_procura/finanzas/cierre_obra/auditoria`) — nunca tuvieron consumidor: `ProjectActionMail` siempre envía al destinatario real de la notificación (mismo criterio por rol que push/bandeja), nunca a una dirección fija de departamento.
+  - Nuevo setting `acciones_con_notificacion_app`: mismo patrón que `acciones_con_correo` pero para push + bandeja interna (`NotificationDispatcher::notify()`). Por defecto incluye las ~16 acciones auditadas (comportamiento actual sin cambios); editable desde CONFIG APP para silenciar acciones de bajo valor sin dejar de auditarlas — `AuditLog::record()` sigue corriendo siempre, solo se filtra el aviso.
+  - Nuevo setting `retencion_notificaciones_dias` (default 90, rango 7-365) + comando `notifications:prune`, programado diario en el scheduler junto a `sanctum:clear-expired-tokens`. Antes las notificaciones en `app_notifications` se acumulaban indefinidamente, sin ningún mecanismo de limpieza.
+  - Nuevos settings `polling_notificaciones_segundos` (default 8, rango 5-120) y `polling_dashboard_segundos` (default 25, rango 10-300) — catálogo listo para conectarse en una fase futura (no conectados todavía, solo el dato queda disponible en CONFIG APP).
+  - **Auditoría de CONFIG APP separada y exclusiva de SUPERADMIN**: nueva tabla `config_audit_logs` + modelo `ConfigAuditLog` + `GET /config-audit-logs` (middleware `role:SUPERADMIN`), deliberadamente distinta de `audit_logs`/`GET /audit-logs` (visible para cualquier autenticado, incluida Presidencia). `AppSettingController::update()` registra cada cambio (valor viejo, valor nuevo, usuario, timestamp) y devuelve la entrada recién creada anidada en la respuesta (`data.auditLog`) para que el frontend la inserte sin una consulta adicional.
+- Por qué / causa raíz: el usuario señaló que el apartado "Correos" de notificaciones no reflejaba cómo funciona la app (esos 4 campos eran configuración muerta) y pidió el equivalente de `acciones_con_correo` para notificaciones in-app, además de que la auditoría de cambios de configuración quedara restringida a SUPERADMIN, invisible para Presidencia (a diferencia de la auditoría de proyectos).
+- Archivos: nuevas migraciones `database/migrations/2026_08_13_000001_rework_notification_settings.php`, `2026_08_13_000002_create_config_audit_logs_table.php`; nuevos `app/Models/ConfigAuditLog.php`, `app/Http/Controllers/Api/ConfigAuditLogController.php`, `app/Console/Commands/PruneOldNotifications.php`; modificados `app/Services/NotificationDispatcher.php`, `app/Http/Controllers/Api/AppSettingController.php`, `app/Console/Kernel.php`, `routes/api.php`; tests nuevos `tests/Feature/PruneOldNotificationsTest.php` (2), `tests/Feature/ConfigAuditLogTest.php` (5, incluye la respuesta anidada del PATCH), +2 en `tests/Feature/NotificationDispatcherTest.php` (filtro de acciones con notificación app).
+- Verificación: **228/228 tests backend.**
+
+## [2026-08-12] — Fix crítico: el registro/evaluación de ofertas rechazaba anticipos renegociados por encima del máximo
+- Tipo: fix (bug bloqueante introducido en esta misma sesión)
+- Qué: `AddProjectProposalRequest` (registro de propuesta por Analistas) y `AIEvaluationController::evaluate()` (evaluación IA de Procura) seguían validando `negotiatedAdvancePercent` con `max:{$maxAdvance}` contra el setting configurable — rechazando con 422 cualquier intento de cargar una oferta con anticipo renegociado por encima de la política interna (ej. 40% cuando el máximo configurado es 30%). Se revirtió a un tope fijo de sanidad `max:100` en ambos, igual que ya se había hecho para el link público de proveedores.
+- Por qué / causa raíz: el diseño de negocio correcto (confirmado por el usuario) es que el máximo configurado en CONFIG APP sea solo una **alerta visual** para Analistas/Procura, nunca un bloqueo — existen casos reales de renegociación telefónica o directa con el proveedor donde el anticipo pactado excede la política interna, y el sistema debe permitir registrar esa condición real, no rechazarla. La alerta (ya implementada en `BidRegistrationSection`, `ComparativeTableSection`, `BidEvaluationSection` y `HireConfirmDialog`) es la forma correcta de que Analistas/Procura vean el riesgo sin que el dato se pierda.
+- Archivos: modificados `app/Http/Requests/AddProjectProposalRequest.php`, `app/Http/Controllers/Api/AIEvaluationController.php`; tests ajustados en `tests/Feature/ProjectLifecycleTest.php` y `tests/Feature/AiEvaluationTest.php` (reemplazados los tests que esperaban 422 configurable por: aceptación por encima del máximo configurado, y rechazo solo por encima del techo de sanidad 100%).
+- Verificación: **220/220 tests backend.**
+
+## [2026-08-12] — Corrección: el link público de proveedores NO respeta el anticipo máximo configurado
+- Tipo: fix (corrección de diseño de negocio)
+- Qué: revertido `SupplierProposalController::store()` y `SupplierInvitationController::publicInfo()` — el proveedor externo (formulario público sin sesión, vía token de invitación) vuelve a validar con un tope fijo `max:100`, no con `SettingsService::get('anticipo_maximo_porcentaje')`. Se eliminó `maxAdvancePercent` del payload de `publicInfo()`.
+- Por qué / causa raíz: el usuario señaló que el proveedor externo no debe estar sujeto a una política interna que ni siquiera conoce el motivo — su cotización debe reflejar su condición real. Quien sí necesita ver si esa oferta excede la política interna es el Analista/Procura al evaluarla, no el proveedor al momento de cotizar. La validación con el setting configurable se mantiene en los 2 flujos internos autenticados (`AddProjectProposalRequest`, `AIEvaluationController`).
+- Archivos: modificados `app/Http/Controllers/Api/SupplierProposalController.php`, `app/Http/Controllers/Api/SupplierInvitationController.php`; tests ajustados en `tests/Feature/SupplierInvitationTest.php` (reemplazado el test que esperaba 422 configurable por dos tests: rechazo por techo fijo de sanidad 100%, y aceptación por encima del máximo configurado ya que el link no lo respeta).
+- Verificación: **218/218 tests backend.**
+
+## [2026-08-12] — Anticipo máximo (CONFIG APP) conectado a toda validación de anticipo en la app
+- Tipo: fix
+- Qué: el setting `presupuesto.anticipo_maximo_porcentaje` (hasta ahora solo editable en CONFIG APP, sin consumidor) ahora es la única fuente de verdad para el tope de anticipo en los 3 puntos donde el backend valida ese campo — se eliminó el `max:100` hardcodeado de los tres:
+  - `AddProjectProposalRequest::rules()` — alta de propuesta de contratista (`POST /projects/{project}/proposals`).
+  - `AIEvaluationController::evaluate()` — validación inline de `proposals.*.negotiatedAdvancePercent` antes de mandar a evaluación IA.
+  - `SupplierProposalController::store()` — envío público (sin auth, vía token de invitación) de cotización de proveedor de materiales.
+  - `SupplierInvitationController::publicInfo()` ahora expone `maxAdvancePercent` en el payload público de la invitación, para que el formulario público de proveedores sepa qué tope mostrar/validar sin necesitar sesión (la ruta `/settings` requiere autenticación).
+- Por qué / causa raíz: el usuario pidió conectar el anticipo máximo a "todo lo que tenga que ver con anticipos", para que un cambio de política (ej. bajar el tope al 50%) se refleje de inmediato en los 3 flujos de captura sin deploy, en vez de solo en el panel de configuración.
+- Archivos: modificados `app/Http/Requests/AddProjectProposalRequest.php`, `app/Http/Controllers/Api/AIEvaluationController.php`, `app/Http/Controllers/Api/SupplierProposalController.php`, `app/Http/Controllers/Api/SupplierInvitationController.php`; tests nuevos/extendidos en `tests/Feature/ProjectLifecycleTest.php` (+1), `tests/Feature/AiEvaluationTest.php` (+1), `tests/Feature/SupplierInvitationTest.php` (+2, incluye la nueva estructura JSON de `publicInfo`).
+- Verificación: **218/218 tests backend.**
+
+## [2026-08-12] — CONFIG APP: rango min/max para settings numéricos acotados
+- Tipo: fix
+- Qué:
+  - Nuevas columnas `min_value`/`max_value` (decimal nullable) en `app_settings`, pobladas para los 5 settings porcentuales (`anticipo_maximo_porcentaje`, los 3 umbrales de semáforo, `alerta_precio_umbral_porcentaje`) con rango 0–100.
+  - `AppSettingController::update()` valida el rango además del tipo: si el nuevo valor está fuera de `[min_value, max_value]` responde 422, en vez de confiar solo en la validación del frontend.
+- Por qué / causa raíz: el usuario notó que el panel permitía guardar porcentajes fuera de rango (>100, negativos) sin aviso. Los límites deben vivir junto al dato en BD para que cualquier cliente (panel, futura API externa) los respete, no solo el formulario actual.
+- Archivos: nueva `database/migrations/2026_08_12_000003_add_min_max_to_app_settings_table.php`; modificados `app/Models/AppSetting.php`, `app/Http/Controllers/Api/AppSettingController.php`; +2 tests en `tests/Feature/AppSettingTest.php` (rechazo por debajo/encima del rango).
+- Verificación: **214/214 tests backend.**
+
+## [2026-08-12] — Plan 90 días, Fase 1.4: CONFIG APP (parámetros de negocio editables sin deploy)
+- Tipo: feature
+- Qué:
+  - Tabla genérica `app_settings` (key/value tipado: string|integer|float|boolean|json, agrupado por `group`, con `label`/`description` para el panel de administración). Sembrada con 18 defaults que reproducen exactamente los valores hoy hardcodeados en el código (anticipo 100%, semáforo 80/95/100, acciones de correo) — desplegar esta migración no cambia comportamiento, solo lo hace editable.
+  - `App\Models\AppSetting` con accessor `cast_value` (casteo por `type`).
+  - `App\Services\SettingsService`: punto único de lectura tipada (`get(key, default)`, `all()`), cacheado 5 min (driver `file`), invalidado explícitamente en cada `update()` — un cambio desde CONFIG APP se refleja de inmediato, no hay que esperar el TTL.
+  - `AppSettingController`: `GET /settings` (cualquier autenticado, agrupado), `PATCH /settings/{setting}` (solo SUPERADMIN/ADMIN, valida el nuevo valor según `type` — entero/booleano/JSON bien formados).
+  - **Primer consumidor real conectado**: `NotificationDispatcher::MAIL_ACTIONS` (constante hardcodeada desde Fase 1.1/1.2) ahora lee `SettingsService::get('acciones_con_correo', ...)` — la lista de acciones que disparan correo es editable desde CONFIG APP sin deploy, con fallback a las mismas 4 acciones de antes si el setting no existe.
+- Por qué / causa raíz: Fase 1.4 del plan de 90 días (`docs/PLAN-MAESTRO-90-DIAS.md`) — todo lo configurable (montos, límites, correos, pesos, umbrales) debe vivir en CONFIG, nunca hardcodeado. Se decidió construir las 9 áreas completas del plan de una vez (moneda, presupuesto/anticipo, ratings, notificaciones, fiscal, alertas de precio, inflación, app) en vez de solo lo que ya tiene consumidor hoy, para no volver a tocar el panel en cada fase futura.
+- Archivos: nuevos `database/migrations/2026_08_12_000002_create_app_settings_table.php`, `app/Models/AppSetting.php`, `app/Services/SettingsService.php`, `app/Http/Controllers/Api/AppSettingController.php`; modificados `app/Services/NotificationDispatcher.php`, `routes/api.php`, `config/permissions.php` (nueva ruta frontend `/config-app` para SUPERADMIN/ADMIN); tests nuevos `tests/Feature/AppSettingTest.php` (8 tests), `tests/Feature/SettingsServiceTest.php` (5 tests), +1 test en `tests/Feature/NotificationDispatcherTest.php` (lista de acciones editable sin deploy).
+- Verificación: **212/212 tests backend.**
+
 ## [2026-08-12] — Plan 90 días, Fase 1.1: notificaciones unificadas vía AuditLog::record()
 - Tipo: feature
 - Qué:

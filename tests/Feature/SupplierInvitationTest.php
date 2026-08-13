@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\SupplierInvitation;
 use App\Models\SupplierMaterialProposal;
 use App\Models\User;
+use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -206,6 +208,47 @@ class SupplierInvitationTest extends TestCase
             'invitation_token' => $invitation->id,
             'project_id'       => $this->project->id,
         ]);
+    }
+
+    public function test_submit_proposal_rejects_advance_percent_above_sanity_ceiling(): void
+    {
+        // El link público NO respeta el máximo configurable de CONFIG APP —
+        // el proveedor externo cotiza su condición real sin conocer la
+        // política interna. Solo hay una cota de sanidad fija (100%).
+        $invitation = SupplierInvitation::factory()->create([
+            'project_id' => $this->project->id,
+        ]);
+
+        $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'items' => [
+                ['materialName' => 'Cemento', 'quantity' => 100, 'unit' => 'kg', 'unitPrice' => 12.50, 'totalPrice' => 1250.00],
+            ],
+            'advancePercent' => 150,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('advancePercent');
+    }
+
+    public function test_submit_proposal_accepts_advance_percent_above_configured_max(): void
+    {
+        // Aunque CONFIG APP tenga el tope en 20%, el link público lo ignora —
+        // solo Analistas/Procura ven la alerta al evaluar la oferta.
+        AppSetting::where('key', 'anticipo_maximo_porcentaje')->update(['value' => '20']);
+        SettingsService::forget();
+
+        $invitation = SupplierInvitation::factory()->create([
+            'project_id' => $this->project->id,
+        ]);
+
+        $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'items' => [
+                ['materialName' => 'Cemento', 'quantity' => 100, 'unit' => 'kg', 'unitPrice' => 12.50, 'totalPrice' => 1250.00],
+            ],
+            'advancePercent' => 30,
+        ]);
+
+        $response->assertStatus(201);
     }
 
     public function test_submit_proposal_with_used_token_returns_404(): void

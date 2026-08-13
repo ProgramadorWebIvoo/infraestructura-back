@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\MaterialCatalog;
@@ -9,6 +10,7 @@ use App\Models\Project;
 use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
 use App\Models\User;
+use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -173,6 +175,49 @@ class ProjectLifecycleTest extends TestCase
         $response->assertStatus(200);
         $this->assertCount(1, $project->fresh()->proposals);
         $this->assertDatabaseMissing('project_proposals', ['id' => $proposalId]);
+    }
+
+    public function test_add_proposal_accepts_advance_percent_above_configured_max(): void
+    {
+        // El anticipo negociado puede exceder el máximo configurado en CONFIG
+        // APP (renegociación telefónica/directa con el proveedor) — el máximo
+        // configurado solo dispara una alerta visual en el frontend, nunca
+        // bloquea el registro de la propuesta.
+        $project = Project::factory()->confirmed()->create();
+        $contractor = Contractor::factory()->create();
+
+        AppSetting::where('key', 'anticipo_maximo_porcentaje')->update(['value' => '20']);
+        SettingsService::forget();
+
+        $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals", [
+                'contractorCode'           => $contractor->code,
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 30,
+                'description'              => 'Anticipo renegociado por encima del máximo configurado',
+            ])
+            ->assertStatus(200);
+    }
+
+    public function test_add_proposal_rejects_advance_percent_above_sanity_ceiling(): void
+    {
+        $project = Project::factory()->confirmed()->create();
+        $contractor = Contractor::factory()->create();
+
+        $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals", [
+                'contractorCode'           => $contractor->code,
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 150,
+                'description'              => 'Anticipo por encima del 100%',
+            ])
+            ->assertStatus(422);
     }
 
     public function test_full_project_lifecycle(): void

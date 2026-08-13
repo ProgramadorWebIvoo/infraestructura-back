@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\AppNotification;
+use App\Models\AppSetting;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\User;
 use App\Notifications\ProjectActionMail;
 use App\Notifications\ProjectActionNotification;
+use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -121,6 +123,63 @@ class NotificationDispatcherTest extends TestCase
             fn (ProjectActionMail $mail) => $mail->project->id === $project->id
                 && $mail->action === 'Liberacion total de fondos'
         );
+    }
+
+    public function test_mail_actions_list_is_editable_via_config_app_without_deploy(): void
+    {
+        Notification::fake();
+
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $project = Project::factory()->create(['status' => 'LISTO_PAGO_FINAL']);
+
+        // Quitar "Liberacion total de fondos" de la lista editable — sin
+        // tocar código, esa acción deja de enviar correo.
+        AppSetting::where('key', 'acciones_con_correo')->update([
+            'value' => json_encode(['Rechazo de cuadro comparativo']),
+        ]);
+        SettingsService::forget();
+
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Liberacion total de fondos');
+
+        Notification::assertNotSentTo($finanzas, ProjectActionMail::class);
+    }
+
+    public function test_action_excluded_from_notification_list_does_not_notify_nor_create_row(): void
+    {
+        Notification::fake();
+
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        AppSetting::where('key', 'acciones_con_notificacion_app')->update([
+            'value' => json_encode(['Otra accion cualquiera']),
+        ]);
+        SettingsService::forget();
+
+        AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
+
+        Notification::assertNotSentTo($cierre, ProjectActionNotification::class);
+        $this->assertDatabaseMissing('app_notifications', [
+            'user_id' => $cierre->id,
+            'action' => 'Creacion de peticion de obra',
+        ]);
+    }
+
+    public function test_action_still_in_notification_list_notifies_normally(): void
+    {
+        Notification::fake();
+
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        AppSetting::where('key', 'acciones_con_notificacion_app')->update([
+            'value' => json_encode(['Creacion de peticion de obra']),
+        ]);
+        SettingsService::forget();
+
+        AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
+
+        Notification::assertSentTo($cierre, ProjectActionNotification::class);
     }
 
     public function test_mark_read_endpoint_updates_read_at(): void

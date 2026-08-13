@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\AiConfiguration;
+use App\Models\AppSetting;
 use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -145,6 +147,41 @@ class AiEvaluationTest extends TestCase
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors('provider');
+    }
+
+    public function test_evaluate_accepts_advance_percent_above_configured_max(): void
+    {
+        // El anticipo negociado puede exceder el máximo configurado en CONFIG
+        // APP — Procura evalúa ofertas ya cargadas por Analistas, incluyendo
+        // renegociaciones que superen la política interna. El máximo
+        // configurado solo alerta en el frontend, nunca bloquea.
+        $project = Project::factory()->create();
+        $contractor = Contractor::factory()->create();
+
+        AppSetting::where('key', 'anticipo_maximo_porcentaje')->update(['value' => '20']);
+        SettingsService::forget();
+
+        $payload = $this->evaluationPayload($project, $contractor); // negotiatedAdvancePercent: 30
+
+        $response = $this->withHeaders($this->headers($this->procura))
+            ->postJson('/api/ai/evaluate-proposals', $payload);
+
+        $response->assertJsonMissingValidationErrors('proposals.0.negotiatedAdvancePercent');
+    }
+
+    public function test_evaluate_rejects_advance_percent_above_sanity_ceiling(): void
+    {
+        $project = Project::factory()->create();
+        $contractor = Contractor::factory()->create();
+
+        $payload = $this->evaluationPayload($project, $contractor);
+        $payload['proposals'][0]['negotiatedAdvancePercent'] = 150;
+
+        $response = $this->withHeaders($this->headers($this->procura))
+            ->postJson('/api/ai/evaluate-proposals', $payload);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('proposals.0.negotiatedAdvancePercent');
     }
 
     public function test_role_without_permission_cannot_evaluate(): void

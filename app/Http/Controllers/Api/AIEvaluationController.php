@@ -46,6 +46,9 @@ class AIEvaluationController extends Controller
             'proposals.*.laborCost'                => ['required', 'numeric', 'min:0'],
             'proposals.*.totalCost'                => ['required', 'numeric', 'min:0'],
             'proposals.*.deliveryWeeks'            => ['required', 'integer', 'min:0'],
+            // Sin tope contra el máximo configurado en CONFIG APP — el anticipo
+            // negociado puede exceder la política interna por renegociación con
+            // el proveedor; el máximo configurado solo alerta, no bloquea.
             'proposals.*.negotiatedAdvancePercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'proposals.*.description'              => ['required', 'string', 'max:2000'],
             'proposals.*.observations'             => ['nullable', 'string', 'max:2000'],

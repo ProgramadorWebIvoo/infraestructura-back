@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreMaterialRequest;
 use App\Http\Requests\UpdateMaterialRequest;
 use App\Http\Resources\MaterialResource;
+use App\Models\ConfigAuditLog;
 use App\Models\MaterialCatalog;
+use App\Services\NotificationDispatcher;
 
 class MaterialController extends Controller
 {
@@ -41,6 +43,10 @@ class MaterialController extends Controller
             'estimated_unit_price' => $data['estimatedUnitPrice'] ?? 0,
             'is_active'           => $data['isActive'] ?? true,
         ]);
+
+        $details = "Material: {$material->name} ({$material->unit})";
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, $details);
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Alta de material', $details);
 
         return response()->json(new MaterialResource($material), 201);
     }
@@ -82,6 +88,10 @@ class MaterialController extends Controller
 
         $material->update($updateData);
 
+        $details = "Material: {$material->name} ({$material->unit})";
+        ConfigAuditLog::recordAdminAction('material', 'Modificacion de material', null, null, $details);
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Modificacion de material', $details);
+
         return response()->json(new MaterialResource($material));
     }
 
@@ -89,6 +99,10 @@ class MaterialController extends Controller
     {
         $material->is_active = !$material->is_active;
         $material->save();
+
+        $details = "Material: {$material->name} ({$material->unit}) / Activo: " . ($material->is_active ? 'sí' : 'no');
+        ConfigAuditLog::recordAdminAction('material', 'Activacion/desactivacion de material', null, null, $details);
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Activacion/desactivacion de material', $details);
 
         return response()->json([
             'id'       => $material->id,

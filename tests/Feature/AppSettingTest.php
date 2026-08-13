@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\AppSetting;
 use App\Models\User;
-use App\Services\NotificationDispatcher;
 use App\Services\SettingsService;
+use App\Support\NotificationCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -131,8 +131,8 @@ class AppSettingTest extends TestCase
 
         $response->assertStatus(200);
         $data = $response->json('data');
-        $this->assertCount(count(NotificationDispatcher::AUDITABLE_ACTIONS), $data);
-        $this->assertSame(NotificationDispatcher::AUDITABLE_ACTIONS, array_column($data, 'value'));
+        $this->assertCount(count(NotificationCatalog::keys()), $data);
+        $this->assertSame(NotificationCatalog::keys(), array_column($data, 'value'));
 
         $contractorRegisterEntry = collect($data)->firstWhere('value', 'contractor.register');
         $this->assertSame('Registro público de proveedor', $contractorRegisterEntry['label']);

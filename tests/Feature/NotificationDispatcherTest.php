@@ -12,6 +12,7 @@ use App\Notifications\ProjectActionNotification;
 use App\Notifications\UserPasswordReset;
 use App\Services\NotificationDispatcher;
 use App\Services\SettingsService;
+use App\Support\NotificationCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -280,10 +281,10 @@ class NotificationDispatcherTest extends TestCase
 
     public function test_contractor_register_action_is_now_auditable_and_included_in_catalog(): void
     {
-        $this->assertContains('contractor.register', NotificationDispatcher::AUDITABLE_ACTIONS);
-        $this->assertContains('invitation.view', NotificationDispatcher::AUDITABLE_ACTIONS);
-        $this->assertContains('proposal.submit', NotificationDispatcher::AUDITABLE_ACTIONS);
-        $this->assertContains('Solicitud de restablecimiento de contrasena', NotificationDispatcher::AUDITABLE_ACTIONS);
+        $this->assertContains('contractor.register', NotificationCatalog::keys());
+        $this->assertContains('invitation.view', NotificationCatalog::keys());
+        $this->assertContains('proposal.submit', NotificationCatalog::keys());
+        $this->assertContains('Solicitud de restablecimiento de contrasena', NotificationCatalog::keys());
     }
 
     public function test_public_contractor_registration_is_now_audited(): void

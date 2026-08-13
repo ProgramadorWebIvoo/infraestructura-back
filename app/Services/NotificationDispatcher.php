@@ -34,55 +34,6 @@ class NotificationDispatcher
     ];
 
     /**
-     * Catálogo único de acciones auditadas que efectivamente puede generar
-     * la app vía AuditLog::record() con destinatarios reales (recipientsFor()
-     * las resuelve por status de proyecto). Fuente de verdad tanto para el
-     * default de `acciones_con_notificacion_app` (migración
-     * 2026_08_13_000001) como para el selector de tags en CONFIG APP
-     * (GET /settings/notification-actions) — así el frontend nunca muestra
-     * una acción que la app no dispara realmente.
-     */
-    public const AUDITABLE_ACTIONS = [
-        'Creacion de peticion de obra',
-        'Revision tecnica de calculos y planos',
-        'Confirmacion de presupuesto y envio a licitacion',
-        'Carga de propuesta',
-        'Carga de cuadro comparativo',
-        'Importación automática de propuestas de proveedores',
-        'Eliminacion de propuesta',
-        'Rechazo de cuadro comparativo',
-        'Confirmacion de contratacion',
-        'Liberacion de anticipo',
-        'Liberacion total de fondos',
-        'Reporte de obra finalizada',
-        'Verificacion de finalizacion y calidad de obra',
-        'Carga de hojas de calculo/cubicaciones',
-        'Carga de planos de ingenieria',
-        'Eliminacion de documento adjunto',
-        'contractor.register',
-        'invitation.view',
-        'proposal.submit',
-        'Solicitud de restablecimiento de contrasena',
-    ];
-
-    /**
-     * Labels legibles para las acciones cuyo string técnico (el que se
-     * guarda en AuditLog/los settings) no es autoexplicativo para un
-     * usuario — hoy, los 3 identificadores de acceso público heredados de
-     * LogsPublicAccess ('contractor.register', etc.), que nunca fueron
-     * pensados para mostrarse en una UI. El resto de AUDITABLE_ACTIONS ya es
-     * una frase en español y se muestra tal cual (sin entrada acá).
-     * Consumido por GET /settings/notification-actions — el valor que
-     * viaja y se persiste en los settings sigue siendo el string técnico;
-     * esto es solo para la etiqueta visible en el selector de tags.
-     */
-    public const ACTION_LABELS = [
-        'contractor.register' => 'Registro público de proveedor',
-        'invitation.view' => 'Visualización de invitación (proveedor)',
-        'proposal.submit' => 'Envío de propuesta pública (proveedor)',
-    ];
-
-    /**
      * Acciones auditables sin proyecto asociado (ver AuditLog::record()) no
      * tienen destinatarios que resolver por rol/status ni bandeja/push que
      * poblar — quedan registradas en AuditLog para visibilidad, pero el

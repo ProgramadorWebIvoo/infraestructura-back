@@ -118,6 +118,13 @@ class AIEvaluationController extends Controller
 
     /**
      * Registra en la bitácora de auditoría el resultado de la evaluación.
+     *
+     * `$action` es la constante fija 'Evaluacion inteligente de propuestas'
+     * (antes interpolaba el nombre del ganador — 'Evaluación Inteligente -
+     * ' . $winnerContractorName — un dato variable usado como identificador
+     * de tipo de evento, que por diseño nunca podía coincidir con ningún
+     * catálogo/filtro de acciones ni aparecer seleccionable en CONFIG APP).
+     * El nombre del ganador sigue disponible, ahora solo en `$details`.
      */
     private function logEvaluation(Project $project, array $result): void
     {
@@ -125,7 +132,7 @@ class AIEvaluationController extends Controller
             AuditLog::record(
                 $project,
                 'PROCURA',
-                'Evaluación Inteligente - ' . $result['winnerContractorName'],
+                'Evaluacion inteligente de propuestas',
                 sprintf(
                     'Evaluación via %s | Score: %d%% | Ganador: %s (%s) | Fortalezas: %d | Debilidades: %d',
                     $result['providerUsed'] ?? 'N/A',

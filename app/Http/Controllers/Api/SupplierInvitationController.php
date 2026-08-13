@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Concerns\LogsPublicAccess;
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\SupplierInvitation;
 use Illuminate\Http\Request;
@@ -41,6 +42,13 @@ class SupplierInvitationController extends Controller
             'supplier_contact' => $data['supplierContact'],
             'expires_at'       => now()->addDays(SupplierInvitation::DEFAULT_VALIDITY_DAYS),
         ]);
+
+        AuditLog::record(
+            $project,
+            auth()->user()->role,
+            'Envio de invitacion a proveedor',
+            "Proveedor: {$invitation->supplier_name} / Contacto: {$invitation->supplier_contact}",
+        );
 
         return response()->json([
             'token'          => $invitation->id,

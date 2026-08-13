@@ -58,6 +58,26 @@ class SupplierInvitationTest extends TestCase
         $this->assertEquals('Proveedor Test', $response->json('supplierName'));
     }
 
+    public function test_create_invitation_is_recorded_in_audit_log_with_project(): void
+    {
+        // Tiene $project asociado (parte del flujo de una obra específica,
+        // no una operación de panel admin) — pasa por AuditLog::record(),
+        // no ConfigAuditLog, para que Presidencia lo vea junto al resto del
+        // flujo regular.
+        $this->withHeaders($this->authHeaders())
+            ->postJson('/api/supplier-invitations', [
+                'project_id'      => $this->project->id,
+                'supplierName'    => 'Proveedor Test',
+                'supplierContact' => 'proveedor@test.com',
+            ])
+            ->assertStatus(201);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'project_id' => $this->project->id,
+            'action' => 'Envio de invitacion a proveedor',
+        ]);
+    }
+
     public function test_create_invitation_replaces_previous_active(): void
     {
         // Create first invitation

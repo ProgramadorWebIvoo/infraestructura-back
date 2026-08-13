@@ -7,10 +7,12 @@ use App\Http\Requests\StoreAiConfigurationRequest;
 use App\Http\Requests\UpdateAiConfigurationRequest;
 use App\Http\Resources\AiConfigurationResource;
 use App\Models\AiConfiguration;
+use App\Models\ConfigAuditLog;
 use App\Services\AI\AiConfigurationService;
 use App\Services\AI\AIEvaluationService;
 use App\Services\AI\AiUsageAnalyticsService;
 use App\Services\AI\Providers\AIProviderFactory;
+use App\Services\NotificationDispatcher;
 use Illuminate\Http\Request;
 
 class AiConfigController extends Controller
@@ -85,6 +87,10 @@ class AiConfigController extends Controller
 
         $this->configService->syncToCache();
 
+        $details = "Proveedor: {$config->provider} / Modelo: {$config->model}";
+        ConfigAuditLog::recordAdminAction('ai_config', 'Alta de configuracion de IA', null, null, $details);
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Alta de configuracion de IA', $details);
+
         return response()->json(new AiConfigurationResource($config), 201);
     }
 
@@ -134,6 +140,10 @@ class AiConfigController extends Controller
 
         $this->configService->syncToCache();
 
+        $details = "Proveedor: {$config->provider} / Modelo: {$config->model}";
+        ConfigAuditLog::recordAdminAction('ai_config', 'Modificacion de configuracion de IA', null, null, $details);
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Modificacion de configuracion de IA', $details);
+
         return response()->json(new AiConfigurationResource($config->fresh()));
     }
 
@@ -143,9 +153,14 @@ class AiConfigController extends Controller
      */
     public function destroy(AiConfiguration $aiConfig)
     {
+        $details = "Proveedor: {$aiConfig->provider} / Modelo: {$aiConfig->model}";
+
         $aiConfig->delete();
 
         $this->configService->syncToCache();
+
+        ConfigAuditLog::recordAdminAction('ai_config', 'Eliminacion de configuracion de IA', null, null, $details);
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Eliminacion de configuracion de IA', $details);
 
         return response()->json(['message' => 'Configuración eliminada.'], 200);
     }

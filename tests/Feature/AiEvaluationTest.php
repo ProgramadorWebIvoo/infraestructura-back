@@ -100,7 +100,11 @@ class AiEvaluationTest extends TestCase
             'project_id' => $project->id,
             'role' => 'PROCURA',
         ]);
-        $this->assertStringContainsString('Constructora Test', AuditLog::first()->action);
+        // `action` es una constante fija (no interpola el ganador — antes lo
+        // hacía, lo que rompía cualquier comparación contra el catálogo de
+        // acciones configurables); el nombre del ganador vive en `details`.
+        $this->assertSame('Evaluacion inteligente de propuestas', AuditLog::first()->action);
+        $this->assertStringContainsString('Constructora Test', AuditLog::first()->details);
     }
 
     public function test_evaluate_returns_503_when_no_provider_configured(): void

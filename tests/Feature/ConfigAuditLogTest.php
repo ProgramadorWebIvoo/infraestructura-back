@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AppSetting;
+use App\Models\ConfigAuditLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -110,5 +111,49 @@ class ConfigAuditLogTest extends TestCase
         $this->actingAs($presidencia)
             ->getJson('/api/config-audit-logs')
             ->assertStatus(403);
+    }
+
+    public function test_record_setting_change_persists_entity_type_setting(): void
+    {
+        $setting = AppSetting::where('key', 'anticipo_maximo_porcentaje')->firstOrFail();
+
+        $log = ConfigAuditLog::recordSettingChange($setting, '100', '80');
+
+        $this->assertSame('setting', $log->entity_type);
+        $this->assertSame('anticipo_maximo_porcentaje', $log->action);
+        $this->assertDatabaseHas('config_audit_logs', [
+            'id' => $log->id,
+            'entity_type' => 'setting',
+            'action' => 'anticipo_maximo_porcentaje',
+            'setting_key' => 'anticipo_maximo_porcentaje',
+        ]);
+    }
+
+    public function test_record_admin_action_persists_non_setting_entity(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+
+        $log = ConfigAuditLog::recordAdminAction('user', 'Creacion de usuario', null, null, 'Usuario: jdoe@test.com');
+
+        $this->assertSame('user', $log->entity_type);
+        $this->assertSame('Creacion de usuario', $log->action);
+        $this->assertNull($log->setting_id);
+        $this->assertNull($log->setting_key);
+        $this->assertSame('Usuario: jdoe@test.com', $log->new_value);
+        $this->assertSame($superadmin->id, $log->user_id);
+    }
+
+    public function test_config_audit_logs_endpoint_exposes_entity_type_and_action(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+        ConfigAuditLog::recordAdminAction('contractor', 'Alta de proveedor', null, null, 'Proveedor: ACME');
+
+        $response = $this->getJson('/api/config-audit-logs');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.items.0.entityType', 'contractor');
+        $response->assertJsonPath('data.items.0.action', 'Alta de proveedor');
     }
 }

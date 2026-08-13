@@ -1,6 +1,5 @@
 <?php
 
-use App\Services\NotificationDispatcher;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
@@ -32,11 +31,40 @@ return new class extends Migration
 
         $now = now();
 
+        // Congelado tal como existía al momento en que esta migración corrió
+        // por primera vez — las migraciones no deben depender de una
+        // constante mutable externa (NotificationCatalog::keys() hoy tiene
+        // más acciones que las 20 originales). Ampliaciones posteriores del
+        // catálogo se siembran en sus propias migraciones (ver Fase D del
+        // plan de notificaciones configurables por rol).
+        $originalAuditableActions = [
+            'Creacion de peticion de obra',
+            'Revision tecnica de calculos y planos',
+            'Confirmacion de presupuesto y envio a licitacion',
+            'Carga de propuesta',
+            'Carga de cuadro comparativo',
+            'Importación automática de propuestas de proveedores',
+            'Eliminacion de propuesta',
+            'Rechazo de cuadro comparativo',
+            'Confirmacion de contratacion',
+            'Liberacion de anticipo',
+            'Liberacion total de fondos',
+            'Reporte de obra finalizada',
+            'Verificacion de finalizacion y calidad de obra',
+            'Carga de hojas de calculo/cubicaciones',
+            'Carga de planos de ingenieria',
+            'Eliminacion de documento adjunto',
+            'contractor.register',
+            'invitation.view',
+            'proposal.submit',
+            'Solicitud de restablecimiento de contrasena',
+        ];
+
         DB::table('app_settings')->insert([
             [
                 'group' => 'notificaciones',
                 'key' => 'acciones_con_notificacion_app',
-                'value' => json_encode(NotificationDispatcher::AUDITABLE_ACTIONS),
+                'value' => json_encode($originalAuditableActions),
                 'type' => 'json',
                 'min_value' => null,
                 'max_value' => null,

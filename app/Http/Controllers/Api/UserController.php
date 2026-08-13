@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Models\ConfigAuditLog;
 use App\Models\User;
 use App\Rules\StrongPassword;
+use App\Services\NotificationDispatcher;
+use App\Support\Roles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
@@ -13,16 +16,11 @@ use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    private const VALID_ROLES = [
-        'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
-        'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
-    ];
-
     private const VALID_STATUSES = ['Active', 'Inactive'];
 
     public function roles(Request $request)
     {
-        return response()->json(self::VALID_ROLES);
+        return response()->json(Roles::VALID);
     }
 
     public function index(Request $request)
@@ -42,7 +40,7 @@ class UserController extends Controller
             'name'                  => ['required', 'string', 'max:255'],
             'email'                 => ['required', 'email', 'unique:users,email'],
             'password'              => ['required', 'string', 'confirmed', StrongPassword::rule()],
-            'role'                  => ['required', Rule::in(self::VALID_ROLES)],
+            'role'                  => ['required', Rule::in(Roles::VALID)],
             'status'                => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);
 
@@ -54,6 +52,9 @@ class UserController extends Controller
             'status'   => $data['status'] ?? 'Active',
         ]);
 
+        ConfigAuditLog::recordAdminAction('user', 'Creacion de usuario', null, null, "Usuario: {$user->name} ({$user->email}) / Rol: {$user->role}");
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Creacion de usuario', "Usuario: {$user->name} ({$user->email})");
+
         return response()->json(new UserResource($user), 201);
     }
 
@@ -62,9 +63,11 @@ class UserController extends Controller
         $data = $request->validate([
             'name'   => ['sometimes', 'string', 'max:255'],
             'email'  => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'role'   => ['sometimes', Rule::in(self::VALID_ROLES)],
+            'role'   => ['sometimes', Rule::in(Roles::VALID)],
             'status' => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);
+
+        $previousRole = $user->role;
 
         if (isset($data['name']))   $user->name  = $data['name'];
         if (isset($data['email']))  $user->email = $data['email'];
@@ -72,6 +75,18 @@ class UserController extends Controller
         if (isset($data['status'])) $user->status = $data['status'];
 
         $user->save();
+
+        ConfigAuditLog::recordAdminAction('user', 'Modificacion de usuario', null, null, "Usuario: {$user->name} ({$user->email})");
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Modificacion de usuario', "Usuario: {$user->name} ({$user->email})");
+
+        // Escalación de privilegios — se registra y notifica aparte, no
+        // implícito dentro de "Modificacion de usuario", porque su audiencia
+        // de notificación es más restringida (ver NotificationCatalog).
+        if (isset($data['role']) && $data['role'] !== $previousRole) {
+            $details = "Usuario: {$user->name} ({$user->email}) / {$previousRole} → {$user->role}";
+            ConfigAuditLog::recordAdminAction('user', 'Cambio de rol de usuario', $previousRole, $user->role, $details);
+            NotificationDispatcher::notify(null, 'SISTEMA', 'Cambio de rol de usuario', $details);
+        }
 
         return response()->json(new UserResource($user));
     }
@@ -85,6 +100,10 @@ class UserController extends Controller
         if ($user->isInactive()) {
             $user->tokens()->delete();
         }
+
+        $details = "Usuario: {$user->name} ({$user->email}) / Estado: {$user->status}";
+        ConfigAuditLog::recordAdminAction('user', 'Activacion/desactivacion de usuario', null, null, $details);
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Activacion/desactivacion de usuario', $details);
 
         return response()->json([
             'id'     => $user->id,

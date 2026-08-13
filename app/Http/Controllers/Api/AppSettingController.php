@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Models\ConfigAuditLog;
-use App\Services\NotificationDispatcher;
 use App\Services\SettingsService;
+use App\Support\NotificationCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,26 +28,17 @@ class AppSettingController extends Controller
     /**
      * Catálogo real de acciones auditadas disponibles para los selectores de
      * `acciones_con_correo` / `acciones_con_notificacion_app` en CONFIG
-     * APP — misma fuente que usa NotificationDispatcher al filtrar, así el
-     * frontend nunca ofrece una acción que la app no dispara de verdad.
+     * APP — misma fuente que usa NotificationCatalog/NotificationDispatcher
+     * al filtrar, así el frontend nunca ofrece una acción que la app no
+     * dispara de verdad.
      *
      * `value` es el string técnico que realmente se guarda en el setting
-     * (debe coincidir exactamente con lo que AuditLog::record() recibe como
-     * $action); `label` es el texto legible a mostrar — para la mayoría de
-     * las acciones ambos son iguales (ya son frases en español), salvo las
-     * cubiertas por NotificationDispatcher::ACTION_LABELS.
+     * (debe coincidir exactamente con el `$action` que se audita); `label`
+     * es el texto legible a mostrar.
      */
     public function notificationActions(): JsonResponse
     {
-        $actions = array_map(
-            fn (string $action) => [
-                'value' => $action,
-                'label' => NotificationDispatcher::ACTION_LABELS[$action] ?? $action,
-            ],
-            NotificationDispatcher::AUDITABLE_ACTIONS,
-        );
-
-        return response()->json(['data' => $actions]);
+        return response()->json(['data' => NotificationCatalog::toOptions()]);
     }
 
     public function update(Request $request, AppSetting $setting): JsonResponse
@@ -86,7 +77,7 @@ class AppSettingController extends Controller
         $setting->update(['value' => $data['value']]);
         SettingsService::forget();
 
-        $auditLog = ConfigAuditLog::record($setting, $oldValue, $data['value']);
+        $auditLog = ConfigAuditLog::recordSettingChange($setting, $oldValue, $data['value']);
 
         // `auditLog` va anidado dentro de `data` (no como hermano) porque
         // apiFetch (frontend) desenvuelve automáticamente `json.data` —

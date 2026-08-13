@@ -10,9 +10,13 @@ use Illuminate\Http\Request;
 class ConfigAuditLogController extends Controller
 {
     /**
-     * Historial de cambios en CONFIG APP — exclusivo de SUPERADMIN (ver
+     * Historial de acciones administrativas — exclusivo de SUPERADMIN (ver
      * middleware de la ruta). Deliberadamente separado de /audit-logs, que
-     * cualquier autenticado puede consultar (incluida Presidencia).
+     * cualquier autenticado puede consultar (incluida Presidencia). Cubre
+     * tanto cambios de CONFIG APP (`entityType: 'setting'`) como otras
+     * acciones administrativas (usuarios, proveedores, materiales, IA,
+     * matriz de notificaciones) en el mismo listado — `entityType` permite
+     * a la UI distinguir/filtrar sin necesitar un segundo endpoint.
      */
     public function index(Request $request): JsonResponse
     {
@@ -29,6 +33,8 @@ class ConfigAuditLogController extends Controller
         return response()->json(['data' => [
             'items' => $logs->getCollection()->map(fn (ConfigAuditLog $log) => [
                 'id' => $log->id,
+                'entityType' => $log->entity_type,
+                'action' => $log->action,
                 'settingKey' => $log->setting_key,
                 'oldValue' => $log->old_value,
                 'newValue' => $log->new_value,

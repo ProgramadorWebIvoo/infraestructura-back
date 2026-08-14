@@ -82,6 +82,7 @@ class UserManagementTest extends TestCase
             'role'   => 'ANALISTA',
             'status' => 'Active',
         ]);
+        $response->assertJsonPath('auditLog.action', 'Creacion de usuario');
     }
 
     public function test_store_rejects_password_without_mixed_case_or_numbers(): void
@@ -147,6 +148,23 @@ class UserManagementTest extends TestCase
             'name'   => 'Nombre Actualizado',
             'status' => 'Inactive',
         ]);
+        // Array (no "auditLog" singular): esta acción puede generar 2
+        // entradas en una sola llamada si además cambia el rol.
+        $response->assertJsonPath('auditLogs.0.action', 'Modificacion de usuario');
+        $response->assertJsonCount(1, 'auditLogs');
+    }
+
+    public function test_update_with_role_change_returns_both_audit_log_entries(): void
+    {
+        $user = User::factory()->create(['role' => 'ANALISTA']);
+
+        $response = $this->withHeaders($this->headers($this->superadmin))
+            ->patchJson("/api/users/{$user->id}", ['role' => 'PROCURA']);
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'auditLogs');
+        $response->assertJsonPath('auditLogs.0.action', 'Modificacion de usuario');
+        $response->assertJsonPath('auditLogs.1.action', 'Cambio de rol de usuario');
     }
 
     public function test_toggle_status_to_inactive_revokes_tokens(): void
@@ -161,6 +179,7 @@ class UserManagementTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJson(['status' => 'Inactive']);
+        $response->assertJsonPath('auditLog.action', 'Activacion/desactivacion de usuario');
 
         // Tokens should be revoked
         $user->refresh();
@@ -194,6 +213,16 @@ class UserManagementTest extends TestCase
     {
         $response = $this->withHeaders($this->headers($this->analista))
             ->getJson('/api/users');
+
+        $response->assertStatus(403);
+    }
+
+    public function test_unauthorized_role_cannot_send_reset_link(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->withHeaders($this->headers($this->analista))
+            ->postJson("/api/users/{$user->id}/send-reset-link");
 
         $response->assertStatus(403);
     }

@@ -43,9 +43,12 @@ class ContractorController extends Controller
         });
 
         $details = "Proveedor: {$contractor->name} / Código: {$contractor->code}";
-        ConfigAuditLog::recordAdminAction('contractor', 'Alta de proveedor', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('contractor', 'Alta de proveedor', null, null, $details);
 
-        return response()->json(new ContractorResource($contractor), 201);
+        return response()->json([
+            ...(new ContractorResource($contractor))->resolve(),
+            'auditLog' => $auditLog->toApiPayload(),
+        ], 201);
     }
 
     public function show(Contractor $contractor)
@@ -65,9 +68,12 @@ class ContractorController extends Controller
         $contractor->update($data);
 
         $details = "Proveedor: {$contractor->name} / Código: {$contractor->code}";
-        ConfigAuditLog::recordAdminAction('contractor', 'Modificacion de proveedor', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('contractor', 'Modificacion de proveedor', null, null, $details);
 
-        return response()->json(new ContractorResource($contractor));
+        return response()->json([
+            ...(new ContractorResource($contractor))->resolve(),
+            'auditLog' => $auditLog->toApiPayload(),
+        ]);
     }
 
     public function toggleStatus(Contractor $contractor)
@@ -83,11 +89,12 @@ class ContractorController extends Controller
         $contractor->save();
 
         $details = "Proveedor: {$contractor->name} / Código: {$contractor->code} / Estado: {$contractor->status}";
-        ConfigAuditLog::recordAdminAction('contractor', 'Activacion/desactivacion de proveedor', $previousStatus, $contractor->status, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('contractor', 'Activacion/desactivacion de proveedor', $previousStatus, $contractor->status, $details);
 
         return response()->json([
             'code'   => $contractor->code,
             'status' => $contractor->status,
+            'auditLog' => $auditLog->toApiPayload(),
         ]);
     }
 

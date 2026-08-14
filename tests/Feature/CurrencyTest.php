@@ -66,6 +66,60 @@ class CurrencyTest extends TestCase
         $response->assertJsonPath('data.auditLog.entityType', 'currency');
     }
 
+    public function test_rejects_code_shorter_than_three_letters(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/currencies', ['code' => 'EU', 'name' => 'Euro', 'symbol' => '€'])
+            ->assertStatus(422);
+    }
+
+    public function test_rejects_code_longer_than_three_letters(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/currencies', ['code' => 'EURO', 'name' => 'Euro', 'symbol' => '€'])
+            ->assertStatus(422);
+    }
+
+    public function test_rejects_name_above_eighty_characters(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/currencies', ['code' => 'EUR', 'name' => str_repeat('a', 81), 'symbol' => '€'])
+            ->assertStatus(422);
+    }
+
+    public function test_accepts_name_at_the_exact_eighty_character_boundary(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/currencies', ['code' => 'EUR', 'name' => str_repeat('a', 80), 'symbol' => '€'])
+            ->assertStatus(201);
+    }
+
+    public function test_rejects_symbol_above_eight_characters(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/currencies', ['code' => 'EUR', 'name' => 'Euro', 'symbol' => str_repeat('$', 9)])
+            ->assertStatus(422);
+    }
+
+    public function test_accepts_symbol_at_the_exact_eight_character_boundary(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/currencies', ['code' => 'EUR', 'name' => 'Euro', 'symbol' => str_repeat('$', 8)])
+            ->assertStatus(201);
+    }
+
     public function test_cannot_add_a_duplicate_currency_code(): void
     {
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);
@@ -126,7 +180,12 @@ class CurrencyTest extends TestCase
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);
         $eur = Currency::create(['code' => 'EUR', 'name' => 'Euro', 'symbol' => '€', 'is_base' => false, 'is_active' => true]);
 
-        $this->actingAs($admin)->deleteJson("/api/currencies/{$eur->id}")->assertStatus(204);
+        // 200 (no 204) porque el response lleva el auditLog recién creado —
+        // el frontend lo necesita para insertar la entrada en vivo en el
+        // panel de auditoría (mismo patrón que store/update/setBase).
+        $response = $this->actingAs($admin)->deleteJson("/api/currencies/{$eur->id}");
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.auditLog.action', 'Eliminación de moneda');
         $this->assertDatabaseMissing('currencies', ['id' => $eur->id]);
     }
 

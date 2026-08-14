@@ -51,9 +51,12 @@ class UserController extends Controller
             'status'   => $data['status'] ?? 'Active',
         ]);
 
-        ConfigAuditLog::recordAdminAction('user', 'Creacion de usuario', null, null, "Usuario: {$user->name} ({$user->email}) / Rol: {$user->role}");
+        $auditLog = ConfigAuditLog::recordAdminAction('user', 'Creacion de usuario', null, null, "Usuario: {$user->name} ({$user->email}) / Rol: {$user->role}");
 
-        return response()->json(new UserResource($user), 201);
+        return response()->json([
+            ...(new UserResource($user))->resolve(),
+            'auditLog' => $auditLog->toApiPayload(),
+        ], 201);
     }
 
     public function update(Request $request, User $user)
@@ -74,17 +77,25 @@ class UserController extends Controller
 
         $user->save();
 
-        ConfigAuditLog::recordAdminAction('user', 'Modificacion de usuario', null, null, "Usuario: {$user->name} ({$user->email})");
+        $auditLogs = [
+            ConfigAuditLog::recordAdminAction('user', 'Modificacion de usuario', null, null, "Usuario: {$user->name} ({$user->email})"),
+        ];
 
         // Escalación de privilegios — se registra y notifica aparte, no
         // implícito dentro de "Modificacion de usuario", porque su audiencia
         // de notificación es más restringida (ver NotificationCatalog).
         if (isset($data['role']) && $data['role'] !== $previousRole) {
             $details = "Usuario: {$user->name} ({$user->email}) / {$previousRole} → {$user->role}";
-            ConfigAuditLog::recordAdminAction('user', 'Cambio de rol de usuario', $previousRole, $user->role, $details);
+            $auditLogs[] = ConfigAuditLog::recordAdminAction('user', 'Cambio de rol de usuario', $previousRole, $user->role, $details);
         }
 
-        return response()->json(new UserResource($user));
+        return response()->json([
+            ...(new UserResource($user))->resolve(),
+            // Array (no "auditLog" singular) porque esta acción puede
+            // generar 2 entradas en una sola llamada (modificación +
+            // escalación de rol) — el frontend inserta cada una en el panel.
+            'auditLogs' => array_map(fn ($log) => $log->toApiPayload(), $auditLogs),
+        ]);
     }
 
     public function toggleStatus(User $user)
@@ -98,11 +109,12 @@ class UserController extends Controller
         }
 
         $details = "Usuario: {$user->name} ({$user->email}) / Estado: {$user->status}";
-        ConfigAuditLog::recordAdminAction('user', 'Activacion/desactivacion de usuario', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('user', 'Activacion/desactivacion de usuario', null, null, $details);
 
         return response()->json([
             'id'     => $user->id,
             'status' => $user->status,
+            'auditLog' => $auditLog->toApiPayload(),
         ]);
     }
 

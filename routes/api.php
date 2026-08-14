@@ -56,29 +56,39 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::patch('/notifications/read-all', [AppNotificationController::class, 'markAllRead']);
 
     // CONFIG APP — lectura abierta a cualquier autenticado (varias features
-    // consumen settings), edición restringida a administración.
-    Route::get('/settings', [AppSettingController::class, 'index']);
-    Route::get('/settings/notification-actions', [AppSettingController::class, 'notificationActions']);
+    // consumen settings), edición restringida a administración. Las lecturas
+    // van al bucket `catalog` (200/min, mismo patrón que /contractors,
+    // /materials, /audit-logs más abajo): son GETs de solo consulta, y las
+    // vistas de configuración (varios paneles montan 4-10 de estos por
+    // navegación) no deben competir por el mismo presupuesto de 180/min que
+    // el polling de fondo y las acciones de escritura del resto de la app.
+    Route::get('/settings', [AppSettingController::class, 'index'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/settings/notification-actions', [AppSettingController::class, 'notificationActions'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::patch('/settings/{setting}', [AppSettingController::class, 'update'])
         ->middleware('role:SUPERADMIN,ADMIN');
 
     // Historial de cambios de CONFIG APP — exclusivo de SUPERADMIN, separado
     // de /audit-logs (visible para cualquier autenticado, incl. Presidencia).
     Route::get('/config-audit-logs', [ConfigAuditLogController::class, 'index'])
-        ->middleware('role:SUPERADMIN');
+        ->middleware(['role:SUPERADMIN'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
 
     // Matriz configurable rol × acción × canal — exclusivo SUPERADMIN. `action`
     // va en el body (no como path param) porque varias acciones del catálogo
     // contienen espacios y hasta una barra literal (ej. "Carga de hojas de
     // calculo/cubicaciones"), lo que haría frágil cualquier URL-encoding.
     Route::get('/notification-rules', [NotificationRuleController::class, 'index'])
-        ->middleware('role:SUPERADMIN');
+        ->middleware(['role:SUPERADMIN'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::put('/notification-rules', [NotificationRuleController::class, 'update'])
         ->middleware('role:SUPERADMIN');
 
     // Catálogo de monedas aceptadas — exclusivo SUPERADMIN.
     Route::get('/currencies', [CurrencyController::class, 'index'])
-        ->middleware('role:SUPERADMIN');
+        ->middleware(['role:SUPERADMIN'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/currencies', [CurrencyController::class, 'store'])
         ->middleware('role:SUPERADMIN');
     Route::patch('/currencies/{currency}', [CurrencyController::class, 'update'])
@@ -88,11 +98,11 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::delete('/currencies/{currency}', [CurrencyController::class, 'destroy'])
         ->middleware('role:SUPERADMIN');
 
-    Route::get('/modules', [ModuleController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
-    Route::get('/contractors', [ContractorController::class, 'activeList'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::get('/modules', [ModuleController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/contractors', [ContractorController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/contractors/{contractor}/rating', [ContractorController::class, 'updateRating']);
-    Route::get('/materials', [MaterialController::class, 'activeList'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
-    Route::get('/audit-logs', [AuditLogController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::get('/materials', [MaterialController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/audit-logs', [AuditLogController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/supplier-invitations', [SupplierInvitationController::class, 'store']);
     Route::get('/supplier-material-proposals', [SupplierProposalController::class, 'index']);
 
@@ -131,7 +141,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
 
     // Project documents (planos y hojas de cálculo)
-    Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');
+    Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload']);
     Route::delete('/projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy']);
     Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download']);
@@ -158,14 +168,22 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         Route::patch('/materials/config/{material}', [MaterialController::class, 'update']);
         Route::post('/materials/config/{material}/toggle-status', [MaterialController::class, 'toggleStatus']);
 
-        // AI Configuration (static routes BEFORE wildcard {id})
+        // AI Configuration (static routes BEFORE wildcard {id}) — GETs de
+        // solo lectura al bucket `catalog` (mismo criterio que /settings,
+        // /currencies, /notification-rules más arriba); escrituras y el
+        // endpoint `test` (que sí dispara una llamada saliente real al
+        // proveedor de IA) se quedan en el bucket general.
         Route::prefix('ai/config')->group(function () {
-            Route::get('/usage', [AiConfigController::class, 'usage']);
-            Route::get('/models', [AiConfigController::class, 'availableModels']);
+            Route::get('/usage', [AiConfigController::class, 'usage'])
+                ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+            Route::get('/models', [AiConfigController::class, 'availableModels'])
+                ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
             Route::post('/sync', [AiConfigController::class, 'sync']);
-            Route::get('/', [AiConfigController::class, 'index']);
+            Route::get('/', [AiConfigController::class, 'index'])
+                ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
             Route::post('/', [AiConfigController::class, 'store']);
-            Route::get('/{aiConfig}', [AiConfigController::class, 'show']);
+            Route::get('/{aiConfig}', [AiConfigController::class, 'show'])
+                ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
             Route::patch('/{aiConfig}', [AiConfigController::class, 'update']);
             Route::delete('/{aiConfig}', [AiConfigController::class, 'destroy']);
             Route::post('/{aiConfig}/test', [AiConfigController::class, 'test']);

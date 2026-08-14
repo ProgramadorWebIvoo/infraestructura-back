@@ -125,6 +125,111 @@ class AppSettingTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_update_accepts_percentage_value_at_the_exact_max_boundary(): void
+    {
+        // Boundary exacto (no "por encima"/"por debajo") — si el controller
+        // usara > en vez de >= por error, este test lo detecta.
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'anticipo_maximo_porcentaje')->firstOrFail();
+        $max = $setting->max_value;
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => (string) $max])
+            ->assertStatus(200);
+    }
+
+    public function test_update_accepts_percentage_value_at_the_exact_min_boundary(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'anticipo_maximo_porcentaje')->firstOrFail();
+        $min = $setting->min_value;
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => (string) $min])
+            ->assertStatus(200);
+    }
+
+    public function test_update_rejects_max_file_count_above_configured_max(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'documento_cantidad_maxima_archivos')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => (string) ($setting->max_value + 1)])
+            ->assertStatus(422);
+    }
+
+    public function test_update_rejects_max_file_count_below_configured_min(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'documento_cantidad_maxima_archivos')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => (string) ($setting->min_value - 1)])
+            ->assertStatus(422);
+    }
+
+    public function test_update_accepts_max_file_count_at_exact_boundaries(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'documento_cantidad_maxima_archivos')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => (string) $setting->min_value])
+            ->assertStatus(200);
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => (string) $setting->max_value])
+            ->assertStatus(200);
+    }
+
+    public function test_update_rejects_session_timeout_above_configured_max(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'sesion_inactividad_minutos')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => (string) ($setting->max_value + 1)])
+            ->assertStatus(422);
+    }
+
+    public function test_update_rejects_session_timeout_below_configured_min(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'sesion_inactividad_minutos')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => (string) ($setting->min_value - 1)])
+            ->assertStatus(422);
+    }
+
+    public function test_update_with_empty_string_clears_setting_to_null(): void
+    {
+        // El middleware ConvertEmptyStringsToNull de Laravel convierte ''
+        // a null ANTES de que corran las reglas de validación — por eso
+        // esto no da 422 (que sería lo esperable a simple vista), sino que
+        // vacía el setting igual que mandar `value: null` explícito. Se
+        // documenta como comportamiento real, no como bug: el propio
+        // controller ya trata `null` como "sin restricción" en cada chequeo
+        // (`$data['value'] !== null`).
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'anticipo_maximo_porcentaje')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => ''])
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('app_settings', ['id' => $setting->id, 'value' => null]);
+    }
+
+    public function test_update_nonexistent_setting_returns_404(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)
+            ->patchJson('/api/settings/999999', ['value' => '50'])
+            ->assertStatus(404);
+    }
+
     public function test_update_rejects_notification_retention_above_one_week(): void
     {
         // Purgado destructivo (notifications:prune elimina filas sin

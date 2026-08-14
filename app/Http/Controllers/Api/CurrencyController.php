@@ -97,10 +97,14 @@ class CurrencyController extends Controller
     {
         abort_if($currency->is_base, 422, 'No se puede eliminar la moneda base.');
 
+        $code = $currency->code;
         $currency->delete();
 
-        ConfigAuditLog::recordAdminAction('currency', 'Eliminación de moneda', $currency->code, null, "Moneda \"{$currency->code}\" eliminada.");
+        $auditLog = ConfigAuditLog::recordAdminAction('currency', 'Eliminación de moneda', $code, null, "Moneda \"{$code}\" eliminada.");
 
-        return response()->json(['data' => null], 204);
+        // 200 (no 204) porque el frontend necesita el auditLog recién creado
+        // para insertarlo en vivo en el panel de auditoría (mismo patrón que
+        // store/update/setBase) — un 204 no puede llevar cuerpo.
+        return response()->json(['data' => ['auditLog' => $auditLog->toApiPayload()]]);
     }
 }

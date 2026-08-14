@@ -352,6 +352,29 @@ class NotificationDispatcherTest extends TestCase
         ]);
     }
 
+    public function test_notify_falls_back_to_informacion_type_for_an_action_not_in_the_catalog(): void
+    {
+        // NotificationDispatcher::notify() no exige que $action exista en
+        // NotificationCatalog — no lanza excepción y cae al tipo INFORMACION
+        // por defecto (ver NotificationCatalog::type()). El propio setting
+        // `acciones_con_notificacion_app` sembrado es una whitelist explícita
+        // de acciones conocidas, así que una acción inventada queda filtrada
+        // por esa capa antes de llegar a NotificationRuleResolver — para
+        // probar solo el fallback de tipo (sin la capa de whitelist),
+        // vaciamos la whitelist (null = "no filtrar nada", ver isAppNotificationAllowed()).
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        AppSetting::where('key', 'acciones_con_notificacion_app')->update(['value' => null]);
+        SettingsService::forget();
+
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Accion completamente inventada sin catalogo', 'detalle');
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $superadmin->id,
+            'action' => 'Accion completamente inventada sin catalogo',
+            'type' => NotificationType::INFORMACION,
+        ]);
+    }
+
     public function test_app_notification_row_carries_the_type_from_the_catalog(): void
     {
         // "Rechazo de cuadro comparativo" tiene un TYPE_OVERRIDE explícito

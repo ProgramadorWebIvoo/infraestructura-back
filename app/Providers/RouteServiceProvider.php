@@ -45,8 +45,18 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting()
     {
+        /**
+         * 60/min quedaba insuficiente para un SPA con polling en segundo
+         * plano: NotificationsProvider ya consume ~15/min por sí solo
+         * (2 requests cada 8s, sin pausa en background — necesario para la
+         * Notification API nativa), más ~5/min de dashboard/proyectos, antes
+         * de que el usuario navegue una sola vez. Con varias pestañas del
+         * mismo usuario (misma key, el user_id) el presupuesto se multiplica
+         * aún más rápido. 180/min deja margen real para navegación activa
+         * sin acercarse al límite solo por el tráfico de fondo.
+         */
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            return Limit::perMinute(180)->by($request->user()?->id ?: $request->ip());
         });
 
         RateLimiter::for('public-api', function (Request $request) {

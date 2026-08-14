@@ -87,9 +87,17 @@ class AiConfigController extends Controller
         $this->configService->syncToCache();
 
         $details = "Proveedor: {$config->provider} / Modelo: {$config->model}";
-        ConfigAuditLog::recordAdminAction('ai_config', 'Alta de configuracion de IA', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('ai_config', 'Alta de configuracion de IA', null, null, $details);
 
-        return response()->json(new AiConfigurationResource($config), 201);
+        // auditLog va como campo hermano del resource (no envuelto en su
+        // propia clave "data") para no romper el contrato plano que ya
+        // consume el frontend — mismo patrón que CurrencyController, pero
+        // sin el wrap adicional porque este endpoint nunca respondió bajo
+        // {data: ...} en primer lugar.
+        return response()->json([
+            ...(new AiConfigurationResource($config))->resolve(),
+            'auditLog' => $auditLog->toApiPayload(),
+        ], 201);
     }
 
     /**
@@ -139,9 +147,12 @@ class AiConfigController extends Controller
         $this->configService->syncToCache();
 
         $details = "Proveedor: {$config->provider} / Modelo: {$config->model}";
-        ConfigAuditLog::recordAdminAction('ai_config', 'Modificacion de configuracion de IA', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('ai_config', 'Modificacion de configuracion de IA', null, null, $details);
 
-        return response()->json(new AiConfigurationResource($config->fresh()));
+        return response()->json([
+            ...(new AiConfigurationResource($config->fresh()))->resolve(),
+            'auditLog' => $auditLog->toApiPayload(),
+        ]);
     }
 
     /**
@@ -156,9 +167,12 @@ class AiConfigController extends Controller
 
         $this->configService->syncToCache();
 
-        ConfigAuditLog::recordAdminAction('ai_config', 'Eliminacion de configuracion de IA', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('ai_config', 'Eliminacion de configuracion de IA', null, null, $details);
 
-        return response()->json(['message' => 'Configuración eliminada.'], 200);
+        return response()->json([
+            'message' => 'Configuración eliminada.',
+            'auditLog' => $auditLog->toApiPayload(),
+        ], 200);
     }
 
     /**

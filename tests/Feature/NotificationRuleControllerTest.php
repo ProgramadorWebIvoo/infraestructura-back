@@ -74,6 +74,30 @@ class NotificationRuleControllerTest extends TestCase
             ->assertStatus(404);
     }
 
+    public function test_update_rejects_app_field_that_is_not_an_array(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($superadmin)
+            ->putJson('/api/notification-rules', ['action' => 'Alta de material', 'app' => 'SUPERADMIN'])
+            ->assertStatus(422);
+    }
+
+    public function test_update_accepts_the_same_role_in_both_app_and_mail_channels(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $response = $this->actingAs($superadmin)->putJson('/api/notification-rules', [
+            'action' => 'Alta de material',
+            'app' => ['SUPERADMIN'],
+            'mail' => ['SUPERADMIN'],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('notification_rules', ['action' => 'Alta de material', 'role' => 'SUPERADMIN', 'channel' => 'app']);
+        $this->assertDatabaseHas('notification_rules', ['action' => 'Alta de material', 'role' => 'SUPERADMIN', 'channel' => 'mail']);
+    }
+
     public function test_update_rejects_invalid_role(): void
     {
         $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
@@ -124,6 +148,27 @@ class NotificationRuleControllerTest extends TestCase
         ]);
 
         $response->assertStatus(200);
+    }
+
+    public function test_cache_does_not_leak_stale_data_between_consecutive_updates_of_different_actions(): void
+    {
+        // Regresión: dos PUT consecutivos a acciones distintas no deben
+        // dejar que el caché de la primera acción contamine la resolución
+        // de la segunda (ambas comparten la misma clave de caché completa).
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($superadmin)->putJson('/api/notification-rules', [
+            'action' => 'Rechazo de cuadro comparativo',
+            'app' => ['PROCURA'],
+        ])->assertStatus(200);
+
+        $this->actingAs($superadmin)->putJson('/api/notification-rules', [
+            'action' => 'Alta de material',
+            'app' => ['CATALOGOS'],
+        ])->assertStatus(200);
+
+        $this->assertEqualsCanonicalizing(['PROCURA'], NotificationRuleResolver::rolesFor('Rechazo de cuadro comparativo', 'app'));
+        $this->assertEqualsCanonicalizing(['CATALOGOS'], NotificationRuleResolver::rolesFor('Alta de material', 'app'));
     }
 
     public function test_update_is_recorded_in_config_audit_log(): void

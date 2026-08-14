@@ -25,6 +25,34 @@ class ContractorMaterialTest extends TestCase
         return ['Authorization' => 'Bearer ' . $this->admin->createToken('test')->plainTextToken];
     }
 
+    // ─── AUTORIZACIÓN ───
+
+    public function test_unauthorized_role_cannot_access_contractor_config_endpoints(): void
+    {
+        $analista = User::factory()->create(['role' => 'ANALISTA']);
+        $headers = ['Authorization' => 'Bearer ' . $analista->createToken('test')->plainTextToken];
+        $contractor = Contractor::factory()->create();
+
+        $this->withHeaders($headers)->getJson('/api/contractors/config')->assertStatus(403);
+        $this->withHeaders($headers)->postJson('/api/contractors/config', [
+            'name' => 'X', 'specialty' => 'Y', 'contact' => 'z@z.com',
+        ])->assertStatus(403);
+        $this->withHeaders($headers)->patchJson("/api/contractors/config/{$contractor->code}", ['rating' => 4])->assertStatus(403);
+        $this->withHeaders($headers)->postJson("/api/contractors/config/{$contractor->code}/toggle-status")->assertStatus(403);
+    }
+
+    public function test_unauthorized_role_cannot_access_material_config_endpoints(): void
+    {
+        $analista = User::factory()->create(['role' => 'ANALISTA']);
+        $headers = ['Authorization' => 'Bearer ' . $analista->createToken('test')->plainTextToken];
+        $material = MaterialCatalog::factory()->create();
+
+        $this->withHeaders($headers)->getJson('/api/materials/config')->assertStatus(403);
+        $this->withHeaders($headers)->postJson('/api/materials/config', ['name' => 'X', 'unit' => 'kg'])->assertStatus(403);
+        $this->withHeaders($headers)->patchJson("/api/materials/config/{$material->id}", ['estimatedUnitPrice' => 1])->assertStatus(403);
+        $this->withHeaders($headers)->postJson("/api/materials/config/{$material->id}/toggle-status")->assertStatus(403);
+    }
+
     // ─── CONTRACTOR CRUD ───
 
     public function test_contractor_index(): void
@@ -55,6 +83,9 @@ class ContractorMaterialTest extends TestCase
         ]);
         $this->assertStringStartsWith('CON-', $response->json('code'));
         $this->assertEquals(4.0, $response->json('rating'));
+        // El frontend inserta esta entrada en vivo en el panel de auditoría
+        // (prependLocal) sin re-consultar /config-audit-logs.
+        $response->assertJsonPath('auditLog.action', 'Alta de proveedor');
     }
 
     public function test_contractor_store_strips_html_tags(): void
@@ -99,6 +130,7 @@ class ContractorMaterialTest extends TestCase
             'rating' => 4.5,
             'status' => 'INACTIVE',
         ]);
+        $response->assertJsonPath('auditLog.action', 'Modificacion de proveedor');
     }
 
     public function test_contractor_toggle_status_cycles(): void
@@ -109,6 +141,7 @@ class ContractorMaterialTest extends TestCase
         $response = $this->withHeaders($this->headers())
             ->postJson("/api/contractors/config/{$contractor->code}/toggle-status");
         $response->assertJson(['status' => 'ACTIVE']);
+        $response->assertJsonPath('auditLog.action', 'Activacion/desactivacion de proveedor');
 
         // ACTIVE -> INACTIVE
         $response = $this->withHeaders($this->headers())
@@ -204,6 +237,55 @@ class ContractorMaterialTest extends TestCase
             'estimatedUnitPrice' => 15.50,
             'isActive'           => true,
         ]);
+        $response->assertJsonPath('auditLog.action', 'Alta de material');
+    }
+
+    public function test_material_store_strips_html_tags(): void
+    {
+        // Paridad con test_contractor_store_strips_html_tags — MaterialController
+        // aplica strip_tags() igual que ContractorController pero no tenía
+        // cobertura equivalente.
+        $response = $this->withHeaders($this->headers())
+            ->postJson('/api/materials/config', [
+                'name' => '<script>alert("xss")</script>Cemento',
+                'unit' => '<b>kg</b>',
+            ]);
+
+        $response->assertStatus(201);
+        $response->assertJson([
+            'name' => 'alert("xss")Cemento',
+            'unit' => 'kg',
+        ]);
+    }
+
+    public function test_material_update_unique_conflict_with_partial_field_change(): void
+    {
+        MaterialCatalog::factory()->create(['name' => 'Arena', 'unit' => 'm3']);
+        $other = MaterialCatalog::factory()->create(['name' => 'Grava', 'unit' => 'kg']);
+
+        // Cambiar solo `unit` (sin tocar `name`) para forzar colisión con
+        // "Arena"/"m3" — antes solo se probaba la colisión exacta en creación.
+        $response = $this->withHeaders($this->headers())
+            ->patchJson("/api/materials/config/{$other->id}", ['name' => 'Arena', 'unit' => 'm3']);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_material_store_rejects_negative_price(): void
+    {
+        $response = $this->withHeaders($this->headers())
+            ->postJson('/api/materials/config', ['name' => 'X', 'unit' => 'kg', 'estimatedUnitPrice' => -0.01]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_material_store_accepts_zero_price_as_boundary(): void
+    {
+        $response = $this->withHeaders($this->headers())
+            ->postJson('/api/materials/config', ['name' => 'X', 'unit' => 'kg', 'estimatedUnitPrice' => 0]);
+
+        $response->assertStatus(201);
+        $response->assertJson(['estimatedUnitPrice' => 0]);
     }
 
     public function test_material_store_duplicate_name_unit_returns_422(): void
@@ -246,6 +328,7 @@ class ContractorMaterialTest extends TestCase
             'estimatedUnitPrice' => 99.99,
             'isActive'           => false,
         ]);
+        $response->assertJsonPath('auditLog.action', 'Modificacion de material');
     }
 
     public function test_material_toggle_status(): void
@@ -257,6 +340,7 @@ class ContractorMaterialTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJson(['isActive' => false]);
+        $response->assertJsonPath('auditLog.action', 'Activacion/desactivacion de material');
 
         // Toggle back
         $response = $this->withHeaders($this->headers())

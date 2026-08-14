@@ -44,9 +44,12 @@ class MaterialController extends Controller
         ]);
 
         $details = "Material: {$material->name} ({$material->unit})";
-        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, $details);
 
-        return response()->json(new MaterialResource($material), 201);
+        return response()->json([
+            ...(new MaterialResource($material))->resolve(),
+            'auditLog' => $auditLog->toApiPayload(),
+        ], 201);
     }
 
     public function show(MaterialCatalog $material)
@@ -87,9 +90,12 @@ class MaterialController extends Controller
         $material->update($updateData);
 
         $details = "Material: {$material->name} ({$material->unit})";
-        ConfigAuditLog::recordAdminAction('material', 'Modificacion de material', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('material', 'Modificacion de material', null, null, $details);
 
-        return response()->json(new MaterialResource($material));
+        return response()->json([
+            ...(new MaterialResource($material))->resolve(),
+            'auditLog' => $auditLog->toApiPayload(),
+        ]);
     }
 
     public function toggleStatus(MaterialCatalog $material)
@@ -98,11 +104,12 @@ class MaterialController extends Controller
         $material->save();
 
         $details = "Material: {$material->name} ({$material->unit}) / Activo: " . ($material->is_active ? 'sí' : 'no');
-        ConfigAuditLog::recordAdminAction('material', 'Activacion/desactivacion de material', null, null, $details);
+        $auditLog = ConfigAuditLog::recordAdminAction('material', 'Activacion/desactivacion de material', null, null, $details);
 
         return response()->json([
             'id'       => $material->id,
             'isActive' => $material->is_active,
+            'auditLog' => $auditLog->toApiPayload(),
         ]);
     }
 

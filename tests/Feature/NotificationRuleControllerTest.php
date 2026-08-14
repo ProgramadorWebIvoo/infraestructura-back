@@ -6,11 +6,32 @@ use App\Models\NotificationRule;
 use App\Models\User;
 use App\Services\NotificationRuleResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class NotificationRuleControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_update_notifies_recipients_as_a_single_catalog_action(): void
+    {
+        Notification::fake();
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        // Regresión del Hallazgo 1 (auditoría Fase 0-1): NotificationRuleController
+        // auditaba con una acción por fila ("notification_rules.{accion}", que no
+        // existe en el catálogo) sin notificar a nadie. Ahora recordAdminAction()
+        // dispara notify() usando el $notifyAction fijo del catálogo real.
+        $this->actingAs($superadmin)->putJson('/api/notification-rules', [
+            'action' => 'Rechazo de cuadro comparativo',
+            'app' => ['PROCURA'],
+        ])->assertStatus(200);
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $superadmin->id,
+            'action' => 'Modificacion de reglas de notificacion',
+        ]);
+    }
 
     public function test_index_requires_superadmin(): void
     {

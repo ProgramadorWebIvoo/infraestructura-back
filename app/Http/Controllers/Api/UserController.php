@@ -7,7 +7,6 @@ use App\Http\Resources\UserResource;
 use App\Models\ConfigAuditLog;
 use App\Models\User;
 use App\Rules\StrongPassword;
-use App\Services\NotificationDispatcher;
 use App\Support\Roles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -53,7 +52,6 @@ class UserController extends Controller
         ]);
 
         ConfigAuditLog::recordAdminAction('user', 'Creacion de usuario', null, null, "Usuario: {$user->name} ({$user->email}) / Rol: {$user->role}");
-        NotificationDispatcher::notify(null, 'SISTEMA', 'Creacion de usuario', "Usuario: {$user->name} ({$user->email})");
 
         return response()->json(new UserResource($user), 201);
     }
@@ -77,7 +75,6 @@ class UserController extends Controller
         $user->save();
 
         ConfigAuditLog::recordAdminAction('user', 'Modificacion de usuario', null, null, "Usuario: {$user->name} ({$user->email})");
-        NotificationDispatcher::notify(null, 'SISTEMA', 'Modificacion de usuario', "Usuario: {$user->name} ({$user->email})");
 
         // Escalación de privilegios — se registra y notifica aparte, no
         // implícito dentro de "Modificacion de usuario", porque su audiencia
@@ -85,7 +82,6 @@ class UserController extends Controller
         if (isset($data['role']) && $data['role'] !== $previousRole) {
             $details = "Usuario: {$user->name} ({$user->email}) / {$previousRole} → {$user->role}";
             ConfigAuditLog::recordAdminAction('user', 'Cambio de rol de usuario', $previousRole, $user->role, $details);
-            NotificationDispatcher::notify(null, 'SISTEMA', 'Cambio de rol de usuario', $details);
         }
 
         return response()->json(new UserResource($user));
@@ -103,7 +99,6 @@ class UserController extends Controller
 
         $details = "Usuario: {$user->name} ({$user->email}) / Estado: {$user->status}";
         ConfigAuditLog::recordAdminAction('user', 'Activacion/desactivacion de usuario', null, null, $details);
-        NotificationDispatcher::notify(null, 'SISTEMA', 'Activacion/desactivacion de usuario', $details);
 
         return response()->json([
             'id'     => $user->id,

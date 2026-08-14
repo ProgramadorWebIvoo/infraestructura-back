@@ -7,11 +7,31 @@ use App\Models\User;
 use App\Services\SettingsService;
 use App\Support\NotificationCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AppSettingTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_updating_a_setting_notifies_recipients(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'anticipo_maximo_porcentaje')->firstOrFail();
+
+        // Regresión del Hallazgo 1 (auditoría Fase 0-1): AppSettingController
+        // auditaba vía ConfigAuditLog::recordSettingChange() sin notificar a
+        // nadie — recordSettingChange() ahora dispara notify() internamente.
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => '25'])
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $admin->id,
+            'action' => 'Modificacion de configuracion',
+        ]);
+    }
 
     public function test_index_lists_settings_grouped_by_group(): void
     {

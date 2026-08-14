@@ -171,17 +171,55 @@ class AdminActionAuditTest extends TestCase
     {
         Notification::fake();
         $superadmin = $this->actingAsSuperadmin();
-        $otherSuperadmin = User::factory()->create(['role' => 'SUPERADMIN']);
 
         $this->postJson('/api/materials/config', [
             'name' => 'Arena',
             'unit' => 'm3',
         ])->assertStatus(201);
 
-        // recipientsFor() legacy no reconoce acciones nuevas (branch default
-        // => []) hasta que la Fase B active el resolver — por ahora no debe
-        // fallar ni notificar a nadie todavía, solo quedar auditado.
-        Notification::assertNothingSent();
+        // "Alta de material" no tiene fila propia en notification_rules —
+        // cae al fallback DEFAULT_APP_ROLES (SUPERADMIN/ADMIN) de
+        // NotificationRuleResolver. ConfigAuditLog::recordAdminAction()
+        // dispara NotificationDispatcher::notify() automáticamente
+        // (Hallazgo 1 de la auditoría Fase 0-1) — ya no requiere que el
+        // controller llame notify() aparte, y ya no se queda "solo
+        // auditado, sin notificar a nadie" como en la Fase A original.
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $superadmin->id,
+            'action' => 'Alta de material',
+        ]);
+    }
+
+    public function test_admin_action_without_project_sends_mail_when_configured(): void
+    {
+        Notification::fake();
+        $superadmin = $this->actingAsSuperadmin();
+
+        // Canal mail nunca tiene fallback automático (a diferencia de app,
+        // que cae a SUPERADMIN/ADMIN) — hay que configurar la regla explícita.
+        \App\Models\NotificationRule::create([
+            'action' => 'Alta de material',
+            'role' => 'SUPERADMIN',
+            'channel' => 'mail',
+            'enabled' => true,
+        ]);
+        \App\Services\NotificationRuleResolver::forget();
+
+        \App\Models\AppSetting::where('key', 'acciones_con_correo')->update([
+            'value' => json_encode(['Alta de material']),
+        ]);
+        SettingsService::forget();
+
+        $this->postJson('/api/materials/config', [
+            'name' => 'Grava',
+            'unit' => 'm3',
+        ])->assertStatus(201);
+
+        // Antes del fix (Hallazgo 2), AdminActionMail no existía y
+        // NotificationDispatcher solo enviaba mail cuando $project !== null
+        // — las acciones administrativas nunca podían mandar correo aunque
+        // la matriz/setting tuviera destinatarios configurados en canal mail.
+        Notification::assertSentTo($superadmin, \App\Notifications\AdminActionMail::class);
     }
 
     public function test_admin_actions_are_included_in_default_acciones_con_notificacion_app(): void

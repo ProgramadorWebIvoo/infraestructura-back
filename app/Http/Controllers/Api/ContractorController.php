@@ -9,7 +9,6 @@ use App\Http\Requests\UpdateContractorRequest;
 use App\Http\Resources\ContractorResource;
 use App\Models\Contractor;
 use App\Models\ConfigAuditLog;
-use App\Services\NotificationDispatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -45,7 +44,6 @@ class ContractorController extends Controller
 
         $details = "Proveedor: {$contractor->name} / Código: {$contractor->code}";
         ConfigAuditLog::recordAdminAction('contractor', 'Alta de proveedor', null, null, $details);
-        NotificationDispatcher::notify(null, 'SISTEMA', 'Alta de proveedor', $details);
 
         return response()->json(new ContractorResource($contractor), 201);
     }
@@ -68,7 +66,6 @@ class ContractorController extends Controller
 
         $details = "Proveedor: {$contractor->name} / Código: {$contractor->code}";
         ConfigAuditLog::recordAdminAction('contractor', 'Modificacion de proveedor', null, null, $details);
-        NotificationDispatcher::notify(null, 'SISTEMA', 'Modificacion de proveedor', $details);
 
         return response()->json(new ContractorResource($contractor));
     }
@@ -87,7 +84,6 @@ class ContractorController extends Controller
 
         $details = "Proveedor: {$contractor->name} / Código: {$contractor->code} / Estado: {$contractor->status}";
         ConfigAuditLog::recordAdminAction('contractor', 'Activacion/desactivacion de proveedor', $previousStatus, $contractor->status, $details);
-        NotificationDispatcher::notify(null, 'SISTEMA', 'Activacion/desactivacion de proveedor', $details);
 
         return response()->json([
             'code'   => $contractor->code,
@@ -151,7 +147,6 @@ class ContractorController extends Controller
 
         $details = "Proveedor: {$contractor->name} / Código: {$contractor->code} / Rating: {$contractor->rating}";
         ConfigAuditLog::recordAdminAction('contractor', 'Calificacion de proveedor', (string) $previousRating, (string) $contractor->rating, $details);
-        NotificationDispatcher::notify(null, 'SISTEMA', 'Calificacion de proveedor', $details);
 
         return response()->json([
             'code'   => $contractor->code,

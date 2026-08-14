@@ -5,11 +5,32 @@ namespace Tests\Feature;
 use App\Models\Currency;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class CurrencyTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_creating_a_currency_notifies_recipients(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        // Regresión del Hallazgo 1 (auditoría Fase 0-1): CurrencyController
+        // auditaba vía ConfigAuditLog::recordAdminAction() sin notificar a
+        // nadie — recordAdminAction() ahora dispara notify() internamente.
+        $this->actingAs($admin)->postJson('/api/currencies', [
+            'code' => 'eur',
+            'name' => 'Euro',
+            'symbol' => '€',
+        ])->assertStatus(201);
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $admin->id,
+            'action' => 'Alta de moneda',
+        ]);
+    }
 
     public function test_index_lists_currencies_base_first(): void
     {

@@ -22,6 +22,23 @@ namespace App\Support;
 class NotificationCatalog
 {
     /**
+     * Acciones cuyo NotificationType no se deriva del default binario de
+     * `critical` (ver type()) — "Rechazo de cuadro comparativo" exige que
+     * alguien corrija algo (accion_requerida), mientras que el resto de
+     * acciones `critical` son eventos ya consumados que solo requieren
+     * atención (prioritario), y "Solicitud de restablecimiento de
+     * contrasena" es un flujo de sistema esperado, no una alerta (informacion).
+     */
+    private const TYPE_OVERRIDES = [
+        'Rechazo de cuadro comparativo' => NotificationType::ACCION_REQUERIDA,
+        'Solicitud de restablecimiento de contrasena' => NotificationType::INFORMACION,
+        'Alta de proveedor' => NotificationType::EXITO,
+        'Alta de material' => NotificationType::EXITO,
+        'Creacion de usuario' => NotificationType::EXITO,
+        'Confirmacion de contratacion' => NotificationType::EXITO,
+    ];
+
+    /**
      * @var array<string, array{label: ?string, group: string, scope: string, critical: bool}>
      */
     private const ACTIONS = [
@@ -76,6 +93,18 @@ class NotificationCatalog
         'Alta de configuracion de IA' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
         'Modificacion de configuracion de IA' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
         'Eliminacion de configuracion de IA' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
+
+        // Administración: CONFIG APP (settings genéricos)
+        'Modificacion de configuracion' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => false],
+
+        // Administración: monedas
+        'Alta de moneda' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
+        'Modificación de moneda' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
+        'Cambio de moneda base' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => true],
+        'Eliminación de moneda' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
+
+        // Administración: matriz de notificaciones
+        'Modificacion de reglas de notificacion' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
     ];
 
     /** @return string[] */
@@ -102,6 +131,19 @@ class NotificationCatalog
     public static function isCritical(string $action): bool
     {
         return self::ACTIONS[$action]['critical'] ?? false;
+    }
+
+    /**
+     * Tipo de notificación (taxonomía de 6 valores, ver NotificationType) a
+     * usar por defecto para esta acción. `TYPE_OVERRIDES` cubre los casos
+     * donde el binario `critical` no basta para elegir el tipo correcto;
+     * el resto se deriva: critical=true -> prioritario, critical=false ->
+     * informacion.
+     */
+    public static function type(string $action): string
+    {
+        return self::TYPE_OVERRIDES[$action]
+            ?? (self::isCritical($action) ? NotificationType::PRIORITARIO : NotificationType::INFORMACION);
     }
 
     public static function exists(string $action): bool

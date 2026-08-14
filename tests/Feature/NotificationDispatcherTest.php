@@ -15,6 +15,7 @@ use App\Services\NotificationDispatcher;
 use App\Services\NotificationRuleResolver;
 use App\Services\SettingsService;
 use App\Support\NotificationCatalog;
+use App\Support\NotificationType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -348,6 +349,50 @@ class NotificationDispatcherTest extends TestCase
             'user_id' => $catalogos->id,
             'project_id' => null,
             'action' => 'Alta de material',
+        ]);
+    }
+
+    public function test_app_notification_row_carries_the_type_from_the_catalog(): void
+    {
+        // "Rechazo de cuadro comparativo" tiene un TYPE_OVERRIDE explícito
+        // a accion_requerida en NotificationCatalog — Hallazgo 3 de la
+        // auditoría Fase 0-1 (antes app_notifications no tenía columna type).
+        // Sin notification_rules sembradas para esta acción en el entorno de
+        // test, cae al fallback DEFAULT_APP_ROLES (SUPERADMIN/ADMIN).
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $project = Project::factory()->create(['status' => 'COMPARATIVA_ENVIADA']);
+
+        AuditLog::record($project, 'PROCURA', 'Rechazo de cuadro comparativo', 'motivo');
+
+        $this->assertDatabaseHas('app_notifications', [
+            'action' => 'Rechazo de cuadro comparativo',
+            'type' => NotificationType::ACCION_REQUERIDA,
+        ]);
+    }
+
+    public function test_app_notification_row_defaults_to_prioritario_for_critical_actions_without_override(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $project = Project::factory()->create(['status' => 'COMPLETADO_PAGADO']);
+
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Liberacion total de fondos', 'pago final');
+
+        $this->assertDatabaseHas('app_notifications', [
+            'action' => 'Liberacion total de fondos',
+            'type' => NotificationType::PRIORITARIO,
+        ]);
+    }
+
+    public function test_app_notification_row_defaults_to_informacion_for_non_critical_actions(): void
+    {
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra');
+
+        $this->assertDatabaseHas('app_notifications', [
+            'action' => 'Creacion de peticion de obra',
+            'type' => NotificationType::INFORMACION,
         ]);
     }
 

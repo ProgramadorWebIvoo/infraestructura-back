@@ -11,6 +11,7 @@ class AppNotification extends Model
         'project_id',
         'project_title_snapshot',
         'action',
+        'type',
         'details',
         'read_at',
     ];

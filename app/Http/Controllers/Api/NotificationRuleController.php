@@ -82,6 +82,7 @@ class NotificationRuleController extends Controller
             json_encode($before),
             json_encode($after),
             "Regla de notificación para \"{$action}\" actualizada.",
+            notifyAction: 'Modificacion de reglas de notificacion',
         );
 
         return response()->json(['data' => [

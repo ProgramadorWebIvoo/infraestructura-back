@@ -4,8 +4,12 @@ namespace App\Services;
 
 use App\Models\AppNotification;
 use App\Models\Project;
+use App\Notifications\AdminActionMail;
+use App\Notifications\AdminActionNotification;
 use App\Notifications\ProjectActionMail;
 use App\Notifications\ProjectActionNotification;
+use App\Support\NotificationCatalog;
+use App\Support\NotificationType;
 
 /**
  * Punto único de notificación de eventos de negocio. Invocado desde
@@ -50,10 +54,13 @@ class NotificationDispatcher
         }
 
         $appRecipients = NotificationRuleResolver::recipientsFor($action, 'app');
+        $type = NotificationCatalog::exists($action) ? NotificationCatalog::type($action) : NotificationType::INFORMACION;
 
         foreach ($appRecipients as $user) {
             if ($project !== null) {
                 $user->notify(new ProjectActionNotification($project, $action, $project->status));
+            } else {
+                $user->notify(new AdminActionNotification($action, $details));
             }
 
             AppNotification::create([
@@ -61,6 +68,7 @@ class NotificationDispatcher
                 'project_id' => $project?->id,
                 'project_title_snapshot' => $project?->title,
                 'action' => $action,
+                'type' => $type,
                 'details' => $details,
             ]);
         }
@@ -74,6 +82,8 @@ class NotificationDispatcher
         foreach ($mailRecipients as $user) {
             if ($project !== null) {
                 $user->notify(new ProjectActionMail($project, $action, $details));
+            } else {
+                $user->notify(new AdminActionMail($action, $details));
             }
         }
     }

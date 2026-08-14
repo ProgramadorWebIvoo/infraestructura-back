@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\NotificationDispatcher;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -12,6 +13,15 @@ use Illuminate\Database\Eloquent\Model;
  * entidad ('user', 'contractor', 'material', 'ai_config',
  * 'notification_rule', ...) — una sola tabla para ambos casos, sin crear una
  * tercera tabla de auditoría.
+ *
+ * `recordAdminAction()`/`recordSettingChange()` disparan
+ * NotificationDispatcher::notify() igual que AuditLog::record() hace para
+ * el flujo de proyectos (mismo patrón "auditar y notificar son un solo
+ * paso") — antes cada controller debía acordarse de llamar notify() aparte,
+ * y 3 de 7 no lo hacían (Hallazgo 1, auditoría Fase 0-1): AppSettingController,
+ * CurrencyController, NotificationRuleController auditaban en silencio sin
+ * notificar a nadie. Moverlo aquí hace que ningún controller futuro pueda
+ * volver a olvidarlo.
  */
 class ConfigAuditLog extends Model
 {
@@ -36,7 +46,7 @@ class ConfigAuditLog extends Model
     /** Cambio de valor de un AppSetting — comportamiento original, sin cambios de firma. */
     public static function recordSettingChange(AppSetting $setting, ?string $oldValue, ?string $newValue): self
     {
-        return static::create([
+        $log = static::create([
             'entity_type' => 'setting',
             'action' => $setting->key,
             'setting_id' => $setting->id,
@@ -45,6 +55,10 @@ class ConfigAuditLog extends Model
             'new_value' => $newValue,
             ...static::actorSnapshot(),
         ]);
+
+        NotificationDispatcher::notify(null, 'SISTEMA', 'Modificacion de configuracion', "Configuración \"{$setting->key}\" modificada.");
+
+        return $log;
     }
 
     /**
@@ -54,10 +68,17 @@ class ConfigAuditLog extends Model
      * acciones no tienen un "antes/después" de un solo campo (ej. "Creación
      * de usuario"), en cuyo caso el detalle relevante va en `$details` y se
      * guarda en `new_value` para no perderlo.
+     *
+     * `$notifyAction` es opcional y por defecto igual a `$action` — existe
+     * porque algunos llamadores auditan con una clave más específica que la
+     * acción real del catálogo de notificaciones (ej.
+     * NotificationRuleController audita "notification_rules.{accion}" por
+     * cada fila de la matriz, pero todas notifican como una sola acción del
+     * catálogo, "Modificacion de reglas de notificacion").
      */
-    public static function recordAdminAction(string $entityType, string $action, ?string $oldValue = null, ?string $newValue = null, ?string $details = null): self
+    public static function recordAdminAction(string $entityType, string $action, ?string $oldValue = null, ?string $newValue = null, ?string $details = null, ?string $notifyAction = null): self
     {
-        return static::create([
+        $log = static::create([
             'entity_type' => $entityType,
             'action' => $action,
             'setting_id' => null,
@@ -66,6 +87,10 @@ class ConfigAuditLog extends Model
             'new_value' => $newValue ?? $details,
             ...static::actorSnapshot(),
         ]);
+
+        NotificationDispatcher::notify(null, 'SISTEMA', $notifyAction ?? $action, $details);
+
+        return $log;
     }
 
     private static function actorSnapshot(): array

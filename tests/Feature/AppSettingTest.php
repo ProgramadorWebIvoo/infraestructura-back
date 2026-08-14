@@ -68,7 +68,7 @@ class AppSettingTest extends TestCase
     public function test_update_rejects_invalid_boolean_value(): void
     {
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);
-        $setting = AppSetting::where('key', 'cambios_bloqueados')->firstOrFail();
+        $setting = AppSetting::create(['group' => 'app', 'key' => 'flag_de_prueba', 'value' => 'false', 'type' => 'boolean']);
 
         $this->actingAs($admin)
             ->patchJson("/api/settings/{$setting->id}", ['value' => 'tal-vez'])
@@ -132,12 +132,12 @@ class AppSettingTest extends TestCase
         // label/description no son columnas de app_settings — vienen de
         // App\Support\AppSettingCatalog (código versionado), expuestas vía
         // accessors para no cambiar el shape de la API.
-        $setting = AppSetting::where('key', 'moneda_base')->firstOrFail();
+        $setting = AppSetting::where('key', 'razon_social')->firstOrFail();
 
         $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('app_settings', 'label'));
         $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('app_settings', 'description'));
-        $this->assertSame('Moneda base', $setting->label);
-        $this->assertSame('Moneda en la que se registran los montos por defecto.', $setting->description);
+        $this->assertSame('Razón social', $setting->label);
+        $this->assertSame('Razón social de la empresa, usada en comprobantes de pago.', $setting->description);
     }
 
     public function test_settings_endpoint_response_still_includes_label_and_description(): void
@@ -175,6 +175,75 @@ class AppSettingTest extends TestCase
             ->assertStatus(200);
 
         $this->assertSame(60, SettingsService::get('anticipo_maximo_porcentaje'));
+    }
+
+    public function test_app_group_settings_exist_with_expected_defaults_and_ranges(): void
+    {
+        $expected = [
+            'proyecto_estancado_umbral_dias' => ['value' => '14', 'min_value' => 1, 'max_value' => 90],
+            'documento_tamano_maximo_mb' => ['value' => '25', 'min_value' => 1, 'max_value' => 40],
+            'documento_cantidad_maxima_archivos' => ['value' => '10', 'min_value' => 1, 'max_value' => 50],
+            'invitacion_proveedor_vigencia_dias' => ['value' => '7', 'min_value' => 1, 'max_value' => 30],
+            'sesion_inactividad_minutos' => ['value' => '30', 'min_value' => 5, 'max_value' => 120],
+        ];
+
+        foreach ($expected as $key => $ranges) {
+            $setting = AppSetting::where('key', $key)->firstOrFail();
+            $this->assertSame('app', $setting->group);
+            $this->assertSame($ranges['value'], $setting->value);
+            $this->assertEquals($ranges['min_value'], $setting->min_value);
+            $this->assertEquals($ranges['max_value'], $setting->max_value);
+        }
+    }
+
+    public function test_update_rejects_max_file_size_above_the_php_physical_limit(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'documento_tamano_maximo_mb')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => '60'])
+            ->assertStatus(422);
+    }
+
+    public function test_update_rejects_invitation_validity_above_thirty_days(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $setting = AppSetting::where('key', 'invitacion_proveedor_vigencia_dias')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => '60'])
+            ->assertStatus(422);
+    }
+
+    public function test_cambios_bloqueados_setting_no_longer_exists(): void
+    {
+        $this->assertDatabaseMissing('app_settings', ['key' => 'cambios_bloqueados']);
+    }
+
+    public function test_index_reports_no_missing_settings_when_catalog_is_fully_seeded(): void
+    {
+        $user = User::factory()->create(['role' => 'ANALISTA']);
+
+        $response = $this->actingAs($user)->getJson('/api/settings');
+
+        $response->assertStatus(200);
+        $this->assertSame([], $response->json('data.missing'));
+    }
+
+    public function test_index_reports_missing_settings_when_a_row_is_absent(): void
+    {
+        // Simula el escenario real que motivó este guard: una migración de
+        // seed que no corrió (o una fila borrada) deja una key documentada
+        // en AppSettingCatalog sin fila en app_settings — antes, el campo
+        // simplemente no aparecía en el panel sin ningún rastro.
+        AppSetting::where('key', 'proyecto_estancado_umbral_dias')->delete();
+        $user = User::factory()->create(['role' => 'ANALISTA']);
+
+        $response = $this->actingAs($user)->getJson('/api/settings');
+
+        $response->assertStatus(200);
+        $this->assertContains('proyecto_estancado_umbral_dias', $response->json('data.missing'));
     }
 
     public function test_notification_actions_endpoint_returns_the_real_auditable_actions_catalog(): void

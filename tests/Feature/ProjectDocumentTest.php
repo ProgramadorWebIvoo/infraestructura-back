@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\Project;
 use App\Models\ProjectDocument;
 use App\Models\User;
+use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -83,6 +85,43 @@ class ProjectDocumentTest extends TestCase
         $doc = ProjectDocument::first();
         $this->assertStringNotContainsString('..', $doc->stored_path);
         $this->assertStringNotContainsString('/etc/', $doc->stored_path);
+    }
+
+    public function test_upload_rejects_file_above_the_configured_max_size(): void
+    {
+        AppSetting::where('key', 'documento_tamano_maximo_mb')->update(['value' => '1']);
+        SettingsService::forget();
+
+        $project = Project::factory()->create();
+        $file = UploadedFile::fake()->create('cubicacion.pdf', 2048, 'application/pdf'); // 2 MB
+
+        $response = $this->withHeaders($this->headers())
+            ->post("/api/projects/{$project->id}/documents", [
+                'document_type' => 'CALC',
+                'files' => [$file],
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonFragment(['Cada archivo debe pesar máximo 1 MB.']);
+    }
+
+    public function test_upload_rejects_more_files_than_the_configured_max_count(): void
+    {
+        AppSetting::where('key', 'documento_cantidad_maxima_archivos')->update(['value' => '1']);
+        SettingsService::forget();
+
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders($this->headers())
+            ->post("/api/projects/{$project->id}/documents", [
+                'document_type' => 'CALC',
+                'files' => [
+                    UploadedFile::fake()->create('a.pdf', 10, 'application/pdf'),
+                    UploadedFile::fake()->create('b.pdf', 10, 'application/pdf'),
+                ],
+            ]);
+
+        $response->assertStatus(422);
     }
 
     public function test_index_lists_documents_for_project(): void

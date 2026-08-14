@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\AppSetting;
 use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
 use App\Models\User;
+use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -192,6 +194,32 @@ class DashboardSummaryTest extends TestCase
         $this->assertEquals($old->id, $stalled[0]['id']);
         $this->assertEquals('REVISADO_CIERRE', $stalled[0]['status']);
         $this->assertGreaterThanOrEqual(14, $stalled[0]['daysSinceUpdate']);
+    }
+
+    public function test_stalled_threshold_is_configurable_via_app_setting(): void
+    {
+        // Proyecto con 10 días de inactividad: no estancado con el umbral
+        // default (14), pero sí con un umbral configurado a 7.
+        $project = Project::factory()->create([
+            'status' => 'REVISADO_CIERRE',
+            'created_date' => now()->subDays(10)->toDateString(),
+            'updated_at' => now()->subDays(10),
+        ]);
+
+        $response = $this->actingAs($this->presidencia)
+            ->getJson('/api/dashboard/summary')
+            ->assertOk();
+        $this->assertCount(0, $response->json('stalledProjects'));
+
+        AppSetting::where('key', 'proyecto_estancado_umbral_dias')->update(['value' => '7']);
+        SettingsService::forget();
+
+        $response = $this->actingAs($this->presidencia)
+            ->getJson('/api/dashboard/summary')
+            ->assertOk();
+        $stalled = $response->json('stalledProjects');
+        $this->assertCount(1, $stalled);
+        $this->assertEquals($project->id, $stalled[0]['id']);
     }
 
     public function test_winner_falls_back_to_selected_contractor_code(): void

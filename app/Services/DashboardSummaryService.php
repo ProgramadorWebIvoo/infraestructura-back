@@ -34,12 +34,10 @@ class DashboardSummaryService
         'COMPLETADO_PAGADO'     => 8,
     ];
 
-    /** Días sin actividad para marcar una obra como estancada. */
-    private const STALLED_THRESHOLD_DAYS = 14;
-
     public function getSummary(): array
     {
         $projects = Project::with(['payments', 'proposals'])->get();
+        $stalledThresholdDays = (int) SettingsService::get('proyecto_estancado_umbral_dias', 14);
 
         $totalApproved = 0.0;
         $totalReleased = 0.0;
@@ -93,7 +91,7 @@ class DashboardSummaryService
             // Obras sin actividad reciente (no cerradas): señal de riesgo ejecutivo.
             if ($status !== 'COMPLETADO_PAGADO') {
                 $daysSinceUpdate = (int) now()->diffInDays($project->updated_at);
-                if ($daysSinceUpdate >= self::STALLED_THRESHOLD_DAYS) {
+                if ($daysSinceUpdate >= $stalledThresholdDays) {
                     $stalled[] = [
                         'id'              => $project->id,
                         'title'           => $project->title,

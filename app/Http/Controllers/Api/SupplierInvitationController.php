@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\SupplierInvitation;
+use App\Services\SettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -40,7 +41,7 @@ class SupplierInvitationController extends Controller
             'supplier_name'    => $data['supplierName'],
             'supplier_company' => $data['supplierCompany'] ?? null,
             'supplier_contact' => $data['supplierContact'],
-            'expires_at'       => now()->addDays(SupplierInvitation::DEFAULT_VALIDITY_DAYS),
+            'expires_at'       => now()->addDays((int) SettingsService::get('invitacion_proveedor_vigencia_dias', SupplierInvitation::DEFAULT_VALIDITY_DAYS)),
         ]);
 
         AuditLog::record(

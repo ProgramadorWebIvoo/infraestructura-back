@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\SettingsService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,6 +30,11 @@ class StoreProjectDocumentRequest extends FormRequest
     private const ALLOWED_CALC_EXTENSIONS = ['xlsx', 'xls', 'csv', 'pdf', 'ods'];
     private const ALLOWED_PLANO_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'svg', 'tiff', 'tif', 'dwg', 'dxf'];
 
+    /** Memoizados por instancia — rules()/messages() los leen dos veces cada
+     *  uno; sin esto son 4 lecturas de SettingsService::get() por request. */
+    private ?int $maxFileMb = null;
+    private ?int $maxFileCount = null;
+
     public function authorize(): bool
     {
         return true; // already behind auth:sanctum
@@ -38,11 +44,11 @@ class StoreProjectDocumentRequest extends FormRequest
     {
         return [
             'document_type' => ['required', Rule::in(['CALC', 'PLANO'])],
-            'files'         => ['required', 'array', 'min:1', 'max:10'],
+            'files'         => ['required', 'array', 'min:1', 'max:' . $this->maxFileCount()],
             'files.*'       => [
                 'required',
                 'file',
-                'max:51200', // 50 MB per file
+                'max:' . ($this->maxFileMb() * 1024),
                 $this->validateFileMimeAndExtension(),
             ],
         ];
@@ -51,8 +57,19 @@ class StoreProjectDocumentRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'files.*.max' => 'Cada archivo debe pesar máximo 50 MB.',
+            'files.*.max' => "Cada archivo debe pesar máximo {$this->maxFileMb()} MB.",
+            'files.max' => "Puede adjuntar como máximo {$this->maxFileCount()} archivos por carga.",
         ];
+    }
+
+    private function maxFileMb(): int
+    {
+        return $this->maxFileMb ??= (int) SettingsService::get('documento_tamano_maximo_mb', 25);
+    }
+
+    private function maxFileCount(): int
+    {
+        return $this->maxFileCount ??= (int) SettingsService::get('documento_cantidad_maxima_archivos', 10);
     }
 
     /**

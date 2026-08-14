@@ -21,10 +21,6 @@ class AppSettingCatalog
 {
     /** @var array<string, array{label: string, description: ?string}> */
     private const ENTRIES = [
-        'moneda_base' => [
-            'label' => 'Moneda base',
-            'description' => 'Moneda en la que se registran los montos por defecto.',
-        ],
         'anticipo_maximo_porcentaje' => [
             'label' => 'Anticipo máximo (%)',
             'description' => 'Porcentaje máximo de anticipo permitido en una oferta/propuesta.',
@@ -69,9 +65,25 @@ class AppSettingCatalog
             'label' => 'Inflación de referencia anual (%)',
             'description' => 'Tasa de inflación anual de referencia usada en el análisis de precios.',
         ],
-        'cambios_bloqueados' => [
-            'label' => 'Bloquear cambios de aplicación',
-            'description' => 'Cuando está activo, evita despliegues/cambios no planificados (uso administrativo).',
+        'proyecto_estancado_umbral_dias' => [
+            'label' => 'Obra estancada — umbral (días)',
+            'description' => 'Días sin actividad tras los cuales una obra no cerrada aparece como estancada en el dashboard ejecutivo.',
+        ],
+        'documento_tamano_maximo_mb' => [
+            'label' => 'Tamaño máximo por archivo (MB)',
+            'description' => 'Peso máximo de cada archivo adjunto en el cierre de obra. Acotado a 40 MB porque es el límite físico del servidor PHP (upload_max_filesize/post_max_size); subirlo por encima requiere cambiar php.ini primero.',
+        ],
+        'documento_cantidad_maxima_archivos' => [
+            'label' => 'Cantidad máxima de archivos por carga',
+            'description' => 'Número máximo de archivos que se pueden adjuntar en una sola carga de documentación.',
+        ],
+        'invitacion_proveedor_vigencia_dias' => [
+            'label' => 'Vigencia de invitación a proveedor (días)',
+            'description' => 'Días que un enlace público de invitación a proveedor permanece válido. Es un token accesible sin autenticación: a mayor vigencia, mayor ventana de exposición. Rango acotado a 1-30 días.',
+        ],
+        'sesion_inactividad_minutos' => [
+            'label' => 'Cierre de sesión por inactividad (minutos)',
+            'description' => 'Minutos de inactividad tras los cuales la aplicación cierra la sesión en el navegador. Es un control del cliente: no revoca el token en el servidor, cuya expiración se define por SANCTUM_EXPIRATION en el entorno.',
         ],
         'acciones_con_correo' => [
             'label' => 'Acciones que envían correo',
@@ -103,5 +115,33 @@ class AppSettingCatalog
     public static function description(string $key): ?string
     {
         return self::ENTRIES[$key]['description'] ?? null;
+    }
+
+    /**
+     * Todas las keys documentadas en el catálogo — usado por
+     * AppSettingController::index() para detectar filas de app_settings
+     * ausentes en BD (ej. una migración de seed que no corrió) y exponerlo
+     * como `missing` en la respuesta, en vez de que el campo simplemente
+     * no aparezca en el panel sin ningún rastro.
+     *
+     * @return array<int, string>
+     */
+    public static function keys(): array
+    {
+        return array_keys(self::ENTRIES);
+    }
+
+    /**
+     * Keys documentadas en el catálogo sin fila en app_settings — la
+     * reconciliación catálogo-vs-BD es responsabilidad de este catálogo,
+     * no de cada controller que necesite el dato (ver
+     * AppSettingController::index()).
+     *
+     * @param array<int, string> $seededKeys keys actualmente en app_settings
+     * @return array<int, string>
+     */
+    public static function missingFrom(array $seededKeys): array
+    {
+        return array_values(array_diff(self::keys(), $seededKeys));
     }
 }

@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\AppNotificationController;
 use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\ConfigAuditLogController;
 use App\Http\Controllers\Api\NotificationRuleController;
+use App\Http\Controllers\Api\CurrencyController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,6 +74,18 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/notification-rules', [NotificationRuleController::class, 'index'])
         ->middleware('role:SUPERADMIN');
     Route::put('/notification-rules', [NotificationRuleController::class, 'update'])
+        ->middleware('role:SUPERADMIN');
+
+    // Catálogo de monedas aceptadas — exclusivo SUPERADMIN.
+    Route::get('/currencies', [CurrencyController::class, 'index'])
+        ->middleware('role:SUPERADMIN');
+    Route::post('/currencies', [CurrencyController::class, 'store'])
+        ->middleware('role:SUPERADMIN');
+    Route::patch('/currencies/{currency}', [CurrencyController::class, 'update'])
+        ->middleware('role:SUPERADMIN');
+    Route::post('/currencies/{currency}/set-base', [CurrencyController::class, 'setBase'])
+        ->middleware('role:SUPERADMIN');
+    Route::delete('/currencies/{currency}', [CurrencyController::class, 'destroy'])
         ->middleware('role:SUPERADMIN');
 
     Route::get('/modules', [ModuleController::class, 'index'])->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class])->middleware('throttle:catalog');

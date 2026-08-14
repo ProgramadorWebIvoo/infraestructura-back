@@ -152,6 +152,26 @@ class SupplierInvitationTest extends TestCase
         $this->assertTrue($invitation->expires_at->isFuture());
     }
 
+    public function test_create_invitation_expiration_respects_configured_validity_days(): void
+    {
+        AppSetting::where('key', 'invitacion_proveedor_vigencia_dias')->update(['value' => '3']);
+        SettingsService::forget();
+
+        $this->withHeaders($this->authHeaders())
+            ->postJson('/api/supplier-invitations', [
+                'project_id'      => $this->project->id,
+                'supplierName'    => 'Proveedor Test',
+                'supplierContact' => 'proveedor@test.com',
+            ])->assertStatus(201);
+
+        $invitation = SupplierInvitation::first();
+        $this->assertEqualsWithDelta(
+            now()->addDays(3)->timestamp,
+            $invitation->expires_at->timestamp,
+            5,
+        );
+    }
+
     public function test_view_time_expired_invitation_returns_404(): void
     {
         $invitation = SupplierInvitation::factory()->expired()->create();

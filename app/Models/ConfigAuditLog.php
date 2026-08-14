@@ -78,4 +78,24 @@ class ConfigAuditLog extends Model
             'changed_at' => now(),
         ];
     }
+
+    /**
+     * Shape que consumen los endpoints que insertan una entrada recién
+     * creada directo en el panel de auditoría del frontend sin re-consultar
+     * /config-audit-logs (AppSettingController::update, CurrencyController).
+     * Única fuente de este mapeo — antes duplicado en cada controller.
+     */
+    public function toApiPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'entityType' => $this->entity_type,
+            'action' => $this->action,
+            'settingKey' => $this->setting_key,
+            'oldValue' => $this->old_value,
+            'newValue' => $this->new_value,
+            'userName' => $this->user_name_snapshot,
+            'changedAt' => $this->changed_at->format('Y-m-d H:i'),
+        ];
+    }
 }

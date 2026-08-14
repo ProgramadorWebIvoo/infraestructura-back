@@ -13,10 +13,17 @@ class SettingsServiceTest extends TestCase
 
     public function test_get_returns_value_casted_by_type(): void
     {
+        AppSetting::create(['group' => 'app', 'key' => 'flag_de_prueba', 'value' => 'false', 'type' => 'boolean']);
+
         $this->assertSame(100, SettingsService::get('anticipo_maximo_porcentaje'));
-        $this->assertSame(false, SettingsService::get('cambios_bloqueados'));
+        $this->assertSame(false, SettingsService::get('flag_de_prueba'));
         $this->assertSame(0.0, SettingsService::get('inflacion_referencia_anual_porcentaje'));
         $this->assertIsArray(SettingsService::get('acciones_con_correo'));
+    }
+
+    public function test_get_returns_the_app_group_stalled_threshold_as_int(): void
+    {
+        $this->assertSame(14, SettingsService::get('proyecto_estancado_umbral_dias'));
     }
 
     public function test_get_returns_default_when_key_does_not_exist(): void

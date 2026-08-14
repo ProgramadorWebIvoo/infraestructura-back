@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Models\ConfigAuditLog;
 use App\Services\SettingsService;
+use App\Support\AppSettingCatalog;
 use App\Support\NotificationCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,12 +18,31 @@ class AppSettingController extends Controller
      * (string) tal como vive en BD — el panel de administración necesita el
      * string editable, no el valor casteado que expone SettingsService (ese
      * es para consumo interno del backend).
+     *
+     * `missing` expone las keys documentadas en AppSettingCatalog que no
+     * tienen fila en app_settings (una migración de seed que no corrió, un
+     * rollback parcial, una fila borrada a mano) — sin esto, un setting
+     * ausente simplemente no aparece en el panel, sin ningún rastro de que
+     * debería existir. Solo lo consume la UI de SUPERADMIN (ver
+     * ConfigAppPanel), pero se calcula para cualquier lector: es información
+     * de estado, no un dato sensible.
+     *
+     * `missing` va como clave hermana a los grupos (no anidada bajo una
+     * sub-clave "groups") para no romper a los consumidores existentes que
+     * leen `data.presupuesto`, `data.notificaciones`, etc. directamente —
+     * apiFetch ya desenvuelve `json.data` una sola vez. Esto asume que
+     * ningún `group` real se llama "missing"; AppSettingCatalogTest lo
+     * verifica explícitamente para que un futuro seed con ese nombre de
+     * grupo falle en CI en vez de corromper esta respuesta en silencio.
      */
     public function index(): JsonResponse
     {
         $settings = AppSetting::orderBy('group')->orderBy('key')->get();
 
-        return response()->json(['data' => $settings->groupBy('group')]);
+        return response()->json(['data' => [
+            ...$settings->groupBy('group')->all(),
+            'missing' => AppSettingCatalog::missingFrom($settings->pluck('key')->all()),
+        ]]);
     }
 
     /**
@@ -86,14 +106,7 @@ class AppSettingController extends Controller
         // /config-audit-logs — evita un polling recurrente para un dato que
         // solo cambia por acción del propio usuario en la misma vista.
         $settingPayload = $setting->toArray();
-        $settingPayload['auditLog'] = [
-            'id' => $auditLog->id,
-            'settingKey' => $auditLog->setting_key,
-            'oldValue' => $auditLog->old_value,
-            'newValue' => $auditLog->new_value,
-            'userName' => $auditLog->user_name_snapshot,
-            'changedAt' => $auditLog->changed_at->format('Y-m-d H:i'),
-        ];
+        $settingPayload['auditLog'] = $auditLog->toApiPayload();
 
         return response()->json(['data' => $settingPayload]);
     }

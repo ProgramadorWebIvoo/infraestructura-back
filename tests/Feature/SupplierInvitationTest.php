@@ -327,21 +327,21 @@ class SupplierInvitationTest extends TestCase
     public function test_import_supplier_proposals_as_project_proposals(): void
     {
         $contractor = Contractor::factory()->create([
-            'name'    => 'Proveedor Test',
-            'contact' => 'proveedor@test.com',
+            'name'  => 'Proveedor Test',
+            'email' => 'proveedor@test.com',
         ]);
 
         // First invitation + proposal
         $invitation1 = SupplierInvitation::factory()->create([
             'project_id'       => $this->project->id,
             'supplier_name'    => $contractor->name,
-            'supplier_contact' => $contractor->contact,
+            'supplier_contact' => $contractor->email,
         ]);
         SupplierMaterialProposal::factory()->create([
             'project_id'       => $this->project->id,
             'invitation_token' => $invitation1->id,
             'supplier_name'    => $contractor->name,
-            'supplier_contact' => $contractor->contact,
+            'supplier_contact' => $contractor->email,
             'items'            => [
                 ['name' => 'Material 1', 'quantity' => 10, 'unitPrice' => 100, 'totalPrice' => 1000],
             ],

@@ -200,7 +200,7 @@ class RoleMiddlewareTest extends TestCase
         $response = $this->postJson('/api/contractors', [
             'name'      => 'Test Contractor',
             'specialty' => 'General',
-            'contact'   => 'test@test.com',
+            'email'     => 'test@test.com',
         ]);
         $response->assertStatus(201);
     }

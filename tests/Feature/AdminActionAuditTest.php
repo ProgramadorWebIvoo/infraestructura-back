@@ -107,7 +107,7 @@ class AdminActionAuditTest extends TestCase
         $response = $this->postJson('/api/contractors/config', [
             'name' => 'Constructora ACME',
             'specialty' => 'Electricidad',
-            'contact' => 'acme@test.com',
+            'email' => 'acme@test.com',
         ]);
         $response->assertStatus(201);
 

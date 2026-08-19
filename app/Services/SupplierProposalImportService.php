@@ -30,7 +30,7 @@ class SupplierProposalImportService
 
         foreach ($supplierProposals as $supplierProposal) {
             // Find matching contractor by email or name
-            $contractor = Contractor::where('contact', $supplierProposal->supplier_contact)
+            $contractor = Contractor::where('email', $supplierProposal->supplier_contact)
                 ->orWhere('name', $supplierProposal->supplier_name)
                 ->first();
 

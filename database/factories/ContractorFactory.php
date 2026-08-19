@@ -16,7 +16,8 @@ class ContractorFactory extends Factory
             'name' => fake()->company(),
             'specialty' => fake()->randomElement(['Construcción Civil', 'Electricidad', 'Plomería', 'Estructuras Metálicas', 'Pintura']),
             'rating' => fake()->randomFloat(1, 3.0, 5.0),
-            'contact' => fake()->email(),
+            'email' => fake()->email(),
+            'phone' => fake()->optional()->phoneNumber(),
             'registration_source' => 'SEED',
             'status' => 'ACTIVE',
         ];

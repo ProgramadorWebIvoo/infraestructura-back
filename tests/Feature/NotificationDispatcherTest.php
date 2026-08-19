@@ -303,7 +303,7 @@ class NotificationDispatcherTest extends TestCase
         $response = $this->postJson('/api/contractors', [
             'name' => 'Constructora XYZ',
             'specialty' => 'Electricidad',
-            'contact' => 'contacto@xyz.com',
+            'email' => 'contacto@xyz.com',
         ]);
 
         $response->assertStatus(201);

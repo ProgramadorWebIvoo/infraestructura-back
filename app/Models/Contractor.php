@@ -18,7 +18,8 @@ class Contractor extends Model
         'name',
         'specialty',
         'rating',
-        'contact',
+        'email',
+        'phone',
         'registration_source',
         'status',
     ];

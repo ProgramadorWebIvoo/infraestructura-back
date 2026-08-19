@@ -31,7 +31,8 @@ class ContractorController extends Controller
 
         $data['name'] = strip_tags($data['name']);
         $data['specialty'] = strip_tags($data['specialty']);
-        $data['contact'] = strip_tags($data['contact']);
+        if (isset($data['email'])) $data['email'] = strip_tags($data['email']);
+        if (isset($data['phone'])) $data['phone'] = strip_tags($data['phone']);
 
         $contractor = DB::transaction(function () use ($data) {
             $data['code'] ??= Contractor::nextCode();
@@ -62,7 +63,8 @@ class ContractorController extends Controller
 
         if (isset($data['name']))      $data['name'] = strip_tags($data['name']);
         if (isset($data['specialty']))  $data['specialty'] = strip_tags($data['specialty']);
-        if (isset($data['contact']))    $data['contact'] = strip_tags($data['contact']);
+        if (isset($data['email']))      $data['email'] = strip_tags($data['email']);
+        if (isset($data['phone']))      $data['phone'] = strip_tags($data['phone']);
         if (isset($data['rating']))     $data['rating'] = round($data['rating'], 1);
 
         $contractor->update($data);
@@ -105,7 +107,7 @@ class ContractorController extends Controller
     {
         return Contractor::where('status', 'ACTIVE')
             ->orderBy('name')
-            ->get(['code', 'name', 'specialty', 'rating', 'contact', 'status']);
+            ->get(['code', 'name', 'specialty', 'rating', 'email', 'phone', 'status']);
     }
 
     /**
@@ -118,13 +120,15 @@ class ContractorController extends Controller
             'name' => ['required', 'string', 'max:180'],
             'specialty' => ['required', 'string', 'max:180'],
             'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
-            'contact' => ['required', 'string', 'max:180'],
+            'email' => ['required', 'email', 'max:180'],
+            'phone' => ['nullable', 'string', 'max:40'],
         ]);
 
         // Sanitización server-side: eliminar etiquetas HTML/XML de campos de texto
         $data['name'] = strip_tags($data['name']);
         $data['specialty'] = strip_tags($data['specialty']);
-        $data['contact'] = strip_tags($data['contact']);
+        $data['email'] = strip_tags($data['email']);
+        if (isset($data['phone'])) $data['phone'] = strip_tags($data['phone']);
 
         $contractor = DB::transaction(function () use ($data) {
             $data['code'] ??= Contractor::nextCode();

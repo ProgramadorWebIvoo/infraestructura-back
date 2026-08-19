@@ -18,7 +18,8 @@ class StoreContractorRequest extends FormRequest
         return [
             'name'      => ['required', 'string', 'max:180'],
             'specialty' => ['required', 'string', 'max:180'],
-            'contact'   => ['required', 'string', 'max:180'],
+            'email'     => ['required_without:phone', 'nullable', 'email', 'max:180'],
+            'phone'     => ['required_without:email', 'nullable', 'string', 'max:40'],
             'rating'    => ['nullable', 'numeric', 'min:0', 'max:5'],
             'status'    => ['sometimes', Rule::in(ContractorController::CONTRACTOR_STATUSES)],
         ];

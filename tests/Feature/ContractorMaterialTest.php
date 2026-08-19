@@ -35,7 +35,7 @@ class ContractorMaterialTest extends TestCase
 
         $this->withHeaders($headers)->getJson('/api/contractors/config')->assertStatus(403);
         $this->withHeaders($headers)->postJson('/api/contractors/config', [
-            'name' => 'X', 'specialty' => 'Y', 'contact' => 'z@z.com',
+            'name' => 'X', 'specialty' => 'Y', 'email' => 'z@z.com',
         ])->assertStatus(403);
         $this->withHeaders($headers)->patchJson("/api/contractors/config/{$contractor->code}", ['rating' => 4])->assertStatus(403);
         $this->withHeaders($headers)->postJson("/api/contractors/config/{$contractor->code}/toggle-status")->assertStatus(403);
@@ -72,7 +72,7 @@ class ContractorMaterialTest extends TestCase
             ->postJson('/api/contractors/config', [
                 'name'      => 'Constructora del Sur',
                 'specialty' => 'Construcción Civil',
-                'contact'   => 'contacto@constructorasur.com',
+                'email'     => 'contacto@constructorasur.com',
             ]);
 
         $response->assertStatus(201);
@@ -88,13 +88,61 @@ class ContractorMaterialTest extends TestCase
         $response->assertJsonPath('auditLog.action', 'Alta de proveedor');
     }
 
+    public function test_contractor_store_accepts_phone_only(): void
+    {
+        $response = $this->withHeaders($this->headers())
+            ->postJson('/api/contractors/config', [
+                'name'      => 'Constructora del Norte',
+                'specialty' => 'Plomería',
+                'phone'     => '+58 412-1234567',
+            ]);
+
+        $response->assertStatus(201);
+        $response->assertJson(['name' => 'Constructora del Norte', 'phone' => '+58 412-1234567']);
+        $this->assertNull($response->json('email'));
+    }
+
+    public function test_contractor_store_rejects_without_email_and_phone(): void
+    {
+        $response = $this->withHeaders($this->headers())
+            ->postJson('/api/contractors/config', [
+                'name'      => 'Constructora Sin Contacto',
+                'specialty' => 'Plomería',
+            ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['email', 'phone']);
+    }
+
+    public function test_contractor_update_rejects_clearing_both_email_and_phone(): void
+    {
+        $contractor = Contractor::factory()->create(['email' => 'existing@test.com', 'phone' => null]);
+
+        $response = $this->withHeaders($this->headers())
+            ->patchJson("/api/contractors/config/{$contractor->code}", ['email' => null]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['email']);
+    }
+
+    public function test_contractor_update_allows_clearing_email_when_phone_present(): void
+    {
+        $contractor = Contractor::factory()->create(['email' => 'existing@test.com', 'phone' => '04121234567']);
+
+        $response = $this->withHeaders($this->headers())
+            ->patchJson("/api/contractors/config/{$contractor->code}", ['email' => null]);
+
+        $response->assertStatus(200);
+        $this->assertNull($response->json('email'));
+    }
+
     public function test_contractor_store_strips_html_tags(): void
     {
         $response = $this->withHeaders($this->headers())
             ->postJson('/api/contractors/config', [
                 'name'      => '<script>alert("xss")</script>Constructora',
                 'specialty' => '<b>Especialidad</b>',
-                'contact'   => 'test@test.com',
+                'email'     => 'test@test.com',
             ]);
 
         $response->assertStatus(201);
@@ -161,7 +209,7 @@ class ContractorMaterialTest extends TestCase
         $response = $this->postJson('/api/contractors', [
             'name'      => 'Proveedor Público',
             'specialty' => 'Electricidad',
-            'contact'   => 'proveedor@test.com',
+            'email'     => 'proveedor@test.com',
         ]);
 
         $response->assertStatus(201);

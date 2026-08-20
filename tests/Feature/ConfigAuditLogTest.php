@@ -156,4 +156,170 @@ class ConfigAuditLogTest extends TestCase
         $response->assertJsonPath('data.items.0.entityType', 'contractor');
         $response->assertJsonPath('data.items.0.action', 'Alta de proveedor');
     }
+
+    public function test_filters_by_entity_type(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+        ConfigAuditLog::recordAdminAction('contractor', 'Alta de proveedor', null, null, 'Proveedor: ACME');
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Cemento');
+
+        $response = $this->getJson('/api/config-audit-logs?entity_type=contractor');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.items.0.entityType', 'contractor');
+    }
+
+    public function test_filters_by_exact_action(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+        ConfigAuditLog::recordAdminAction('contractor', 'Alta de proveedor', null, null, 'Proveedor: ACME');
+        ConfigAuditLog::recordAdminAction('contractor', 'Modificacion de proveedor', null, null, 'Proveedor: ACME');
+
+        $response = $this->getJson('/api/config-audit-logs?action='.urlencode('Alta de proveedor'));
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.items.0.action', 'Alta de proveedor');
+    }
+
+    public function test_filters_by_user_name_partial_match(): void
+    {
+        $alice = User::factory()->create(['role' => 'SUPERADMIN', 'name' => 'Alice Wonder']);
+        $bob = User::factory()->create(['role' => 'SUPERADMIN', 'name' => 'Bob Builder']);
+
+        $this->actingAs($alice);
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: A');
+        $this->actingAs($bob);
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: B');
+
+        $response = $this->getJson('/api/config-audit-logs?user=Alice');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.items.0.userName', 'Alice Wonder');
+    }
+
+    public function test_filters_by_free_text_query_across_values(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+        ConfigAuditLog::recordAdminAction('contractor', 'Alta de proveedor', null, null, 'Proveedor: Constructora Andes');
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Cemento Portland');
+
+        $response = $this->getJson('/api/config-audit-logs?q=Andes');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.items.0.entityType', 'contractor');
+    }
+
+    public function test_filters_by_date_range(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+
+        $old = ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Viejo');
+        $old->forceFill(['changed_at' => now()->subDays(10)])->save();
+
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Nuevo');
+
+        $response = $this->getJson('/api/config-audit-logs?date_from='.now()->subDay()->toDateString());
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.items.0.newValue', 'Material: Nuevo');
+    }
+
+    public function test_combines_multiple_filters_with_and(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+        ConfigAuditLog::recordAdminAction('contractor', 'Alta de proveedor', null, null, 'Proveedor: ACME');
+        ConfigAuditLog::recordAdminAction('contractor', 'Modificacion de proveedor', null, null, 'Proveedor: ACME');
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Cemento');
+
+        $response = $this->getJson('/api/config-audit-logs?entity_type=contractor&action='.urlencode('Alta de proveedor'));
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+    }
+
+    public function test_exposes_immutable_user_id_and_current_email(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN', 'name' => 'Alejandro González', 'email' => 'alejandro@ivoo.local']);
+        $this->actingAs($superadmin);
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Cemento');
+
+        $response = $this->getJson('/api/config-audit-logs');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.items.0.userId', $superadmin->id);
+        $response->assertJsonPath('data.items.0.userName', 'Alejandro González');
+        $response->assertJsonPath('data.items.0.userEmail', 'alejandro@ivoo.local');
+    }
+
+    public function test_user_id_and_name_snapshot_survive_a_later_rename(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN', 'name' => 'Nombre Viejo', 'email' => 'user@ivoo.local']);
+        $this->actingAs($superadmin);
+        $log = ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Cemento');
+
+        $superadmin->update(['name' => 'Nombre Nuevo']);
+
+        $response = $this->getJson('/api/config-audit-logs');
+
+        $response->assertStatus(200);
+        // El snapshot conserva el nombre de ese momento; el ID y el email
+        // (si no cambió) siguen resolviendo al usuario actual.
+        $response->assertJsonPath('data.items.0.userId', $log->user_id);
+        $response->assertJsonPath('data.items.0.userName', 'Nombre Viejo');
+        $response->assertJsonPath('data.items.0.userEmail', 'user@ivoo.local');
+    }
+
+    public function test_user_email_is_null_when_the_user_was_deleted(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $this->actingAs($superadmin);
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Cemento');
+        $superadmin->delete();
+
+        // El propio actor fue borrado — se consulta con otro SUPERADMIN.
+        $otherSuperadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $response = $this->actingAs($otherSuperadmin)->getJson('/api/config-audit-logs');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.items.0.userEmail', null);
+    }
+
+    public function test_filters_by_user_email_partial_match(): void
+    {
+        $alice = User::factory()->create(['role' => 'SUPERADMIN', 'name' => 'Alice', 'email' => 'alice.wonder@ivoo.local']);
+        $bob = User::factory()->create(['role' => 'SUPERADMIN', 'name' => 'Bob', 'email' => 'bob.builder@ivoo.local']);
+
+        $this->actingAs($alice);
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: A');
+        $this->actingAs($bob);
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: B');
+
+        $response = $this->getJson('/api/config-audit-logs?user=alice.wonder');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+        $response->assertJsonPath('data.items.0.userEmail', 'alice.wonder@ivoo.local');
+    }
+
+    public function test_free_text_query_also_matches_current_email(): void
+    {
+        $alice = User::factory()->create(['role' => 'SUPERADMIN', 'email' => 'unique.email.for.test@ivoo.local']);
+        $this->actingAs($alice);
+        ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Cemento');
+
+        $response = $this->getJson('/api/config-audit-logs?q=unique.email.for.test');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.total', 1);
+    }
 }

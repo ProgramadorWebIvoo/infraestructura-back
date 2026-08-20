@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\NotificationDispatcher;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Auditoría de todo lo que le compete a administración (SUPERADMIN/ADMIN) —
@@ -105,6 +106,18 @@ class ConfigAuditLog extends Model
     }
 
     /**
+     * `user_id` es inmutable (a diferencia de `user_name_snapshot`, que
+     * congela el nombre tal como era al momento del cambio) — permite
+     * resolver la identidad actual del actor incluso si cambió de nombre
+     * después. `nullOnDelete` en la FK: si el usuario fue borrado, la
+     * relación resuelve `null` y el frontend cae al nombre snapshot.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
      * Shape que consumen los endpoints que insertan una entrada recién
      * creada directo en el panel de auditoría del frontend sin re-consultar
      * /config-audit-logs (AppSettingController::update, CurrencyController).
@@ -119,7 +132,9 @@ class ConfigAuditLog extends Model
             'settingKey' => $this->setting_key,
             'oldValue' => $this->old_value,
             'newValue' => $this->new_value,
+            'userId' => $this->user_id,
             'userName' => $this->user_name_snapshot,
+            'userEmail' => $this->relationLoaded('user') ? $this->user?->email : $this->user()->value('email'),
             'changedAt' => $this->changed_at->format('Y-m-d H:i'),
         ];
     }

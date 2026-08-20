@@ -20,6 +20,7 @@ class RoleMiddlewareTest extends TestCase
     private User $cierre;
     private User $infraestructura;
     private User $noRole;
+    private User $marketing;
 
     protected function setUp(): void
     {
@@ -32,6 +33,7 @@ class RoleMiddlewareTest extends TestCase
         $this->cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
         $this->infraestructura = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
         $this->noRole = User::factory()->create(['role' => 'PRESIDENCIA']);
+        $this->marketing = User::factory()->create(['role' => 'MARKETING']);
     }
 
 
@@ -154,6 +156,46 @@ class RoleMiddlewareTest extends TestCase
         $this->assertNotEquals(401, $response->getStatusCode());
     }
 
+    /**
+     * MARKETING tiene acceso parcial a Procura (crear/consultar/adjuntar),
+     * pero no debe poder aprobar inversión, rechazar, adjudicar ni disparar
+     * evaluación IA — las 4 acciones sensibles del módulo.
+     *
+     * @dataProvider routeRoleProvider
+     */
+    public function test_marketing_is_denied_on_sensitive_procura_routes(string $method, string $uri): void
+    {
+        $project = $this->createProject();
+        $uri = str_replace('__PROJECT__', $project->id, $uri);
+
+        $response = $this->actingAs($this->marketing)->json($method, $uri);
+
+        $response->assertStatus(403);
+        $response->assertJson(['message' => 'Acceso no autorizado.']);
+    }
+
+    public function test_marketing_can_create_and_view_projects(): void
+    {
+        $response = $this->actingAs($this->marketing)->postJson('/api/projects', [
+            'title'         => 'Solicitud de Marketing',
+            'type'          => 'MANTENIMIENTO',
+            'description'   => 'Prueba de acceso parcial',
+            'location'      => 'Oficina central',
+            'materials'     => [
+                ['name' => 'Material X', 'quantity' => 1, 'unit' => 'UND', 'estimatedUnitPrice' => 10],
+            ],
+        ]);
+        $response->assertStatus(201);
+
+        $projectId = $response->json('data.id');
+
+        $response = $this->actingAs($this->marketing)->getJson('/api/projects');
+        $response->assertStatus(200);
+
+        $response = $this->actingAs($this->marketing)->getJson("/api/projects/{$projectId}");
+        $response->assertStatus(200);
+    }
+
     public function test_ai_evaluate_endpoint_requires_procura(): void
     {
         Project::factory()->create(['id' => 'PRJ-001']);
@@ -165,6 +207,11 @@ class RoleMiddlewareTest extends TestCase
 
         // INFRAESTRUCTURA should get 403
         $response = $this->actingAs($this->infraestructura)
+            ->postJson('/api/ai/evaluate-proposals', ['projectId' => 'PRJ-001']);
+        $response->assertStatus(403);
+
+        // MARKETING (acceso parcial a Procura) should get 403 too
+        $response = $this->actingAs($this->marketing)
             ->postJson('/api/ai/evaluate-proposals', ['projectId' => 'PRJ-001']);
         $response->assertStatus(403);
     }

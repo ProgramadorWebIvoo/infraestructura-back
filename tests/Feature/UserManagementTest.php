@@ -36,6 +36,7 @@ class UserManagementTest extends TestCase
         $response->assertJson([
             'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
             'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
+            'MARKETING',
         ]);
     }
 
@@ -83,6 +84,30 @@ class UserManagementTest extends TestCase
             'status' => 'Active',
         ]);
         $response->assertJsonPath('auditLog.action', 'Creacion de usuario');
+    }
+
+    public function test_store_creates_user_with_marketing_role(): void
+    {
+        $response = $this->withHeaders($this->headers($this->superadmin))
+            ->postJson('/api/users', [
+                'name'                  => 'Usuario Marketing',
+                'email'                 => 'marketing@test.com',
+                'password'              => 'securePass1',
+                'password_confirmation' => 'securePass1',
+                'role'                  => 'MARKETING',
+            ]);
+
+        $response->assertStatus(201);
+        $response->assertJson([
+            'name'   => 'Usuario Marketing',
+            'email'  => 'marketing@test.com',
+            'role'   => 'MARKETING',
+            'status' => 'Active',
+        ]);
+        $this->assertDatabaseHas('users', [
+            'email' => 'marketing@test.com',
+            'role'  => 'MARKETING',
+        ]);
     }
 
     public function test_store_rejects_password_without_mixed_case_or_numbers(): void

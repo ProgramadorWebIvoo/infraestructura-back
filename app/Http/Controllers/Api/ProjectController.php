@@ -18,6 +18,7 @@ use App\Models\Project;
 use App\Models\ProjectMaterial;
 use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
+use App\Services\RejectionService;
 use App\Services\SupplierProposalImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -199,23 +200,21 @@ class ProjectController extends Controller
 
     public function rejectProposals(RejectProposalsRequest $request, Project $project)
     {
-        abort_unless($project->status === self::STATUSES['COMPARATIVA_ENVIADA'], 422, 'Solo se puede rechazar en estado COMPARATIVA_ENVIADA.');
+        $project = RejectionService::reject(
+            $project,
+            self::STATUSES['COMPARATIVA_ENVIADA'],
+            self::STATUSES['CONFIRMADO_PROCURA'],
+            'PROCURA',
+            'Rechazo de cuadro comparativo',
+            $request->validated(),
+            function (Project $project, array $payload) {
+                $project->proposals()->delete();
+                $project->selected_contractor_code = null;
+                $project->selected_proposal_id = null;
+            }
+        );
 
-        $data = $request->validated();
-
-        DB::transaction(function () use ($project, $data) {
-            $project->proposals()->delete();
-
-            $project->update([
-                'status'                  => self::STATUSES['CONFIRMADO_PROCURA'],
-                'selected_contractor_code' => null,
-                'selected_proposal_id'    => null,
-            ]);
-
-            AuditLog::record($project, 'PROCURA', 'Rechazo de cuadro comparativo', $data['reason']);
-        });
-
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project);
     }
 
     public function selectContractor(SelectContractorRequest $request, Project $project)

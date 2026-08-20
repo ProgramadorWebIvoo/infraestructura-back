@@ -15,6 +15,7 @@ return [
     'INFRAESTRUCTURA' => ['/infraestructura'],
     'CIERRE_DE_OBRA' => ['/cierre-obra'],
     'PROCURA' => ['/procura', '/catalogos'],
+    'MARKETING' => ['/procura', '/catalogos'],
     'ANALISTA' => ['/analistas'],
     'FINANZAS' => ['/finanzas'],
     'CATALOGOS' => ['/catalogos'],

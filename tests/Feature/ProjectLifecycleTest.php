@@ -174,7 +174,7 @@ class ProjectLifecycleTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertCount(1, $project->fresh()->proposals);
-        $this->assertDatabaseMissing('project_proposals', ['id' => $proposalId]);
+        $this->assertSoftDeleted('project_proposals', ['id' => $proposalId]);
     }
 
     public function test_add_proposal_accepts_advance_percent_above_configured_max(): void
@@ -360,8 +360,10 @@ class ProjectLifecycleTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.status', 'CONFIRMADO_PROCURA');
-        // Proposals deleted
+        // Proposals excluded from active queries (soft-deleted, not physically removed)
         $this->assertCount(0, $project->fresh()->proposals);
+        $this->assertCount(1, \App\Models\ProjectProposal::withTrashed()->where('project_id', $project->id)->get());
+        $this->assertSoftDeleted('project_proposals', ['project_id' => $project->id]);
     }
 
     public function test_verify_completion_rejects_and_returns_to_execution(): void

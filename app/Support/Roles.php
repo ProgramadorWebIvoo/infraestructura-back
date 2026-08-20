@@ -15,5 +15,6 @@ class Roles
     public const VALID = [
         'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
         'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
+        'MARKETING',
     ];
 }

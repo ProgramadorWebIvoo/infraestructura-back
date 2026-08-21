@@ -33,6 +33,21 @@ class ProjectDocumentTest extends TestCase
         ];
     }
 
+    /** Crea un ProjectDocument fixture, autoasignando document_group_id como V1 (mismo patrón que el controller). */
+    private function createDocument(Project $project, array $overrides = []): ProjectDocument
+    {
+        $doc = $project->documents()->create(array_merge([
+            'document_type' => 'PLANO',
+            'original_name' => 'plano1.pdf',
+            'stored_path' => "project-documents/{$project->id}/PLANO/plano1.pdf",
+            'mime_type' => 'application/pdf',
+            'size_bytes' => 9,
+        ], $overrides));
+        $doc->update(['document_group_id' => $doc->id]);
+
+        return $doc;
+    }
+
     public function test_upload_stores_file_and_creates_document_record(): void
     {
         $project = Project::factory()->create();
@@ -54,6 +69,56 @@ class ProjectDocumentTest extends TestCase
 
         $doc = ProjectDocument::first();
         Storage::disk('local')->assertExists($doc->stored_path);
+    }
+
+    public function test_upload_accepts_foto_document_type_with_valid_image(): void
+    {
+        $project = Project::factory()->create();
+        $file = UploadedFile::fake()->create('sitio.jpg', 100, 'image/jpeg');
+
+        $response = $this->withHeaders($this->headers())
+            ->post("/api/projects/{$project->id}/documents", [
+                'document_type' => 'FOTO',
+                'files' => [$file],
+            ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('data.0.documentType', 'FOTO');
+
+        $this->assertDatabaseHas('project_documents', [
+            'project_id' => $project->id,
+            'document_type' => 'FOTO',
+        ]);
+    }
+
+    public function test_upload_rejects_plano_extension_for_foto_document_type(): void
+    {
+        $project = Project::factory()->create();
+        $file = UploadedFile::fake()->create('plano.dwg', 100, 'application/acad');
+
+        $response = $this->withHeaders($this->headers())
+            ->post("/api/projects/{$project->id}/documents", [
+                'document_type' => 'FOTO',
+                'files' => [$file],
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_upload_rejects_octet_stream_mime_for_foto_document_type(): void
+    {
+        // application/octet-stream solo es válido para dwg/dxf de PLANO —
+        // confirma que ese caso especial no se fuga hacia FOTO.
+        $project = Project::factory()->create();
+        $file = UploadedFile::fake()->create('foto.jpg', 100, 'application/octet-stream');
+
+        $response = $this->withHeaders($this->headers())
+            ->post("/api/projects/{$project->id}/documents", [
+                'document_type' => 'FOTO',
+                'files' => [$file],
+            ]);
+
+        $response->assertStatus(422);
     }
 
     public function test_upload_rejects_disallowed_extension_for_document_type(): void
@@ -127,13 +192,7 @@ class ProjectDocumentTest extends TestCase
     public function test_index_lists_documents_for_project(): void
     {
         $project = Project::factory()->create();
-        $project->documents()->create([
-            'document_type' => 'PLANO',
-            'original_name' => 'plano1.pdf',
-            'stored_path' => "project-documents/{$project->id}/PLANO/plano1.pdf",
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 1234,
-        ]);
+        $this->createDocument($project, ['original_name' => 'plano1.pdf', 'size_bytes' => 1234]);
 
         $response = $this->withHeaders($this->headers())->getJson("/api/projects/{$project->id}/documents");
 
@@ -147,13 +206,7 @@ class ProjectDocumentTest extends TestCase
         $path = "project-documents/{$project->id}/PLANO/plano1.pdf";
         Storage::disk('local')->put($path, 'contenido');
 
-        $doc = $project->documents()->create([
-            'document_type' => 'PLANO',
-            'original_name' => 'plano1.pdf',
-            'stored_path' => $path,
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 9,
-        ]);
+        $doc = $this->createDocument($project, ['stored_path' => $path]);
 
         $response = $this->withHeaders($this->headers())
             ->deleteJson("/api/projects/{$project->id}/documents/{$doc->id}");
@@ -168,13 +221,7 @@ class ProjectDocumentTest extends TestCase
         $project = Project::factory()->create();
         $otherProject = Project::factory()->create();
 
-        $doc = $otherProject->documents()->create([
-            'document_type' => 'PLANO',
-            'original_name' => 'plano1.pdf',
-            'stored_path' => "project-documents/{$otherProject->id}/PLANO/plano1.pdf",
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 9,
-        ]);
+        $doc = $this->createDocument($otherProject);
 
         $response = $this->withHeaders($this->headers())
             ->deleteJson("/api/projects/{$project->id}/documents/{$doc->id}");
@@ -188,13 +235,7 @@ class ProjectDocumentTest extends TestCase
         $path = "project-documents/{$project->id}/PLANO/plano1.pdf";
         Storage::disk('local')->put($path, 'contenido-del-plano');
 
-        $doc = $project->documents()->create([
-            'document_type' => 'PLANO',
-            'original_name' => 'plano1.pdf',
-            'stored_path' => $path,
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 20,
-        ]);
+        $doc = $this->createDocument($project, ['stored_path' => $path, 'size_bytes' => 20]);
 
         $response = $this->withHeaders($this->headers())
             ->get("/api/projects/{$project->id}/documents/{$doc->id}/download");
@@ -205,17 +246,208 @@ class ProjectDocumentTest extends TestCase
     public function test_download_returns_404_when_file_missing_from_disk(): void
     {
         $project = Project::factory()->create();
-        $doc = $project->documents()->create([
-            'document_type' => 'PLANO',
-            'original_name' => 'plano1.pdf',
-            'stored_path' => "project-documents/{$project->id}/PLANO/no-existe.pdf",
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 9,
-        ]);
+        $doc = $this->createDocument($project, ['stored_path' => "project-documents/{$project->id}/PLANO/no-existe.pdf"]);
 
         $response = $this->withHeaders($this->headers())
             ->get("/api/projects/{$project->id}/documents/{$doc->id}/download");
 
         $response->assertStatus(404);
+    }
+
+    // ── Versionado ──────────────────────────────────────────────────────
+
+    public function test_upload_without_new_version_of_creates_its_own_group_as_v1(): void
+    {
+        $project = Project::factory()->create();
+        $file = UploadedFile::fake()->create('plano.pdf', 100, 'application/pdf');
+
+        $response = $this->withHeaders($this->headers())
+            ->post("/api/projects/{$project->id}/documents", [
+                'document_type' => 'PLANO',
+                'files' => [$file],
+            ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('data.0.versionNumber', 1);
+
+        $doc = ProjectDocument::first();
+        $this->assertEquals($doc->id, $doc->document_group_id);
+    }
+
+    public function test_upload_with_new_version_of_creates_v2_in_the_same_group(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project);
+
+        $file = UploadedFile::fake()->create('plano-corregido.pdf', 100, 'application/pdf');
+        $response = $this->withHeaders($this->headers())
+            ->post("/api/projects/{$project->id}/documents", [
+                'document_type' => 'PLANO',
+                'new_version_of' => $v1->id,
+                'files' => [$file],
+            ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('data.0.versionNumber', 2);
+        $response->assertJsonPath('data.0.documentGroupId', $v1->document_group_id);
+
+        // V1 sigue existiendo sin cambios
+        $this->assertDatabaseHas('project_documents', ['id' => $v1->id, 'version_number' => 1]);
+    }
+
+    public function test_upload_with_new_version_of_rejects_more_than_one_file(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project);
+
+        $response = $this->withHeaders($this->headers())
+            ->post("/api/projects/{$project->id}/documents", [
+                'document_type' => 'PLANO',
+                'new_version_of' => $v1->id,
+                'files' => [
+                    UploadedFile::fake()->create('a.pdf', 10, 'application/pdf'),
+                    UploadedFile::fake()->create('b.pdf', 10, 'application/pdf'),
+                ],
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_index_returns_only_latest_version_by_default(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project);
+
+        $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'PLANO',
+            'new_version_of' => $v1->id,
+            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+        ]);
+
+        $response = $this->withHeaders($this->headers())->getJson("/api/projects/{$project->id}/documents");
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.versionNumber', 2);
+    }
+
+    public function test_index_with_all_versions_returns_every_version(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project);
+
+        $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'PLANO',
+            'new_version_of' => $v1->id,
+            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+        ]);
+
+        $response = $this->withHeaders($this->headers())
+            ->getJson("/api/projects/{$project->id}/documents?all_versions=1");
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'data');
+    }
+
+    public function test_history_returns_all_versions_ascending(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project);
+
+        $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'PLANO',
+            'new_version_of' => $v1->id,
+            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+        ]);
+
+        $response = $this->withHeaders($this->headers())
+            ->getJson("/api/projects/{$project->id}/documents/{$v1->id}/history");
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'data');
+        $response->assertJsonPath('data.0.versionNumber', 1);
+        $response->assertJsonPath('data.1.versionNumber', 2);
+    }
+
+    public function test_destroy_removes_the_entire_group_not_a_single_version(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project);
+
+        $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'PLANO',
+            'new_version_of' => $v1->id,
+            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+        ]);
+        $v2 = ProjectDocument::where('document_group_id', $v1->document_group_id)->where('version_number', 2)->first();
+
+        $response = $this->withHeaders($this->headers())
+            ->deleteJson("/api/projects/{$project->id}/documents/{$v1->id}");
+
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('project_documents', ['id' => $v1->id]);
+        $this->assertDatabaseMissing('project_documents', ['id' => $v2->id]);
+    }
+
+    public function test_sync_project_counts_counts_groups_not_rows(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project);
+        $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'PLANO',
+            'new_version_of' => $v1->id,
+            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+        ]);
+
+        $project->refresh();
+        $this->assertEquals(1, $project->blueprints_count);
+    }
+
+    // ── Permisos ────────────────────────────────────────────────────────
+
+    public function test_upload_denied_for_role_without_access(): void
+    {
+        $procura = User::factory()->create(['role' => 'PROCURA']);
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $procura->createToken('test')->plainTextToken,
+            'Accept' => 'application/json',
+        ])->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'PLANO',
+            'files' => [UploadedFile::fake()->create('plano.pdf', 10, 'application/pdf')],
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_destroy_denied_for_role_without_access(): void
+    {
+        $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $project = Project::factory()->create();
+        $doc = $this->createDocument($project);
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $infra->createToken('test')->plainTextToken,
+            'Accept' => 'application/json',
+        ])->deleteJson("/api/projects/{$project->id}/documents/{$doc->id}");
+
+        $response->assertStatus(403);
+    }
+
+    public function test_upload_allowed_for_infraestructura(): void
+    {
+        $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $infra->createToken('test')->plainTextToken,
+            'Accept' => 'application/json',
+        ])->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'FOTO',
+            'files' => [UploadedFile::fake()->create('foto.jpg', 10, 'image/jpeg')],
+        ]);
+
+        $response->assertStatus(201);
     }
 }

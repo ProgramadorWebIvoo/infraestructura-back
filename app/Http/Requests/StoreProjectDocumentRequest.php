@@ -30,6 +30,9 @@ class StoreProjectDocumentRequest extends FormRequest
     private const ALLOWED_CALC_EXTENSIONS = ['xlsx', 'xls', 'csv', 'pdf', 'ods'];
     private const ALLOWED_PLANO_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'svg', 'tiff', 'tif', 'dwg', 'dxf'];
 
+    private const ALLOWED_FOTO_MIMES = ['image/png', 'image/jpeg', 'image/webp'];
+    private const ALLOWED_FOTO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
+
     /** Memoizados por instancia — rules()/messages() los leen dos veces cada
      *  uno; sin esto son 4 lecturas de SettingsService::get() por request. */
     private ?int $maxFileMb = null;
@@ -42,10 +45,16 @@ class StoreProjectDocumentRequest extends FormRequest
 
     public function rules(): array
     {
+        // Una "nueva versión" es siempre reemplazo puntual de un documento
+        // específico — no tiene sentido subir un lote de N archivos como
+        // versión de un solo documento lógico.
+        $isNewVersion = $this->filled('new_version_of');
+
         return [
-            'document_type' => ['required', Rule::in(['CALC', 'PLANO'])],
-            'files'         => ['required', 'array', 'min:1', 'max:' . $this->maxFileCount()],
-            'files.*'       => [
+            'document_type'  => ['required', Rule::in(['CALC', 'PLANO', 'FOTO'])],
+            'new_version_of' => ['nullable', 'integer', 'exists:project_documents,id'],
+            'files'          => ['required', 'array', $isNewVersion ? 'size:1' : 'min:1', 'max:' . $this->maxFileCount()],
+            'files.*'        => [
                 'required',
                 'file',
                 'max:' . ($this->maxFileMb() * 1024),
@@ -87,8 +96,18 @@ class StoreProjectDocumentRequest extends FormRequest
             $ext  = strtolower($value->getClientOriginalExtension());
             $name = $value->getClientOriginalName();
 
-            $allowedMimes = $type === 'CALC' ? self::ALLOWED_CALC_MIMES : self::ALLOWED_PLANO_MIMES;
-            $allowedExts  = $type === 'CALC' ? self::ALLOWED_CALC_EXTENSIONS : self::ALLOWED_PLANO_EXTENSIONS;
+            $allowedMimes = match ($type) {
+                'CALC' => self::ALLOWED_CALC_MIMES,
+                'PLANO' => self::ALLOWED_PLANO_MIMES,
+                'FOTO' => self::ALLOWED_FOTO_MIMES,
+                default => [],
+            };
+            $allowedExts = match ($type) {
+                'CALC' => self::ALLOWED_CALC_EXTENSIONS,
+                'PLANO' => self::ALLOWED_PLANO_EXTENSIONS,
+                'FOTO' => self::ALLOWED_FOTO_EXTENSIONS,
+                default => [],
+            };
 
             // Validate extension
             if (!in_array($ext, $allowedExts)) {

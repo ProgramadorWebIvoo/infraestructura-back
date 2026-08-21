@@ -16,6 +16,8 @@ class ProjectDocumentResource extends JsonResource
             'sizeBytes'    => $this->size_bytes,
             'uploadedBy'   => $this->uploaded_by,
             'uploadedAt'   => $this->created_at?->toIso8601String(),
+            'documentGroupId' => $this->document_group_id,
+            'versionNumber'   => $this->version_number,
         ];
     }
 }

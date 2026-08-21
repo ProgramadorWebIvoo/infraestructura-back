@@ -31,6 +31,7 @@ class NotificationCatalog
      */
     private const TYPE_OVERRIDES = [
         'Rechazo de cuadro comparativo' => NotificationType::ACCION_REQUERIDA,
+        'Rechazo de petición de obra' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de restablecimiento de contrasena' => NotificationType::INFORMACION,
         'Alta de proveedor' => NotificationType::EXITO,
         'Alta de material' => NotificationType::EXITO,
@@ -58,6 +59,8 @@ class NotificationCatalog
         'Verificacion de finalizacion y calidad de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Evaluacion inteligente de propuestas' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Envio de invitacion a proveedor' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
+        'Rechazo de petición de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
+        'Reenvío de petición corregida' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
 
         // Documentos de proyecto
         'Carga de hojas de calculo/cubicaciones' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],

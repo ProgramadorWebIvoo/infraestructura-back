@@ -334,6 +334,35 @@ class NotificationDispatcherTest extends TestCase
         Notification::assertNotSentTo($procura, ProjectActionNotification::class);
     }
 
+    public function test_project_rejection_notifies_infraestructura_via_app_and_mail(): void
+    {
+        Notification::fake();
+
+        $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Rechazo de petición de obra', 'Descripción insuficiente.');
+
+        Notification::assertSentTo($infra, ProjectActionNotification::class);
+        Notification::assertSentTo($infra, ProjectActionMail::class);
+        Notification::assertNotSentTo($cierre, ProjectActionNotification::class);
+    }
+
+    public function test_project_resubmission_notifies_cierre_de_obra_via_app(): void
+    {
+        Notification::fake();
+
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+
+        AuditLog::record($project, 'INFRAESTRUCTURA', 'Reenvío de petición corregida', 'Petición corregida y reenviada.');
+
+        Notification::assertSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertNotSentTo($infra, ProjectActionNotification::class);
+    }
+
     public function test_admin_action_without_project_notifies_via_rule_matrix(): void
     {
         Notification::fake();

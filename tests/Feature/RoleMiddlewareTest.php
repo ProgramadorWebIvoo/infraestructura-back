@@ -182,7 +182,7 @@ class RoleMiddlewareTest extends TestCase
             'description'   => 'Prueba de acceso parcial',
             'location'      => 'Oficina central',
             'materials'     => [
-                ['name' => 'Material X', 'quantity' => 1, 'unit' => 'UND', 'estimatedUnitPrice' => 10],
+                ['name' => 'Material X', 'quantity' => 1, 'unit' => 'UND', 'estimatedUnitPrice' => 10, 'condition' => 'NUEVO'],
             ],
         ]);
         $response->assertStatus(201);

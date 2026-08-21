@@ -22,10 +22,18 @@ class ProjectMaterial extends Model
         'quantity',
         'unit',
         'estimated_unit_price',
+        'condition',
+        'warranty_value',
+        'warranty_unit',
+        'brand',
+        'model',
+        'specifications',
+        'observations',
     ];
 
     protected $casts = [
         'quantity' => 'float',
         'estimated_unit_price' => 'float',
+        'warranty_value' => 'integer',
     ];
 }

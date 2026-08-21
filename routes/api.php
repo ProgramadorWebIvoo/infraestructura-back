@@ -115,6 +115,10 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     // Rutas protegidas por rol (matriz de permisos auditoría)
     Route::post('/projects/{project}/review', [ProjectController::class, 'review'])
         ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/reject-project', [ProjectController::class, 'rejectProject'])
+        ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/resubmit', [ProjectController::class, 'resubmitProject'])
+        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/approve-investment', [ProjectController::class, 'approveInvestment'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/proposals', [ProjectController::class, 'addProposal'])
@@ -140,11 +144,13 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::post('/ai/evaluate-proposals', [AIEvaluationController::class, 'evaluate'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
 
-    // Project documents (planos y hojas de cálculo)
+    // Project documents (planos, hojas de cálculo, fotos)
     Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-    Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload']);
-    Route::delete('/projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy']);
-    Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download']);
+    Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::delete('/projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy'])->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/projects/{project}/documents/{document}/preview', [ProjectDocumentController::class, 'preview'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/projects/{project}/documents/{document}/history', [ProjectDocumentController::class, 'history'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
 
     Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {
         Route::get('/roles', [UserController::class, 'roles']);

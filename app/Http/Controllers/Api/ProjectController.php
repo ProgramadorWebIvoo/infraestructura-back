@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\AddProjectProposalRequest;
 use App\Http\Requests\ApproveInvestmentRequest;
 use App\Http\Requests\PayProjectRequest;
+use App\Http\Requests\RejectProjectRequest;
 use App\Http\Requests\RejectProposalsRequest;
+use App\Http\Requests\ResubmitProjectRequest;
 use App\Http\Requests\ReviewProjectRequest;
 use App\Http\Requests\SelectContractorRequest;
 use App\Http\Requests\StoreProjectRequest;
@@ -28,6 +30,7 @@ class ProjectController extends Controller
     private const STATUSES = [
         'CREADO'                => 'CREADO',
         'REVISADO_CIERRE'       => 'REVISADO_CIERRE',
+        'RECHAZADO_CIERRE'      => 'RECHAZADO_CIERRE',
         'CONFIRMADO_PROCURA'    => 'CONFIRMADO_PROCURA',
         'COMPARATIVA_ENVIADA'   => 'COMPARATIVA_ENVIADA',
         'CONTRATADO'            => 'CONTRATADO',
@@ -41,7 +44,7 @@ class ProjectController extends Controller
     {
         $perPage = min((int) ($request->get('per_page', 20)), 100);
 
-        $query = Project::with(['materials', 'proposals', 'payments', 'documents'])->latest('created_date');
+        $query = Project::with(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])->latest('created_date');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -56,7 +59,7 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function store(StoreProjectRequest $request)
@@ -83,6 +86,13 @@ class ProjectController extends Controller
                     'quantity' => $item['quantity'],
                     'unit' => $item['unit'],
                     'estimated_unit_price' => $item['estimatedUnitPrice'],
+                    'condition' => $item['condition'],
+                    'warranty_value' => $item['warrantyValue'] ?? null,
+                    'warranty_unit' => $item['warrantyUnit'] ?? null,
+                    'brand' => $item['brand'] ?? null,
+                    'model' => $item['model'] ?? null,
+                    'specifications' => $item['specifications'] ?? null,
+                    'observations' => $item['observations'] ?? null,
                 ]);
             }
 
@@ -91,7 +101,7 @@ class ProjectController extends Controller
             return $project;
         });
 
-        return (new ProjectResource($project->load(['materials', 'proposals', 'payments'])))->response()->setStatusCode(201);
+        return (new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])))->response()->setStatusCode(201);
     }
 
     public function review(ReviewProjectRequest $request, Project $project)
@@ -107,7 +117,74 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'CIERRE_DE_OBRA', 'Revision tecnica de calculos y planos', $data['notes']);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+    }
+
+    /**
+     * Rechaza la petición inicial (antes de llegar a revisión de planos/cálculos,
+     * que es un flujo separado — ver RevisedDocumentsSection). No confundir con
+     * rejectProposals(), que rechaza el cuadro comparativo de Procura.
+     */
+    public function rejectProject(RejectProjectRequest $request, Project $project)
+    {
+        $project = RejectionService::reject(
+            $project,
+            self::STATUSES['CREADO'],
+            self::STATUSES['RECHAZADO_CIERRE'],
+            'CIERRE_DE_OBRA',
+            'Rechazo de petición de obra',
+            $request->validated(),
+            function (Project $project, array $payload) {}
+        );
+
+        return new ProjectResource($project);
+    }
+
+    /**
+     * Infraestructura edita y reenvía una petición rechazada — mismo Project.id,
+     * no crea uno nuevo. Reemplaza materiales (borrar+recrear, igual que store())
+     * y vuelve el status a CREADO para que Cierre de Obra la reevalúe.
+     */
+    public function resubmitProject(ResubmitProjectRequest $request, Project $project)
+    {
+        abort_unless($project->status === self::STATUSES['RECHAZADO_CIERRE'], 422, 'Solo se puede reenviar una petición rechazada.');
+
+        $data = $request->validated();
+
+        $project = DB::transaction(function () use ($data, $project) {
+            $project->update([
+                'title' => $data['title'],
+                'description' => $data['description'],
+                'location' => $data['location'],
+                'status' => self::STATUSES['CREADO'],
+                'estimated_total' => $data['estimatedTotal'] ?? $this->materialsTotal($data['materials']),
+            ]);
+
+            $project->materials()->delete();
+            foreach ($data['materials'] as $index => $item) {
+                $project->materials()->create([
+                    'id' => $item['id'] ?? $project->id . '-MAT-' . ($index + 1),
+                    'material_catalog_id' => $item['materialCatalogId'] ?? null,
+                    'name' => $item['name'],
+                    'quantity' => $item['quantity'],
+                    'unit' => $item['unit'],
+                    'estimated_unit_price' => $item['estimatedUnitPrice'],
+                    'condition' => $item['condition'],
+                    'warranty_value' => $item['warrantyValue'] ?? null,
+                    'warranty_unit' => $item['warrantyUnit'] ?? null,
+                    'brand' => $item['brand'] ?? null,
+                    'model' => $item['model'] ?? null,
+                    'specifications' => $item['specifications'] ?? null,
+                    'observations' => $item['observations'] ?? null,
+                ]);
+            }
+
+            AuditLog::record($project, 'INFRAESTRUCTURA', 'Reenvío de petición corregida', 'Petición editada y reenviada a Cierre de Obra tras rechazo.');
+
+            return $project;
+        });
+
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function approveInvestment(ApproveInvestmentRequest $request, Project $project)
@@ -122,7 +199,7 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de presupuesto y envio a licitacion', $data['notes']);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function addProposal(AddProjectProposalRequest $request, Project $project)
@@ -145,7 +222,7 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'ANALISTA', 'Carga de propuesta', "Oferta {$proposal->id} cargada por {$contractor->name}.");
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function submitComparative(Project $project)
@@ -155,7 +232,7 @@ class ProjectController extends Controller
         $project->update(['status' => self::STATUSES['COMPARATIVA_ENVIADA']]);
         AuditLog::record($project, 'ANALISTA', 'Carga de cuadro comparativo', 'Comparativa enviada a Procura para adjudicacion.');
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function importSupplierProposals(Project $project, SupplierProposalImportService $importService)
@@ -171,7 +248,7 @@ class ProjectController extends Controller
                 'imported' => 0,
                 'skipped' => 0,
                 'errors' => [],
-                'project' => new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents'])),
+                'project' => new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])),
             ]);
         }
 
@@ -183,7 +260,7 @@ class ProjectController extends Controller
             'imported' => $imported,
             'skipped' => $skipped,
             'errors' => $errors,
-            'project' => new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents'])),
+            'project' => new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])),
         ]);
     }
 
@@ -195,7 +272,7 @@ class ProjectController extends Controller
         $proposal->delete();
         AuditLog::record($project, 'ANALISTA', 'Eliminacion de propuesta', "Propuesta {$proposal->id} retirada del cuadro comparativo.");
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function rejectProposals(RejectProposalsRequest $request, Project $project)
@@ -233,7 +310,7 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$data['contractorCode']} adjudicado.");
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function pay(PayProjectRequest $request, Project $project)
@@ -262,7 +339,7 @@ class ProjectController extends Controller
         $project->update(['status' => $data['paymentType'] === 'ADVANCE' ? self::STATUSES['EN_EJECUCION'] : self::STATUSES['COMPLETADO_PAGADO']]);
         AuditLog::record($project, 'FINANZAS', $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos', $data['notes'] ?? null);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function reportFinished(Project $project)
@@ -272,7 +349,7 @@ class ProjectController extends Controller
         $project->update(['status' => self::STATUSES['VERIFICANDO_FINALIZACION']]);
         AuditLog::record($project, 'SISTEMA', 'Reporte de obra finalizada', 'La obra fue marcada como finalizada y pendiente de certificacion.');
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     public function verifyCompletion(VerifyCompletionRequest $request, Project $project)
@@ -289,7 +366,7 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'CIERRE_DE_OBRA', 'Verificacion de finalizacion y calidad de obra', $data['details'] ?? null);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents']));
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
 
     private function materialsTotal(array $materials): float

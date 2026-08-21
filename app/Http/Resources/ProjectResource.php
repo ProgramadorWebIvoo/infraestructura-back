@@ -32,6 +32,13 @@ class ProjectResource extends JsonResource
                 'quantity' => $item->quantity,
                 'unit' => $item->unit,
                 'estimatedUnitPrice' => $item->estimated_unit_price,
+                'condition' => $item->condition,
+                'warrantyValue' => $item->warranty_value,
+                'warrantyUnit' => $item->warranty_unit,
+                'brand' => $item->brand,
+                'model' => $item->model,
+                'specifications' => $item->specifications,
+                'observations' => $item->observations,
             ])->values(),
             'estimatedTotal' => $this->estimated_total,
             'cierreObraNotes' => $this->cierre_obra_notes,
@@ -60,15 +67,7 @@ class ProjectResource extends JsonResource
             'qualityVerified' => $this->quality_verified,
             'completionVerifiedDate' => optional($this->completion_verified_date)->format('Y-m-d'),
             'documents' => $this->whenLoaded('documents', fn () =>
-                $this->documents->map(fn ($d) => [
-                    'id'           => $d->id,
-                    'documentType' => $d->document_type,
-                    'originalName' => $d->original_name,
-                    'mimeType'     => $d->mime_type,
-                    'sizeBytes'    => $d->size_bytes,
-                    'uploadedBy'   => $d->uploaded_by,
-                    'uploadedAt'   => $d->created_at?->toIso8601String(),
-                ])->values()
+                ProjectDocumentResource::collection($this->documents)
             ),
         ];
     }

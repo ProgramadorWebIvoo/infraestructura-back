@@ -52,12 +52,14 @@ class ProjectLifecycleTest extends TestCase
                     'quantity'           => 100,
                     'unit'               => 'kg',
                     'estimatedUnitPrice' => 12.50,
+                    'condition'          => 'NUEVO',
                 ],
                 [
                     'name'               => 'Acero',
                     'quantity'           => 50,
                     'unit'               => 'm',
                     'estimatedUnitPrice' => 25.00,
+                    'condition'          => 'NUEVO',
                 ],
             ],
         ]);
@@ -82,6 +84,56 @@ class ProjectLifecycleTest extends TestCase
             'action'     => 'Creacion de peticion de obra',
             'role'       => 'INFRAESTRUCTURA',
         ]);
+
+        // documents también viene cargado en la respuesta de store() (antes faltaba)
+        $this->assertArrayHasKey('documents', $response->json('data'));
+    }
+
+    public function test_create_project_with_material_characteristics(): void
+    {
+        $this->actingAs($this->infra);
+
+        $response = $this->postJson('/api/projects', [
+            'title'       => 'Proyecto con características',
+            'type'        => 'INFRAESTRUCTURA',
+            'description' => 'Descripción del proyecto de prueba',
+            'location'    => 'Ciudad de Prueba',
+            'materials'   => [
+                [
+                    'name'               => 'Motor usado',
+                    'quantity'           => 1,
+                    'unit'               => 'unidad',
+                    'estimatedUnitPrice' => 500,
+                    'condition'          => 'USADO',
+                    'warrantyValue'      => 6,
+                    'warrantyUnit'       => 'MESES',
+                    'brand'              => 'Bosch',
+                    'model'              => 'X200',
+                    'specifications'     => '2HP, 220V',
+                    'observations'       => 'Revisar antes de instalar',
+                ],
+                [
+                    'name'               => 'Sin características',
+                    'quantity'           => 2,
+                    'unit'               => 'unidad',
+                    'estimatedUnitPrice' => 10,
+                    'condition'          => 'AMBAS',
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('data.materials.0.condition', 'USADO');
+        $response->assertJsonPath('data.materials.0.warrantyValue', 6);
+        $response->assertJsonPath('data.materials.0.warrantyUnit', 'MESES');
+        $response->assertJsonPath('data.materials.0.brand', 'Bosch');
+        $response->assertJsonPath('data.materials.0.model', 'X200');
+        $response->assertJsonPath('data.materials.0.specifications', '2HP, 220V');
+        $response->assertJsonPath('data.materials.0.observations', 'Revisar antes de instalar');
+
+        $response->assertJsonPath('data.materials.1.condition', 'AMBAS');
+        $response->assertJsonPath('data.materials.1.warrantyValue', null);
+        $response->assertJsonPath('data.materials.1.warrantyUnit', null);
     }
 
     public function test_review_project_cierre(): void
@@ -107,6 +159,92 @@ class ProjectLifecycleTest extends TestCase
             'role'       => 'CIERRE_DE_OBRA',
             'action'     => 'Revision tecnica de calculos y planos',
         ]);
+    }
+
+    public function test_reject_project_from_creado(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/reject-project", [
+                'reason' => 'La descripción no detalla el alcance del trabajo.',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.status', 'RECHAZADO_CIERRE');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'project_id' => $project->id,
+            'role'       => 'CIERRE_DE_OBRA',
+            'action'     => 'Rechazo de petición de obra',
+        ]);
+        $log = \App\Models\AuditLog::where('project_id', $project->id)
+            ->where('action', 'Rechazo de petición de obra')->first();
+        $this->assertStringContainsString('La descripción no detalla el alcance del trabajo.', $log->details);
+    }
+
+    public function test_reject_project_fails_from_non_creado_status(): void
+    {
+        $project = Project::factory()->reviewed()->create();
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/reject-project", [
+                'reason' => 'Motivo cualquiera',
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_resubmit_project_after_rejection(): void
+    {
+        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+        $project->materials()->create([
+            'id' => $project->id . '-MAT-1',
+            'name' => 'Cemento viejo',
+            'quantity' => 1,
+            'unit' => 'Saco',
+            'estimated_unit_price' => 10,
+            'condition' => 'NUEVO',
+        ]);
+
+        $response = $this->actingAs($this->infra)
+            ->postJson("/api/projects/{$project->id}/resubmit", [
+                'title'       => 'Título corregido',
+                'description' => 'Descripción corregida y detallada',
+                'location'    => 'Ubicación corregida',
+                'materials'   => [
+                    ['name' => 'Cemento nuevo', 'quantity' => 5, 'unit' => 'Saco', 'estimatedUnitPrice' => 12, 'condition' => 'NUEVO'],
+                ],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.status', 'CREADO');
+        $response->assertJsonPath('data.title', 'Título corregido');
+        $this->assertCount(1, $response->json('data.materials'));
+        $response->assertJsonPath('data.materials.0.name', 'Cemento nuevo');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'project_id' => $project->id,
+            'role'       => 'INFRAESTRUCTURA',
+            'action'     => 'Reenvío de petición corregida',
+        ]);
+    }
+
+    public function test_resubmit_project_fails_from_non_rechazado_status(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        $response = $this->actingAs($this->infra)
+            ->postJson("/api/projects/{$project->id}/resubmit", [
+                'title'       => 'Título',
+                'description' => 'Descripción',
+                'location'    => 'Ubicación',
+                'materials'   => [
+                    ['name' => 'Cemento', 'quantity' => 1, 'unit' => 'Saco', 'estimatedUnitPrice' => 10, 'condition' => 'NUEVO'],
+                ],
+            ]);
+
+        $response->assertStatus(422);
     }
 
     public function test_approve_investment(): void
@@ -230,8 +368,8 @@ class ProjectLifecycleTest extends TestCase
                 'description' => 'Prueba del ciclo de vida completo',
                 'location'    => 'Sede Central',
                 'materials'   => [
-                    ['name' => 'Pintura', 'quantity' => 200, 'unit' => 'litro', 'estimatedUnitPrice' => 15.00],
-                    ['name' => 'Brochas', 'quantity' => 30, 'unit' => 'unidad', 'estimatedUnitPrice' => 5.00],
+                    ['name' => 'Pintura', 'quantity' => 200, 'unit' => 'litro', 'estimatedUnitPrice' => 15.00, 'condition' => 'NUEVO'],
+                    ['name' => 'Brochas', 'quantity' => 30, 'unit' => 'unidad', 'estimatedUnitPrice' => 5.00, 'condition' => 'NUEVO'],
                 ],
             ]);
         $createResponse->assertStatus(201);

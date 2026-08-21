@@ -146,8 +146,9 @@ class RejectionServiceTest extends TestCase
 
         $log = AuditLog::where('project_id', $project->id)->first();
         $this->assertStringContainsString('Motivo principal', $log->details);
-        $this->assertStringContainsString('Observations: Observación adicional', $log->details);
+        $this->assertStringNotContainsString('Observations:', $log->details);
         $this->assertStringContainsString('Responsible: Juan Pérez', $log->details);
+        $this->assertSame('Observación adicional', $log->observations);
     }
 
     public function test_transitions_status_and_returns_fresh_project(): void

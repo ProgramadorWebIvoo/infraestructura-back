@@ -23,6 +23,7 @@ class AuditLogController extends Controller
                 'action' => $log->action,
                 'timestamp' => optional($log->logged_at)->format('Y-m-d H:i'),
                 'details' => $log->details,
+                'observations' => $log->observations,
             ]);
     }
 }

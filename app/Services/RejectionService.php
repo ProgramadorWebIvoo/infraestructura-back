@@ -47,7 +47,7 @@ class RejectionService
             $applyRejection($project, $payload);
             $project->status = $toStatus;
             $project->save();
-            AuditLog::record($project, $role, $action, self::buildDetails($payload));
+            AuditLog::record($project, $role, $action, self::buildDetails($payload), $payload['observations'] ?? null);
         });
 
         return $project->fresh(['materials', 'proposals', 'payments', 'documents']);
@@ -57,13 +57,15 @@ class RejectionService
      * Compone `details` para AuditLog: si solo llega 'reason' (caso de hoy),
      * el resultado es idéntico al string plano actual. Los campos opcionales
      * se agregan como líneas legibles adicionales, sin tocar el esquema de
-     * AuditLog.
+     * AuditLog. 'observations' queda fuera a propósito: viaja en su propia
+     * columna (`AuditLog::record()`) para que el frontend no tenga que
+     * parsear texto libre para separarlo del motivo.
      */
     private static function buildDetails(array $payload): string
     {
         $reason = $payload['reason'] ?? '';
         $extra = [];
-        foreach (['observations', 'correctionsRequired', 'responsible', 'dueDate', 'evidence'] as $key) {
+        foreach (['correctionsRequired', 'responsible', 'dueDate', 'evidence'] as $key) {
             if (!empty($payload[$key])) {
                 $extra[] = ucfirst($key) . ': ' . $payload[$key];
             }

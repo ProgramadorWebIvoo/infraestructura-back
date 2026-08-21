@@ -183,6 +183,47 @@ class ProjectLifecycleTest extends TestCase
         $this->assertStringContainsString('La descripción no detalla el alcance del trabajo.', $log->details);
     }
 
+    public function test_reject_project_persists_observations_separately_from_reason(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/reject-project", [
+                'reason' => 'La descripción no detalla el alcance del trabajo.',
+                'observations' => 'Revisar también la cubicación de concreto.',
+            ]);
+
+        $response->assertStatus(200);
+
+        $log = \App\Models\AuditLog::where('project_id', $project->id)
+            ->where('action', 'Rechazo de petición de obra')->first();
+        $this->assertStringContainsString('La descripción no detalla el alcance del trabajo.', $log->details);
+        $this->assertStringNotContainsString('Revisar también la cubicación de concreto.', $log->details);
+        $this->assertSame('Revisar también la cubicación de concreto.', $log->observations);
+    }
+
+    public function test_upload_correccion_document_after_rejection(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+        $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/reject-project", ['reason' => 'Motivo cualquiera'])
+            ->assertStatus(200);
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('correccion.pdf', 100, 'application/pdf');
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/documents", [
+                'document_type' => 'CORRECCION',
+                'files' => [$file],
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('project_documents', [
+            'project_id' => $project->id,
+            'document_type' => 'CORRECCION',
+        ]);
+    }
+
     public function test_reject_project_fails_from_non_creado_status(): void
     {
         $project = Project::factory()->reviewed()->create();

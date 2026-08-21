@@ -33,6 +33,27 @@ class StoreProjectDocumentRequest extends FormRequest
     private const ALLOWED_FOTO_MIMES = ['image/png', 'image/jpeg', 'image/webp'];
     private const ALLOWED_FOTO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
 
+    /**
+     * CORRECCION: adjuntos que Cierre de Obra sube al rechazar una petición
+     * (planos u hojas de cálculo corregidas) — acepta la unión de tipos de
+     * PLANO y CALC, ya que puede ser cualquiera de los dos.
+     */
+    private const ALLOWED_CORRECCION_MIMES = [
+        'application/pdf',
+        'image/png',
+        'image/jpeg',
+        'image/svg+xml',
+        'image/tiff',
+        'application/acad',
+        'application/octet-stream',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'text/csv',
+        'text/plain',
+        'application/vnd.oasis.opendocument.spreadsheet',
+    ];
+    private const ALLOWED_CORRECCION_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'svg', 'tiff', 'tif', 'dwg', 'dxf', 'xlsx', 'xls', 'csv', 'ods'];
+
     /** Memoizados por instancia — rules()/messages() los leen dos veces cada
      *  uno; sin esto son 4 lecturas de SettingsService::get() por request. */
     private ?int $maxFileMb = null;
@@ -51,7 +72,7 @@ class StoreProjectDocumentRequest extends FormRequest
         $isNewVersion = $this->filled('new_version_of');
 
         return [
-            'document_type'  => ['required', Rule::in(['CALC', 'PLANO', 'FOTO'])],
+            'document_type'  => ['required', Rule::in(['CALC', 'PLANO', 'FOTO', 'CORRECCION'])],
             'new_version_of' => ['nullable', 'integer', 'exists:project_documents,id'],
             'files'          => ['required', 'array', $isNewVersion ? 'size:1' : 'min:1', 'max:' . $this->maxFileCount()],
             'files.*'        => [
@@ -100,12 +121,14 @@ class StoreProjectDocumentRequest extends FormRequest
                 'CALC' => self::ALLOWED_CALC_MIMES,
                 'PLANO' => self::ALLOWED_PLANO_MIMES,
                 'FOTO' => self::ALLOWED_FOTO_MIMES,
+                'CORRECCION' => self::ALLOWED_CORRECCION_MIMES,
                 default => [],
             };
             $allowedExts = match ($type) {
                 'CALC' => self::ALLOWED_CALC_EXTENSIONS,
                 'PLANO' => self::ALLOWED_PLANO_EXTENSIONS,
                 'FOTO' => self::ALLOWED_FOTO_EXTENSIONS,
+                'CORRECCION' => self::ALLOWED_CORRECCION_EXTENSIONS,
                 default => [],
             };
 

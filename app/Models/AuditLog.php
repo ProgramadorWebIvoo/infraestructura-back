@@ -26,6 +26,7 @@ class AuditLog extends Model
         'action',
         'logged_at',
         'details',
+        'observations',
     ];
 
     public function user()
@@ -47,7 +48,7 @@ class AuditLog extends Model
      * real, si aplica, lo decide el propio emisor vía
      * NotificationDispatcher::isMailActionAllowed()).
      */
-    public static function record(?Project $project, string $role, string $action, ?string $details = null): self
+    public static function record(?Project $project, string $role, string $action, ?string $details = null, ?string $observations = null): self
     {
         $user = auth()->user();
 
@@ -61,6 +62,7 @@ class AuditLog extends Model
             'action' => $action,
             'logged_at' => now(),
             'details' => $details,
+            'observations' => $observations,
         ]);
 
         NotificationDispatcher::notify($project, $role, $action, $details);

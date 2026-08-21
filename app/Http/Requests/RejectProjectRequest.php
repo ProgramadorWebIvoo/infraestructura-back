@@ -15,6 +15,7 @@ class RejectProjectRequest extends FormRequest
     {
         return [
             'reason' => ['required', 'string', 'max:500'],
+            'observations' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

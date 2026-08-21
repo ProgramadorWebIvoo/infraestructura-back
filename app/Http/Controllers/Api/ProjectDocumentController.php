@@ -108,6 +108,7 @@ class ProjectDocumentController extends Controller
                 'CALC' => 'hojas de calculo/cubicaciones',
                 'PLANO' => 'planos de ingenieria',
                 'FOTO' => 'fotografias del sitio de obra',
+                'CORRECCION' => 'correcciones de peticion rechazada',
                 default => 'documentos',
             };
 

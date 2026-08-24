@@ -20,6 +20,7 @@ use App\Models\Project;
 use App\Models\ProjectMaterial;
 use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
+use App\Services\DossierEvaluationService;
 use App\Services\RejectionService;
 use App\Services\SupplierProposalImportService;
 use Illuminate\Http\Request;
@@ -126,6 +127,30 @@ class ProjectController extends Controller
     }
 
     /**
+     * Evaluación IA del expediente — herramienta de Cierre de Obra para
+     * apoyar su revisión. Se llama desde el frontend tanto en la primera
+     * apertura automática del wizard de revisión como en un reintento
+     * manual explícito ("Reevaluar") — es la misma ruta en ambos casos.
+     */
+    public function evaluateDossier(Project $project, DossierEvaluationService $service)
+    {
+        abort_unless(
+            in_array($project->status, [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_CIERRE']], true),
+            422,
+            'Solo se puede evaluar el expediente mientras está pendiente de revisión por Cierre de Obra.'
+        );
+
+        if (!$service->evaluate($project)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'La evaluación no está disponible. Verifique que haya al menos un proveedor de IA configurado en /config-ia.',
+            ], 503);
+        }
+
+        return new ProjectResource($project->fresh()->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+    }
+
+    /**
      * Rechaza la petición inicial (antes de llegar a revisión de planos/cálculos,
      * que es un flujo separado — ver RevisedDocumentsSection). No confundir con
      * rejectProposals(), que rechaza el cuadro comparativo de Procura.
@@ -163,6 +188,19 @@ class ProjectController extends Controller
                 'location' => $data['location'],
                 'status' => self::STATUSES['CREADO'],
                 'estimated_total' => $data['estimatedTotal'] ?? $this->materialsTotal($data['materials']),
+                // El análisis de IA previo describe un expediente que ya no
+                // existe en esta forma (materiales reemplazados abajo) — se
+                // invalida en vez de dejarlo visible como si fuera vigente.
+                // DossierEvaluationPanel detecta la ausencia y se re-evalúa
+                // solo al abrir el wizard de revisión.
+                'dossier_ai_score' => null,
+                'dossier_ai_summary' => null,
+                'dossier_ai_alerts' => null,
+                'dossier_ai_recommendation' => null,
+                'dossier_ai_suggested_amount' => null,
+                'dossier_ai_completeness_factors' => null,
+                'dossier_ai_provider' => null,
+                'dossier_ai_evaluated_at' => null,
             ]);
 
             $project->materials()->delete();

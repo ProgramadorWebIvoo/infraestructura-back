@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [2026-08-24] — Docs: LEGACY.md con el trabajo no cubierto por bitácoras
+- Tipo: docs
+- Qué: nuevo `docs/LEGACY.md` redactado desde el historial git (74 commits). Cubre todo lo anterior al 17-08-2026 y los commits de backend no registrados en las bitácoras de Notion, con énfasis en los paneles de configuración: Proveedores CRUD (`37b414c`), Materiales CRUD (`734618f`), Config IA (`74912c7`), CONFIG APP Fase 1.4 (`3f49a7b`/`c37bbb1`), Monedas (`f374318`), fixes transversales del panel (`70823e6`, `d9c276a`) y el sistema de notificaciones configurable en 4 fases (`6f64147`, `ddde7e7`, `726eedf`, `d21f822`).
+- Por qué / causa raíz: complemento de `docs/MEJORAS-BITACORAS-08-2026.md` — documentar la historia previa que las bitácoras no cubren.
+- Archivos: `docs/LEGACY.md` [NUEVO].
+
+## [2026-08-24] — Docs: consolidado de mejoras de bitácoras Notion (agosto 2026)
+- Tipo: docs
+- Qué: nuevo `docs/MEJORAS-BITACORAS-08-2026.md` que consolida las 4 bitácoras de seguimiento de Notion (17, 20, 21 y 24-08-2026): normalización del design system, cierre de Fase 1 (rol MARKETING + RejectionService), versionado de documentos, flujo de rechazo/reenvío de solicitudes, rediseño INFRA/CIERRE y fixes de previsualizador/adjuntos.
+- Por qué / causa raíz: solicitud del usuario de un documento único con todas las mejoras realizadas según las bitácoras externas al repo.
+- Archivos: `docs/MEJORAS-BITACORAS-08-2026.md` [NUEVO].
+
 ## [2026-08-14] — Fix: cambios en vistas de configuración no aparecían en vivo en auditlogs
 - Tipo: fix (bug de dos capas: backend + frontend)
 - Qué: `AiConfigController`, `ContractorController`, `MaterialController` y `UserController` no devolvían el `ConfigAuditLog` recién creado en la respuesta de sus endpoints mutadores (store/update/destroy/toggleStatus) — a diferencia de `CurrencyController`/`AppSettingController`, que ya lo hacían desde una sesión previa. Cada uno ahora agrega `auditLog` (payload vía `ConfigAuditLog::toApiPayload()`) como hermano de los campos del resource ya existente. Caso especial: `UserController::update()` puede generar 2 entradas en una sola request (modificación de datos + cambio de rol), así que expone `auditLogs` (array) en vez de `auditLog` singular.

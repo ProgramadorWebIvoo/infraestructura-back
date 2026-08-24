@@ -13,8 +13,12 @@ class AIEvaluationService
     /** Timeout por llamada a proveedor IA (segundos). Config global, no por BD. */
     private const DEFAULT_TIMEOUT = 60;
 
-    /** Mapa de proveedores disponibles */
-    private array $providers = [];
+    /** Config resuelta por provider (sin instanciar) — la instanciación se
+     * defiere hasta conocer la EvaluationStrategyInterface a usar, ya que un
+     * mismo AIEvaluationService ahora sirve más de un tipo de evaluación
+     * (propuestas, expediente) y cada una necesita su propio prompt/esquema
+     * inyectado en los providers. */
+    private array $providerConfigs = [];
 
     /** Bitácora de intentos (para devolver al frontend) */
     private array $attemptLog = [];
@@ -24,26 +28,25 @@ class AIEvaluationService
     public function __construct(AiConfigurationService $configService)
     {
         $this->configService = $configService;
-        $this->registerProviders();
+        $this->providerConfigs = $this->resolveProviderConfigs();
     }
 
     /**
-     * Registra los providers habilitados según configuración en BD.
-     * Si no hay configuración en BD, no registra ningún provider (fail-fast).
+     * Resuelve la configuración de los providers habilitados según BD, sin
+     * instanciarlos. Si no hay configuración en BD, devuelve vacío (fail-fast
+     * en evaluate()/evaluateWithProvider()).
      */
-    private function registerProviders(): void
+    private function resolveProviderConfigs(): array
     {
-        // Solo configuración desde BD
         $dbProviders = $this->configService->getActiveProviders();
 
         if (empty($dbProviders)) {
-            // Sin configs en BD → no hay providers disponibles
-            return;
+            return [];
         }
 
         $order = $this->configService->getProviderOrder();
-
         $timeout = self::DEFAULT_TIMEOUT;
+        $configs = [];
 
         foreach ($order as $key) {
             $key = trim($key);
@@ -65,9 +68,20 @@ class AIEvaluationService
             $config['api_key'] = $apiKey;
             $config['timeout'] = $timeout;
 
-            // Se pasa la config directamente al constructor — no se muta config global
-            $this->providers[$key] = AIProviderFactory::make($key, $config);
+            $configs[$key] = $config;
         }
+
+        return $configs;
+    }
+
+    /** Instancia los providers con la estrategia (prompt/esquema) del tipo de evaluación pedido. */
+    private function buildProviders(EvaluationStrategyInterface $strategy): array
+    {
+        $providers = [];
+        foreach ($this->providerConfigs as $key => $config) {
+            $providers[$key] = AIProviderFactory::make($key, $config, $strategy);
+        }
+        return $providers;
     }
 
     /**
@@ -78,13 +92,16 @@ class AIEvaluationService
      * @return array Resultado con winner, score, análisis, etc.
      * @throws RuntimeException Si todos los proveedores fallan
      */
-public function evaluate(array $payload): array
+public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy = null): array
     {
+        $strategy = $strategy ?? new ProposalEvaluationStrategy();
+        $providers = $this->buildProviders($strategy);
+
         $this->attemptLog = [];
         $lastException = null;
         $startTime = microtime(true);
 
-         foreach ($this->providers as $key => $provider) {
+         foreach ($providers as $key => $provider) {
             try {
                 $this->logAttempt("Intentando con {$provider->name()}...");
 
@@ -94,7 +111,7 @@ public function evaluate(array $payload): array
                 $result['attemptLog'] = $this->attemptLog;
 
                 // Log usage to database
-                $this->logUsage($payload, $key, $result, $startTime, true, null);
+                $this->logUsage($payload, $key, $result, $startTime, true, null, $strategy->endpointKey());
 
                 return $result;
 
@@ -120,7 +137,7 @@ public function evaluate(array $payload): array
             : "No hay proveedores AI configurados en la base de datos. Configure al menos un proveedor en /config-ia";
 
         // Log failed attempt
-        $this->logUsage($payload, null, [], $startTime, false, $errorMsg);
+        $this->logUsage($payload, null, [], $startTime, false, $errorMsg, $strategy->endpointKey());
 
         throw new RuntimeException($errorMsg);
     }
@@ -129,12 +146,14 @@ public function evaluate(array $payload): array
 /**
      * Metodo que permite aceptar proveedores de IA de manera Forzada/
      */
-    public function evaluateWithProvider(array $payload, ?string $forcedprovider = null): array
+    public function evaluateWithProvider(array $payload, ?string $forcedprovider = null, ?EvaluationStrategyInterface $strategy = null): array
     {
+        $strategy = $strategy ?? new ProposalEvaluationStrategy();
         $startTime = microtime(true);
 
         if ($forcedprovider) {
-            $provider = $this->providers[$forcedprovider] ?? null;
+            $providers = $this->buildProviders($strategy);
+            $provider = $providers[$forcedprovider] ?? null;
             if (!$provider) {
                 throw new RuntimeException("Proveedor '$forcedprovider' no configurado");
             }
@@ -148,7 +167,7 @@ public function evaluate(array $payload): array
                 $result['attemptLog'] = $this->attemptLog;
 
                 // Log usage to database
-                $this->logUsage($payload, $forcedprovider, $result, $startTime, true, null);
+                $this->logUsage($payload, $forcedprovider, $result, $startTime, true, null, $strategy->endpointKey());
 
                 return $result;
             } catch (\Throwable $e) {
@@ -160,7 +179,7 @@ public function evaluate(array $payload): array
                 ]);
 
                 // Log failed usage
-                $this->logUsage($payload, $forcedprovider, [], $startTime, false, $e->getMessage());
+                $this->logUsage($payload, $forcedprovider, [], $startTime, false, $e->getMessage(), $strategy->endpointKey());
 
                 throw new RuntimeException(
                     "El proveedor forzado {$provider->name()} falló: {$e->getMessage()}",
@@ -171,7 +190,13 @@ public function evaluate(array $payload): array
         }
 
         //FAILOVER (Vuelve a usar metodo regular principal)
-        return $this->evaluate($payload);
+        return $this->evaluate($payload, $strategy);
+    }
+
+    /** Evalúa el expediente completo (Cierre de Obra) con la estrategia de dossier. */
+    public function evaluateDossier(array $payload, ?string $forcedProvider = null): array
+    {
+        return $this->evaluateWithProvider($payload, $forcedProvider, new DossierEvaluationStrategy());
     }
 
     /**
@@ -190,19 +215,20 @@ private function logAttempt(string $message): void
     /**
      * Registra el uso de IA en la base de datos.
      */
-    private function logUsage(array $payload, string $provider, array $result, float $startTime, bool $success, ?string $errorMessage = null): void
+    private function logUsage(array $payload, ?string $provider, array $result, float $startTime, bool $success, ?string $errorMessage = null, string $endpoint = 'evaluate-proposals'): void
     {
         try {
             $usage = $result['usage'] ?? [];
             $responseTimeMs = (int) ((microtime(true) - $startTime) * 1000);
 
             // Estimar costo basado en tokens (aproximado)
-            $costEstimate = $this->estimateCost($provider, $usage);
+            $costEstimate = $this->estimateCost($provider ?? '', $usage);
 
             AiUsageLog::create([
+                'project_id'         => $payload['project']['projectId'] ?? null,
                 'provider'           => $provider,
                 'model'              => $result['providerUsed'] ?? 'unknown',
-                'endpoint'           => 'evaluate-proposals',
+                'endpoint'           => $endpoint,
                 'prompt_tokens'      => $usage['prompt_tokens'] ?? null,
                 'completion_tokens'  => $usage['completion_tokens'] ?? null,
                 'total_tokens'       => $usage['total_tokens'] ?? null,

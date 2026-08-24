@@ -2,6 +2,8 @@
 
 namespace App\Services\AI\Providers;
 
+use App\Services\AI\EvaluationStrategyInterface;
+
 /**
  * Punto único de resolución provider-key → clase concreta. Antes
  * AIEvaluationService::registerProviders() mezclaba esta resolución con
@@ -21,7 +23,7 @@ class AIProviderFactory
         return isset(self::MAP[$key]);
     }
 
-    public static function make(string $key, array $config): AIProviderInterface
+    public static function make(string $key, array $config, ?EvaluationStrategyInterface $strategy = null): AIProviderInterface
     {
         if (!self::supports($key)) {
             throw new \InvalidArgumentException("Proveedor AI desconocido: {$key}");
@@ -29,6 +31,6 @@ class AIProviderFactory
 
         $class = self::MAP[$key];
 
-        return new $class($config);
+        return new $class($config, $strategy);
     }
 }

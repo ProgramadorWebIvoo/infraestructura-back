@@ -335,6 +335,41 @@ class ProjectLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_resubmit_project_clears_stale_dossier_ai_evaluation(): void
+    {
+        $project = Project::factory()->create([
+            'status' => 'RECHAZADO_CIERRE',
+            'dossier_ai_score' => 90,
+            'dossier_ai_summary' => 'Análisis del expediente antes de la corrección.',
+            'dossier_ai_alerts' => ['Alguna alerta vieja.'],
+            'dossier_ai_recommendation' => 'Proceder.',
+            'dossier_ai_suggested_amount' => 5000,
+            'dossier_ai_completeness_factors' => ['documentation' => 80, 'budgetConsistency' => 90, 'rejectionRisk' => 100],
+            'dossier_ai_provider' => 'openai',
+            'dossier_ai_evaluated_at' => now()->subDay(),
+        ]);
+
+        $response = $this->actingAs($this->infra)
+            ->postJson("/api/projects/{$project->id}/resubmit", [
+                'title'       => 'Título corregido',
+                'description' => 'Descripción corregida y detallada',
+                'location'    => 'Ubicación corregida',
+                'materials'   => [
+                    ['name' => 'Cemento nuevo', 'quantity' => 5, 'unit' => 'Saco', 'estimatedUnitPrice' => 12, 'condition' => 'NUEVO'],
+                ],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.dossierAiScore', null);
+        $response->assertJsonPath('data.dossierAiEvaluatedAt', null);
+
+        $project->refresh();
+        $this->assertNull($project->dossier_ai_score);
+        $this->assertNull($project->dossier_ai_summary);
+        $this->assertNull($project->dossier_ai_alerts);
+        $this->assertNull($project->dossier_ai_evaluated_at);
+    }
+
     public function test_resubmit_project_fails_from_non_rechazado_status(): void
     {
         $project = Project::factory()->create(['status' => 'CREADO']);

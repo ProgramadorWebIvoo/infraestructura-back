@@ -115,6 +115,8 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     // Rutas protegidas por rol (matriz de permisos auditoría)
     Route::post('/projects/{project}/review', [ProjectController::class, 'review'])
         ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/evaluate-dossier', [ProjectController::class, 'evaluateDossier'])
+        ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/reject-project', [ProjectController::class, 'rejectProject'])
         ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/resubmit', [ProjectController::class, 'resubmitProject'])

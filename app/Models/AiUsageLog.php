@@ -11,6 +11,7 @@ class AiUsageLog extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'project_id',
         'provider',
         'model',
         'endpoint',
@@ -40,5 +41,10 @@ class AiUsageLog extends Model
     public function requestedBy()
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class, 'project_id');
     }
 }

@@ -147,7 +147,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     // Project documents (planos, hojas de cálculo, fotos)
     Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
-    Route::delete('/projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy'])->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::delete('/projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
     Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/projects/{project}/documents/{document}/preview', [ProjectDocumentController::class, 'preview'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/projects/{project}/documents/{document}/history', [ProjectDocumentController::class, 'history'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

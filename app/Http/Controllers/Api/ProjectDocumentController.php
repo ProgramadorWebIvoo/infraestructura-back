@@ -125,10 +125,25 @@ class ProjectDocumentController extends Controller
         return response()->json(['data' => $saved], 201);
     }
 
-    /** Elimina el grupo completo (todas las versiones), no una versión suelta. */
+    /**
+     * Elimina el grupo completo (todas las versiones), no una versión suelta.
+     * Infraestructura solo puede borrar mientras el proyecto está
+     * RECHAZADO_CIERRE (editando/reenviando su propia petición tras un
+     * rechazo) — fuera de ese estado, borrar adjuntos queda reservado a
+     * Cierre de Obra (dueño natural de la documentación técnica, ver
+     * RevisedDocumentsSection.tsx). Tampoco puede borrar CORRECCION: son
+     * las correcciones que Cierre de Obra adjuntó al rechazar, quedan como
+     * histórico/evidencia, no un adjunto propio de Infraestructura.
+     */
     public function destroy(Project $project, ProjectDocument $document)
     {
         abort_unless($document->project_id === $project->id, 404);
+
+        $role = auth()->user()->role;
+        if ($role === 'INFRAESTRUCTURA') {
+            abort_unless($project->status === 'RECHAZADO_CIERRE', 403, 'Solo puede eliminar adjuntos mientras corrige una petición rechazada.');
+            abort_if($document->document_type === 'CORRECCION', 403, 'Las correcciones de Cierre de Obra no pueden eliminarse.');
+        }
 
         $versions = ProjectDocument::where('document_group_id', $document->document_group_id)->get();
 
@@ -146,7 +161,7 @@ class ProjectDocumentController extends Controller
         $this->syncProjectCounts($project);
         AuditLog::record(
             $project,
-            'CIERRE_DE_OBRA',
+            $role,
             'Eliminacion de documento adjunto (todas las versiones)',
             "Grupo eliminado: {$label} ({$count} version(es))"
         );

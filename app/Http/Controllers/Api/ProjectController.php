@@ -104,18 +104,23 @@ class ProjectController extends Controller
         return (new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])))->response()->setStatusCode(201);
     }
 
+    /**
+     * Cierre de Obra revisa (audita) la petición — no sube documentación
+     * propia, solo confirma lo ya adjuntado por Infraestructura. Por eso no
+     * recibe blueprintsCount/calculationsAdded del cliente: esos campos ya
+     * los mantiene sincronizados ProjectDocumentController::syncProjectCounts()
+     * desde que Infraestructura cargó sus archivos.
+     */
     public function review(ReviewProjectRequest $request, Project $project)
     {
         $data = $request->validated();
 
         $project->update([
             'status' => self::STATUSES['REVISADO_CIERRE'],
-            'cierre_obra_notes' => $data['notes'],
-            'blueprints_count' => $data['blueprintsCount'],
-            'calculations_added' => $data['calculationsAdded'],
+            'cierre_obra_notes' => $data['notes'] ?? null,
         ]);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Revision tecnica de calculos y planos', $data['notes']);
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Revision tecnica de calculos y planos', $data['notes'] ?? null);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }

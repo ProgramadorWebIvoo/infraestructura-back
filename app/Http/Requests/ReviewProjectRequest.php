@@ -14,9 +14,7 @@ class ReviewProjectRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'notes' => ['required', 'string'],
-            'blueprintsCount' => ['required', 'integer', 'min:0'],
-            'calculationsAdded' => ['required', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

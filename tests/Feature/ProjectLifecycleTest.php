@@ -142,15 +142,11 @@ class ProjectLifecycleTest extends TestCase
 
         $response = $this->actingAs($this->cierre)
             ->postJson("/api/projects/{$project->id}/review", [
-                'notes'             => 'Planos aprobados con correcciones menores',
-                'blueprintsCount'   => 3,
-                'calculationsAdded' => true,
+                'notes' => 'Planos aprobados con correcciones menores',
             ]);
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.status', 'REVISADO_CIERRE');
-        $response->assertJsonPath('data.blueprintsCount', 3);
-        $response->assertJsonPath('data.calculationsAdded', true);
         $response->assertJsonPath('data.cierreObraNotes', 'Planos aprobados con correcciones menores');
 
         // Audit log
@@ -159,6 +155,17 @@ class ProjectLifecycleTest extends TestCase
             'role'       => 'CIERRE_DE_OBRA',
             'action'     => 'Revision tecnica de calculos y planos',
         ]);
+    }
+
+    public function test_review_project_cierre_without_notes(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/review", []);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.status', 'REVISADO_CIERRE');
     }
 
     public function test_reject_project_from_creado(): void
@@ -222,6 +229,63 @@ class ProjectLifecycleTest extends TestCase
             'project_id' => $project->id,
             'document_type' => 'CORRECCION',
         ]);
+    }
+
+    private function makeDocument(Project $project, string $type = 'FOTO'): \App\Models\ProjectDocument
+    {
+        $doc = \App\Models\ProjectDocument::create([
+            'project_id' => $project->id,
+            'document_type' => $type,
+            'original_name' => 'test.jpg',
+            'stored_path' => "project-documents/{$project->id}/{$type}/test.jpg",
+            'mime_type' => 'image/jpeg',
+            'size_bytes' => 100,
+            'version_number' => 1,
+        ]);
+        $doc->update(['document_group_id' => $doc->id]);
+
+        return $doc;
+    }
+
+    public function test_infraestructura_can_delete_document_while_rechazado_cierre(): void
+    {
+        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+        $doc = $this->makeDocument($project);
+
+        $response = $this->actingAs($this->infra)
+            ->deleteJson("/api/projects/{$project->id}/documents/{$doc->id}");
+
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('project_documents', ['id' => $doc->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'project_id' => $project->id,
+            'role' => 'INFRAESTRUCTURA',
+            'action' => 'Eliminacion de documento adjunto (todas las versiones)',
+        ]);
+    }
+
+    public function test_infraestructura_cannot_delete_document_outside_rechazado_cierre(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+        $doc = $this->makeDocument($project);
+
+        $response = $this->actingAs($this->infra)
+            ->deleteJson("/api/projects/{$project->id}/documents/{$doc->id}");
+
+        $response->assertStatus(403);
+        $this->assertDatabaseHas('project_documents', ['id' => $doc->id]);
+    }
+
+    public function test_infraestructura_cannot_delete_correccion_document(): void
+    {
+        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+        $doc = $this->makeDocument($project, 'CORRECCION');
+
+        $response = $this->actingAs($this->infra)
+            ->deleteJson("/api/projects/{$project->id}/documents/{$doc->id}");
+
+        $response->assertStatus(403);
+        $this->assertDatabaseHas('project_documents', ['id' => $doc->id]);
     }
 
     public function test_reject_project_fails_from_non_creado_status(): void
@@ -419,9 +483,7 @@ class ProjectLifecycleTest extends TestCase
         // 2. Review (CIERRE_DE_OBRA)
         $this->actingAs($this->cierre)
             ->postJson("/api/projects/{$projectId}/review", [
-                'notes'             => 'Revisión completa',
-                'blueprintsCount'   => 5,
-                'calculationsAdded' => true,
+                'notes' => 'Revisión completa',
             ])
             ->assertJsonPath('data.status', 'REVISADO_CIERRE');
 

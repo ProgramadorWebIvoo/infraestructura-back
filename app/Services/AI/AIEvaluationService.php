@@ -92,7 +92,7 @@ class AIEvaluationService
      * @return array Resultado con winner, score, análisis, etc.
      * @throws RuntimeException Si todos los proveedores fallan
      */
-public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy = null): array
+    public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy = null): array
     {
         $strategy = $strategy ?? new ProposalEvaluationStrategy();
         $providers = $this->buildProviders($strategy);
@@ -101,7 +101,7 @@ public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy 
         $lastException = null;
         $startTime = microtime(true);
 
-         foreach ($providers as $key => $provider) {
+        foreach ($providers as $key => $provider) {
             try {
                 $this->logAttempt("Intentando con {$provider->name()}...");
 
@@ -144,18 +144,19 @@ public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy 
 
 
 /**
-     * Metodo que permite aceptar proveedores de IA de manera Forzada/
+     * Permite forzar la evaluación con un proveedor de IA específico en vez
+     * de usar el failover automático por orden de prioridad.
      */
-    public function evaluateWithProvider(array $payload, ?string $forcedprovider = null, ?EvaluationStrategyInterface $strategy = null): array
+    public function evaluateWithProvider(array $payload, ?string $forcedProvider = null, ?EvaluationStrategyInterface $strategy = null): array
     {
         $strategy = $strategy ?? new ProposalEvaluationStrategy();
         $startTime = microtime(true);
 
-        if ($forcedprovider) {
+        if ($forcedProvider) {
             $providers = $this->buildProviders($strategy);
-            $provider = $providers[$forcedprovider] ?? null;
+            $provider = $providers[$forcedProvider] ?? null;
             if (!$provider) {
-                throw new RuntimeException("Proveedor '$forcedprovider' no configurado");
+                throw new RuntimeException("Proveedor '$forcedProvider' no configurado");
             }
 
             $this->attemptLog = [];
@@ -167,7 +168,7 @@ public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy 
                 $result['attemptLog'] = $this->attemptLog;
 
                 // Log usage to database
-                $this->logUsage($payload, $forcedprovider, $result, $startTime, true, null, $strategy->endpointKey());
+                $this->logUsage($payload, $forcedProvider, $result, $startTime, true, null, $strategy->endpointKey());
 
                 return $result;
             } catch (\Throwable $e) {
@@ -179,7 +180,7 @@ public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy 
                 ]);
 
                 // Log failed usage
-                $this->logUsage($payload, $forcedprovider, [], $startTime, false, $e->getMessage(), $strategy->endpointKey());
+                $this->logUsage($payload, $forcedProvider, [], $startTime, false, $e->getMessage(), $strategy->endpointKey());
 
                 throw new RuntimeException(
                     "El proveedor forzado {$provider->name()} falló: {$e->getMessage()}",
@@ -207,7 +208,7 @@ public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy 
         return $this->attemptLog;
     }
 
-private function logAttempt(string $message): void
+    private function logAttempt(string $message): void
     {
         $this->attemptLog[] = $message;
     }

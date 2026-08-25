@@ -79,23 +79,7 @@ class ProjectController extends Controller
                 'estimated_total' => $data['estimatedTotal'] ?? $this->materialsTotal($data['materials']),
             ]);
 
-            foreach ($data['materials'] as $index => $item) {
-                $project->materials()->create([
-                    'id' => $item['id'] ?? $project->id . '-MAT-' . ($index + 1),
-                    'material_catalog_id' => $item['materialCatalogId'] ?? null,
-                    'name' => $item['name'],
-                    'quantity' => $item['quantity'],
-                    'unit' => $item['unit'],
-                    'estimated_unit_price' => $item['estimatedUnitPrice'],
-                    'condition' => $item['condition'],
-                    'warranty_value' => $item['warrantyValue'] ?? null,
-                    'warranty_unit' => $item['warrantyUnit'] ?? null,
-                    'brand' => $item['brand'] ?? null,
-                    'model' => $item['model'] ?? null,
-                    'specifications' => $item['specifications'] ?? null,
-                    'observations' => $item['observations'] ?? null,
-                ]);
-            }
+            $this->syncMaterials($project, $data['materials']);
 
             AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'Peticion registrada desde el modulo de infraestructura.');
 
@@ -140,6 +124,10 @@ class ProjectController extends Controller
             'Solo se puede evaluar el expediente mientras está pendiente de revisión por Cierre de Obra.'
         );
 
+        // DossierEvaluationService::evaluate() es best-effort y nunca lanza
+        // (un proveedor de IA caído no debe romper la revisión manual del
+        // auditor), así que acá no aplica abort_if/abort_unless como en el
+        // resto del controller — se traduce el fallo a un 503 explícito.
         if (!$service->evaluate($project)) {
             return response()->json([
                 'success' => false,
@@ -204,23 +192,7 @@ class ProjectController extends Controller
             ]);
 
             $project->materials()->delete();
-            foreach ($data['materials'] as $index => $item) {
-                $project->materials()->create([
-                    'id' => $item['id'] ?? $project->id . '-MAT-' . ($index + 1),
-                    'material_catalog_id' => $item['materialCatalogId'] ?? null,
-                    'name' => $item['name'],
-                    'quantity' => $item['quantity'],
-                    'unit' => $item['unit'],
-                    'estimated_unit_price' => $item['estimatedUnitPrice'],
-                    'condition' => $item['condition'],
-                    'warranty_value' => $item['warrantyValue'] ?? null,
-                    'warranty_unit' => $item['warrantyUnit'] ?? null,
-                    'brand' => $item['brand'] ?? null,
-                    'model' => $item['model'] ?? null,
-                    'specifications' => $item['specifications'] ?? null,
-                    'observations' => $item['observations'] ?? null,
-                ]);
-            }
+            $this->syncMaterials($project, $data['materials']);
 
             AuditLog::record($project, 'INFRAESTRUCTURA', 'Reenvío de petición corregida', 'Petición editada y reenviada a Cierre de Obra tras rechazo.');
 
@@ -228,6 +200,28 @@ class ProjectController extends Controller
         });
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+    }
+
+    /** Crea los ProjectMaterial de un proyecto a partir del array validado — usado por store() y resubmitProject(). */
+    private function syncMaterials(Project $project, array $materials): void
+    {
+        foreach ($materials as $index => $item) {
+            $project->materials()->create([
+                'id' => $item['id'] ?? $project->id . '-MAT-' . ($index + 1),
+                'material_catalog_id' => $item['materialCatalogId'] ?? null,
+                'name' => $item['name'],
+                'quantity' => $item['quantity'],
+                'unit' => $item['unit'],
+                'estimated_unit_price' => $item['estimatedUnitPrice'],
+                'condition' => $item['condition'],
+                'warranty_value' => $item['warrantyValue'] ?? null,
+                'warranty_unit' => $item['warrantyUnit'] ?? null,
+                'brand' => $item['brand'] ?? null,
+                'model' => $item['model'] ?? null,
+                'specifications' => $item['specifications'] ?? null,
+                'observations' => $item['observations'] ?? null,
+            ]);
+        }
     }
 
     public function approveInvestment(ApproveInvestmentRequest $request, Project $project)

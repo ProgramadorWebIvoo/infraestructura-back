@@ -54,6 +54,8 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/notifications/unread-count', [AppNotificationController::class, 'unreadCount']);
     Route::patch('/notifications/{notification}/read', [AppNotificationController::class, 'markRead']);
     Route::patch('/notifications/read-all', [AppNotificationController::class, 'markAllRead']);
+    Route::delete('/notifications/{notification}', [AppNotificationController::class, 'destroy']);
+    Route::delete('/notifications', [AppNotificationController::class, 'destroyAll']);
 
     // CONFIG APP — lectura abierta a cualquier autenticado (varias features
     // consumen settings), edición restringida a administración. Las lecturas

@@ -46,4 +46,20 @@ class AppNotificationController extends Controller
 
         return response()->json(['message' => 'ok']);
     }
+
+    public function destroy(Request $request, AppNotification $notification): JsonResponse
+    {
+        abort_unless($notification->user_id === $request->user()->id, 403);
+
+        $notification->delete();
+
+        return response()->json(['message' => 'ok']);
+    }
+
+    public function destroyAll(Request $request): JsonResponse
+    {
+        AppNotification::where('user_id', $request->user()->id)->delete();
+
+        return response()->json(['message' => 'ok']);
+    }
 }

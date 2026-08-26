@@ -37,6 +37,8 @@ class NotificationCatalog
         'Alta de material' => NotificationType::EXITO,
         'Creacion de usuario' => NotificationType::EXITO,
         'Confirmacion de contratacion' => NotificationType::EXITO,
+        'Obra sin actividad reciente' => NotificationType::ADVERTENCIA,
+        'Invitacion a proveedor proxima a vencer' => NotificationType::ADVERTENCIA,
     ];
 
     /**
@@ -61,11 +63,14 @@ class NotificationCatalog
         'Envio de invitacion a proveedor' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Rechazo de petición de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
         'Reenvío de petición corregida' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
+        'Obra sin actividad reciente' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
+        'Invitacion a proveedor proxima a vencer' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
 
         // Documentos de proyecto
         'Carga de hojas de calculo/cubicaciones' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Carga de planos de ingenieria' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Carga de correcciones de peticion rechazada' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
+        'Carga de nueva version de documento' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Eliminacion de documento adjunto' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
 
         // Accesos públicos (proveedor, sin autenticar)

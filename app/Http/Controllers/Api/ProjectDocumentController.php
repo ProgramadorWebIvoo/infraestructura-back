@@ -127,10 +127,13 @@ class ProjectDocumentController extends Controller
 
             $names = implode(', ', array_column($saved, 'originalName'));
             $action = $newVersionOfId !== null
-                ? "Nueva version (V{$nextVersion}) de documento"
+                ? 'Carga de nueva version de documento'
                 : "Carga de {$label}";
+            $details = $newVersionOfId !== null
+                ? "V{$nextVersion}: {$names}"
+                : $names;
 
-            AuditLog::record($project, 'CIERRE_DE_OBRA', $action, "{$names}");
+            AuditLog::record($project, 'CIERRE_DE_OBRA', $action, $details);
 
             $this->syncProjectCounts($project);
         });
@@ -175,7 +178,7 @@ class ProjectDocumentController extends Controller
         AuditLog::record(
             $project,
             $role,
-            'Eliminacion de documento adjunto (todas las versiones)',
+            'Eliminacion de documento adjunto',
             "Grupo eliminado: {$label} ({$count} version(es))"
         );
 

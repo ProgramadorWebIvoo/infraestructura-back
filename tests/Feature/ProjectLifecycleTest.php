@@ -260,7 +260,7 @@ class ProjectLifecycleTest extends TestCase
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
             'role' => 'INFRAESTRUCTURA',
-            'action' => 'Eliminacion de documento adjunto (todas las versiones)',
+            'action' => 'Eliminacion de documento adjunto',
         ]);
     }
 

@@ -97,10 +97,6 @@ class AppSettingCatalog
             'label' => 'Retención de notificaciones (días)',
             'description' => 'Días que se conservan las notificaciones en la bandeja interna antes de purgarse automáticamente. Purgado destructivo, sin posibilidad de recuperación — rango acotado a 1-7 días.',
         ],
-        'polling_notificaciones_segundos' => [
-            'label' => 'Frecuencia de consulta de notificaciones (segundos)',
-            'description' => 'Cada cuánto la app consulta el servidor por notificaciones nuevas.',
-        ],
         'polling_dashboard_segundos' => [
             'label' => 'Frecuencia de actualización del dashboard (segundos)',
             'description' => 'Cada cuánto se refresca el resumen ejecutivo del dashboard de Presidencia.',

@@ -90,7 +90,7 @@ class DashboardSummaryService
 
             // Obras sin actividad reciente (no cerradas): señal de riesgo ejecutivo.
             if ($status !== 'COMPLETADO_PAGADO') {
-                $daysSinceUpdate = (int) now()->diffInDays($project->updated_at);
+                $daysSinceUpdate = (int) abs(now()->diffInDays($project->updated_at));
                 if ($daysSinceUpdate >= $stalledThresholdDays) {
                     $stalled[] = [
                         'id'              => $project->id,

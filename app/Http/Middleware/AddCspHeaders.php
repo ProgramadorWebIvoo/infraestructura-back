@@ -11,12 +11,24 @@ class AddCspHeaders
     {
         $response = $next($request);
 
+        // El WebSocket de Reverb corre en un host/puerto propio, distinto de
+        // la API REST — sin sumarlo a connect-src, el navegador bloquea la
+        // conexión del cliente Echo por CSP (no por un problema de Reverb en
+        // sí). ws/wss según REVERB_SCHEME, coincidiendo con lo que expone
+        // config/reverb.php al frontend.
+        $reverbHost = env('REVERB_HOST');
+        $reverbPort = env('REVERB_PORT', 443);
+        $reverbWsScheme = env('REVERB_SCHEME', 'https') === 'https' ? 'wss' : 'ws';
+        $reverbConnectSrc = $reverbHost
+            ? " {$reverbWsScheme}://{$reverbHost}:{$reverbPort}"
+            : '';
+
         $csp = "default-src 'self'; " .
                "script-src 'self'; " .
                "style-src 'self' 'unsafe-inline'; " .
                "img-src 'self' data:; " .
                "font-src 'self'; " .
-               "connect-src 'self'; " .
+               "connect-src 'self'{$reverbConnectSrc}; " .
                "frame-ancestors 'none'; " .
                "base-uri 'self'; " .
                "form-action 'self'; " .

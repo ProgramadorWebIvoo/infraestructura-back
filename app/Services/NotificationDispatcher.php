@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\NotificationCreated;
 use App\Models\AppNotification;
 use App\Models\Project;
 use App\Notifications\AdminActionMail;
@@ -63,7 +64,7 @@ class NotificationDispatcher
                 $user->notify(new AdminActionNotification($action, $details));
             }
 
-            AppNotification::create([
+            $appNotification = AppNotification::create([
                 'user_id' => $user->id,
                 'project_id' => $project?->id,
                 'project_title_snapshot' => $project?->title,
@@ -71,6 +72,18 @@ class NotificationDispatcher
                 'type' => $type,
                 'details' => $details,
             ]);
+
+            // Con ShouldBroadcastNow el broadcast es síncrono dentro de este
+            // request — si Reverb está caído, no debe tumbar el flujo de
+            // negocio que originó la notificación (ej. un cambio de estado
+            // de proyecto). La notificación ya quedó persistida arriba; el
+            // push es una mejora, no un requisito para que la acción real
+            // se complete.
+            try {
+                broadcast(new NotificationCreated($appNotification));
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         if (!static::isMailActionAllowed($action)) {

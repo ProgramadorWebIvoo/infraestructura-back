@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\NotificationCreated;
 use App\Models\AppNotification;
 use App\Models\AppSetting;
 use App\Models\AuditLog;
@@ -16,7 +17,9 @@ use App\Services\NotificationRuleResolver;
 use App\Services\SettingsService;
 use App\Support\NotificationCatalog;
 use App\Support\NotificationType;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -464,5 +467,60 @@ class NotificationDispatcherTest extends TestCase
         AuditLog::record($project, 'FINANZAS', 'Liberacion de anticipo', 'anticipo liberado');
 
         Notification::assertSentTo($finanzas, ProjectActionMail::class);
+    }
+
+    public function test_notify_broadcasts_notification_created_per_app_recipient(): void
+    {
+        Event::fake([NotificationCreated::class]);
+
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
+
+        Event::assertDispatched(
+            NotificationCreated::class,
+            fn (NotificationCreated $event) => $event->notification->user_id === $cierre->id
+                && $event->notification->action === 'Creacion de peticion de obra'
+        );
+    }
+
+    public function test_notification_created_broadcasts_on_the_recipients_private_channel(): void
+    {
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $notification = AppNotification::create([
+            'user_id' => $cierre->id,
+            'action' => 'Test',
+        ]);
+
+        $event = new NotificationCreated($notification);
+        $channels = $event->broadcastOn();
+
+        $this->assertCount(1, $channels);
+        $this->assertInstanceOf(PrivateChannel::class, $channels[0]);
+        $this->assertSame('private-App.Models.User.'.$cierre->id, $channels[0]->name);
+        $this->assertSame('notification.created', $event->broadcastAs());
+        $this->assertSame($notification->toArray(), $event->broadcastWith());
+    }
+
+    public function test_notify_does_not_throw_when_broadcasting_fails(): void
+    {
+        // Simula Reverb caído: NotificationCreated::broadcastOn() lanza al
+        // resolverse. El try/catch en NotificationDispatcher::notify() debe
+        // absorberlo — la notificación ya persistida en BD es lo que
+        // importa; el push es una mejora, no un requisito del flujo.
+        Event::listen(NotificationCreated::class, function () {
+            throw new \RuntimeException('Reverb unavailable');
+        });
+
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
+
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $cierre->id,
+            'action' => 'Creacion de peticion de obra',
+        ]);
     }
 }

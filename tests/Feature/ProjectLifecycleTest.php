@@ -256,7 +256,7 @@ class ProjectLifecycleTest extends TestCase
             ->deleteJson("/api/projects/{$project->id}/documents/{$doc->id}");
 
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('project_documents', ['id' => $doc->id]);
+        $this->assertSoftDeleted('project_documents', ['id' => $doc->id]);
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
             'role' => 'INFRAESTRUCTURA',

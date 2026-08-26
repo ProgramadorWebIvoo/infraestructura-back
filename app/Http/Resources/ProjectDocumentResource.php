@@ -18,6 +18,7 @@ class ProjectDocumentResource extends JsonResource
             'uploadedAt'   => $this->created_at?->toIso8601String(),
             'documentGroupId' => $this->document_group_id,
             'versionNumber'   => $this->version_number,
+            'deletedAt'       => $this->deleted_at?->toIso8601String(),
         ];
     }
 }

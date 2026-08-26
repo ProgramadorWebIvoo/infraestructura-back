@@ -20,6 +20,10 @@ class ProjectDocumentController extends Controller
     {
         $query = $project->documents();
 
+        if ($request->boolean('include_deleted')) {
+            $query->withTrashed();
+        }
+
         if (!$request->boolean('all_versions')) {
             $query->latestVersionOnly();
         }
@@ -31,12 +35,21 @@ class ProjectDocumentController extends Controller
         ]);
     }
 
-    /** Historial completo (todas las versiones) del grupo al que pertenece $document. */
-    public function history(Project $project, ProjectDocument $document)
+    /**
+     * Historial completo (todas las versiones, incluidas soft-deleted) del
+     * grupo al que pertenece el documento $documentId. Resuelve manualmente
+     * en vez de route-model-binding automático: Laravel 9 no soporta
+     * `Route::withTrashed()` (eso llegó en 10.14+), y el binding por defecto
+     * excluye soft-deleted — así que un documento cuyo grupo entero fue
+     * eliminado nunca resolvería como {document} en la ruta.
+     */
+    public function history(Project $project, int $documentId)
     {
+        $document = ProjectDocument::withTrashed()->findOrFail($documentId);
         abort_unless($document->project_id === $project->id, 404);
 
-        $versions = ProjectDocument::where('document_group_id', $document->document_group_id)
+        $versions = ProjectDocument::withTrashed()
+            ->where('document_group_id', $document->document_group_id)
             ->orderBy('version_number')
             ->get();
 

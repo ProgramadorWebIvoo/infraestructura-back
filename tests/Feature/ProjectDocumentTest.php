@@ -200,6 +200,58 @@ class ProjectDocumentTest extends TestCase
         $response->assertJsonCount(1, 'data');
     }
 
+    public function test_index_excludes_deleted_documents_by_default(): void
+    {
+        $project = Project::factory()->create();
+        $doc = $this->createDocument($project, ['original_name' => 'plano1.pdf']);
+        $doc->delete();
+
+        $response = $this->withHeaders($this->headers())->getJson("/api/projects/{$project->id}/documents");
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(0, 'data');
+    }
+
+    public function test_index_with_include_deleted_returns_soft_deleted_documents(): void
+    {
+        $project = Project::factory()->create();
+        $doc = $this->createDocument($project, ['original_name' => 'plano1.pdf']);
+        $doc->delete();
+
+        $response = $this->withHeaders($this->headers())->getJson("/api/projects/{$project->id}/documents?include_deleted=true");
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.id', $doc->id);
+        $this->assertNotNull($response->json('data.0.deletedAt'));
+    }
+
+    public function test_index_with_all_versions_and_include_deleted_returns_full_history(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project, ['original_name' => 'plano-v1.pdf']);
+
+        $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'PLANO',
+            'new_version_of' => $v1->id,
+            'files' => [UploadedFile::fake()->create('plano-v2.pdf', 10, 'application/pdf')],
+        ]);
+
+        $orphanGroup = $this->createDocument($project, ['original_name' => 'plano-eliminado.pdf']);
+        $orphanGroup->delete();
+
+        $response = $this->withHeaders($this->headers())
+            ->getJson("/api/projects/{$project->id}/documents?all_versions=true&include_deleted=true");
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(3, 'data');
+
+        $names = collect($response->json('data'))->pluck('originalName');
+        $this->assertTrue($names->contains('plano-v1.pdf'));
+        $this->assertTrue($names->contains('plano-v2.pdf'));
+        $this->assertTrue($names->contains('plano-eliminado.pdf'));
+    }
+
     public function test_destroy_removes_file_and_record(): void
     {
         $project = Project::factory()->create();
@@ -212,7 +264,7 @@ class ProjectDocumentTest extends TestCase
             ->deleteJson("/api/projects/{$project->id}/documents/{$doc->id}");
 
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('project_documents', ['id' => $doc->id]);
+        $this->assertSoftDeleted('project_documents', ['id' => $doc->id]);
         Storage::disk('local')->assertMissing($path);
     }
 
@@ -369,6 +421,34 @@ class ProjectDocumentTest extends TestCase
         $response->assertJsonPath('data.1.versionNumber', 2);
     }
 
+    public function test_history_works_for_a_fully_soft_deleted_group(): void
+    {
+        $project = Project::factory()->create();
+        $v1 = $this->createDocument($project);
+
+        $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'PLANO',
+            'new_version_of' => $v1->id,
+            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+        ]);
+        $v2 = ProjectDocument::where('document_group_id', $v1->document_group_id)->where('version_number', 2)->first();
+
+        $this->withHeaders($this->headers())
+            ->deleteJson("/api/projects/{$project->id}/documents/{$v2->id}")
+            ->assertStatus(200);
+
+        // El grupo entero quedó soft-deleted — el historial debe seguir
+        // siendo consultable a partir de cualquier id del grupo, aunque ese
+        // documento puntual ya no esté "vivo".
+        $response = $this->withHeaders($this->headers())
+            ->getJson("/api/projects/{$project->id}/documents/{$v1->id}/history");
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'data');
+        $response->assertJsonPath('data.0.versionNumber', 1);
+        $response->assertJsonPath('data.1.versionNumber', 2);
+    }
+
     public function test_destroy_removes_the_entire_group_not_a_single_version(): void
     {
         $project = Project::factory()->create();
@@ -385,8 +465,8 @@ class ProjectDocumentTest extends TestCase
             ->deleteJson("/api/projects/{$project->id}/documents/{$v1->id}");
 
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('project_documents', ['id' => $v1->id]);
-        $this->assertDatabaseMissing('project_documents', ['id' => $v2->id]);
+        $this->assertSoftDeleted('project_documents', ['id' => $v1->id]);
+        $this->assertSoftDeleted('project_documents', ['id' => $v2->id]);
     }
 
     public function test_sync_project_counts_counts_groups_not_rows(): void

@@ -255,9 +255,20 @@ class ProjectController extends Controller
             'delivery_weeks' => $data['deliveryWeeks'],
             'negotiated_advance_percent' => $data['negotiatedAdvancePercent'],
             'description' => $data['description'],
+            'origen' => $data['origen'],
+            'fecha_oferta' => $data['fechaOferta'],
+            'created_by' => auth()->id(),
+            'precio_anterior' => $data['precioAnterior'] ?? null,
+            'precio_nuevo' => $data['precioNuevo'] ?? null,
+            'diferencia' => isset($data['precioNuevo'], $data['precioAnterior']) ? $data['precioNuevo'] - $data['precioAnterior'] : null,
+            'motivo' => $data['motivo'] ?? null,
         ]);
 
-        AuditLog::record($project, 'ANALISTA', 'Carga de propuesta', "Oferta {$proposal->id} cargada por {$contractor->name}.");
+        $auditDetails = "Oferta {$proposal->id} cargada por {$contractor->name}.";
+        if ($proposal->motivo) {
+            $auditDetails .= " Motivo: {$proposal->motivo}";
+        }
+        AuditLog::record($project, 'ANALISTA', 'Carga de propuesta', $auditDetails);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }

@@ -77,6 +77,9 @@ class SupplierProposalImportService
                 'delivery_weeks' => $deliveryWeeks,
                 'negotiated_advance_percent' => $supplierProposal->advance_percent ?? 0,
                 'description' => $description,
+                'origen' => 'PORTAL-PROV',
+                'fecha_oferta' => now()->toDateString(),
+                'created_by' => auth()->id(),
             ]);
 
             $existingCodes[] = $contractor->code;

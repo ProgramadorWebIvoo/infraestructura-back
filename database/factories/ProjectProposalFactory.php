@@ -28,6 +28,8 @@ class ProjectProposalFactory extends Factory
             'delivery_weeks' => fake()->numberBetween(2, 24),
             'negotiated_advance_percent' => fake()->randomFloat(2, 10, 50),
             'description' => fake()->paragraph(),
+            'origen' => 'SEED-INSERT',
+            'fecha_oferta' => now()->toDateString(),
         ];
     }
 }

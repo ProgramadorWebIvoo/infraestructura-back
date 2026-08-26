@@ -425,6 +425,8 @@ class ProjectLifecycleTest extends TestCase
                 'deliveryWeeks'           => 12,
                 'negotiatedAdvancePercent' => 30,
                 'description'             => 'Propuesta económica detallada',
+                'origen'                  => 'MANUAL',
+                'fechaOferta'             => '2026-07-01',
             ]);
 
         $response->assertStatus(200);
@@ -441,6 +443,8 @@ class ProjectLifecycleTest extends TestCase
                 'deliveryWeeks'           => 10,
                 'negotiatedAdvancePercent' => 25,
                 'description'             => 'Segunda propuesta',
+                'origen'                  => 'MANUAL',
+                'fechaOferta'             => '2026-07-01',
             ])
             ->assertStatus(200);
 
@@ -455,12 +459,13 @@ class ProjectLifecycleTest extends TestCase
         $this->assertSoftDeleted('project_proposals', ['id' => $proposalId]);
     }
 
-    public function test_add_proposal_accepts_advance_percent_above_configured_max(): void
+    public function test_add_proposal_accepts_advance_percent_above_configured_max_with_motivo(): void
     {
         // El anticipo negociado puede exceder el máximo configurado en CONFIG
         // APP (renegociación telefónica/directa con el proveedor) — el máximo
         // configurado solo dispara una alerta visual en el frontend, nunca
-        // bloquea el registro de la propuesta.
+        // bloquea el registro de la propuesta, siempre que se justifique con
+        // un motivo obligatorio.
         $project = Project::factory()->confirmed()->create();
         $contractor = Contractor::factory()->create();
 
@@ -476,8 +481,37 @@ class ProjectLifecycleTest extends TestCase
                 'deliveryWeeks'            => 12,
                 'negotiatedAdvancePercent' => 30,
                 'description'              => 'Anticipo renegociado por encima del máximo configurado',
+                'origen'                   => 'MANUAL',
+                'fechaOferta'              => '2026-07-01',
+                'motivo'                   => 'Proveedor exige anticipo mayor por escasez de materiales importados.',
             ])
             ->assertStatus(200);
+    }
+
+    public function test_add_proposal_rejects_advance_percent_above_configured_max_without_motivo(): void
+    {
+        // Sin motivo, exceder el máximo configurado ahora se rechaza — el
+        // motivo es lo que documenta/audita la excepción, ya no queda
+        // silenciosa.
+        $project = Project::factory()->confirmed()->create();
+        $contractor = Contractor::factory()->create();
+
+        AppSetting::where('key', 'anticipo_maximo_porcentaje')->update(['value' => '20']);
+        SettingsService::forget();
+
+        $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals", [
+                'contractorCode'           => $contractor->code,
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 30,
+                'description'              => 'Anticipo por encima del máximo, sin justificar',
+                'origen'                   => 'MANUAL',
+                'fechaOferta'              => '2026-07-01',
+            ])
+            ->assertStatus(422);
     }
 
     public function test_add_proposal_rejects_advance_percent_above_sanity_ceiling(): void
@@ -494,8 +528,56 @@ class ProjectLifecycleTest extends TestCase
                 'deliveryWeeks'            => 12,
                 'negotiatedAdvancePercent' => 150,
                 'description'              => 'Anticipo por encima del 100%',
+                'origen'                   => 'MANUAL',
+                'fechaOferta'              => '2026-07-01',
             ])
             ->assertStatus(422);
+    }
+
+    public function test_add_proposal_with_renegociacion_requires_precio_anterior_nuevo_y_motivo(): void
+    {
+        $project = Project::factory()->confirmed()->create();
+        $contractor = Contractor::factory()->create();
+
+        $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals", [
+                'contractorCode'           => $contractor->code,
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 15,
+                'description'              => 'Oferta renegociada',
+                'origen'                   => 'RENEGOCIACION',
+                'fechaOferta'              => '2026-07-01',
+            ])
+            ->assertStatus(422);
+
+        $response = $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals", [
+                'contractorCode'           => $contractor->code,
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 15,
+                'description'              => 'Oferta renegociada',
+                'origen'                   => 'RENEGOCIACION',
+                'fechaOferta'              => '2026-07-01',
+                'precioAnterior'           => 32000.00,
+                'precioNuevo'              => 28000.00,
+                'motivo'                   => 'Renegociación directa: el contratista bajó el precio tras revisar cantidades.',
+            ]);
+
+        $response->assertStatus(200);
+        $proposalId = $response->json('data.proposals')[0]['id'];
+        $this->assertDatabaseHas('project_proposals', [
+            'id' => $proposalId,
+            'origen' => 'RENEGOCIACION',
+            'precio_anterior' => 32000.00,
+            'precio_nuevo' => 28000.00,
+            'diferencia' => -4000.00,
+        ]);
     }
 
     public function test_full_project_lifecycle(): void
@@ -540,6 +622,8 @@ class ProjectLifecycleTest extends TestCase
                 'deliveryWeeks'           => 8,
                 'negotiatedAdvancePercent' => 30,
                 'description'             => 'Propuesta principal',
+                'origen'                  => 'MANUAL',
+                'fechaOferta'             => '2026-07-01',
             ]);
         $proposalResponse->assertStatus(200);
         $proposalId = $proposalResponse->json('data.proposals')[0]['id'];
@@ -621,6 +705,8 @@ class ProjectLifecycleTest extends TestCase
                 'deliveryWeeks'           => 6,
                 'negotiatedAdvancePercent' => 30,
                 'description'             => 'Propuesta a rechazar',
+                'origen'                  => 'MANUAL',
+                'fechaOferta'             => '2026-07-01',
             ])->assertStatus(200);
 
         // Submit comparative

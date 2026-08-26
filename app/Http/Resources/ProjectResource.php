@@ -16,6 +16,11 @@ class ProjectResource extends JsonResource
             $this->proposals->pluck('contractor_code')
         )->pluck('rating', 'code');
 
+        $proposalCreatorNames = \App\Models\User::whereIn(
+            'id',
+            $this->proposals->pluck('created_by')->filter()
+        )->pluck('name', 'id');
+
         return [
             'id' => $this->id,
             'title' => $this->title,
@@ -65,6 +70,13 @@ class ProjectResource extends JsonResource
                 'deliveryWeeks' => $proposal->delivery_weeks,
                 'negotiatedAdvancePercent' => $proposal->negotiated_advance_percent,
                 'description' => $proposal->description,
+                'origen' => $proposal->origen,
+                'fechaOferta' => optional($proposal->fecha_oferta)->toDateString(),
+                'creadoPor' => $proposalCreatorNames[$proposal->created_by] ?? null,
+                'precioAnterior' => $proposal->precio_anterior,
+                'precioNuevo' => $proposal->precio_nuevo,
+                'diferencia' => $proposal->diferencia,
+                'motivo' => $proposal->motivo,
             ])->values(),
             'selectedContractorCode' => $this->selected_contractor_code,
             'selectedProposalId' => $this->selected_proposal_id,

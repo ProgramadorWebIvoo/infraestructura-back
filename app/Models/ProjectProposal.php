@@ -28,6 +28,13 @@ class ProjectProposal extends Model
         'delivery_weeks',
         'negotiated_advance_percent',
         'description',
+        'origen',
+        'fecha_oferta',
+        'created_by',
+        'precio_anterior',
+        'precio_nuevo',
+        'diferencia',
+        'motivo',
     ];
 
     protected $casts = [
@@ -36,7 +43,16 @@ class ProjectProposal extends Model
         'total_cost' => 'float',
         'delivery_weeks' => 'integer',
         'negotiated_advance_percent' => 'float',
+        'fecha_oferta' => 'date:Y-m-d',
+        'precio_anterior' => 'float',
+        'precio_nuevo' => 'float',
+        'diferencia' => 'float',
     ];
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 
     /**
      * Genera un ID único por timestamp + sufijo random (no requiere lock:

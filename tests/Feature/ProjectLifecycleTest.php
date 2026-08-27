@@ -483,7 +483,7 @@ class ProjectLifecycleTest extends TestCase
                 'description'              => 'Anticipo renegociado por encima del máximo configurado',
                 'origen'                   => 'MANUAL',
                 'fechaOferta'              => '2026-07-01',
-                'motivo'                   => 'Proveedor exige anticipo mayor por escasez de materiales importados.',
+                'motivoAnticipoExcedido'   => 'Proveedor exige anticipo mayor por escasez de materiales importados.',
             ])
             ->assertStatus(200);
     }
@@ -534,50 +534,211 @@ class ProjectLifecycleTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_add_proposal_with_renegociacion_requires_precio_anterior_nuevo_y_motivo(): void
+    public function test_add_proposal_rejects_altered_quantity_for_audited_material(): void
     {
         $project = Project::factory()->confirmed()->create();
         $contractor = Contractor::factory()->create();
+        \App\Models\ProjectMaterial::factory()->create([
+            'project_id' => $project->id,
+            'name' => 'Cable eléctrico',
+            'quantity' => 100,
+            'unit' => 'm',
+        ]);
 
         $this->actingAs($this->analista)
             ->postJson("/api/projects/{$project->id}/proposals", [
                 'contractorCode'           => $contractor->code,
                 'materialCost'             => 20000.00,
+                'materialItems'            => [
+                    ['materialName' => 'Cable eléctrico', 'quantity' => 150, 'unit' => 'm', 'unitPrice' => 133.33, 'totalPrice' => 20000.00],
+                ],
                 'laborCost'                => 8000.00,
                 'totalCost'                => 28000.00,
                 'deliveryWeeks'            => 12,
                 'negotiatedAdvancePercent' => 15,
-                'description'              => 'Oferta renegociada',
-                'origen'                   => 'RENEGOCIACION',
+                'description'              => 'Oferta con cantidad alterada',
+                'origen'                   => 'MANUAL',
                 'fechaOferta'              => '2026-07-01',
             ])
-            ->assertStatus(422);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['materialItems.0.quantity']);
+    }
 
-        $response = $this->actingAs($this->analista)
+    public function test_renegotiate_proposal_requires_motivo(): void
+    {
+        $project = Project::factory()->confirmed()->create();
+        $contractor = Contractor::factory()->create();
+
+        $addResponse = $this->actingAs($this->analista)
             ->postJson("/api/projects/{$project->id}/proposals", [
                 'contractorCode'           => $contractor->code,
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 32000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 15,
+                'description'              => 'Oferta original',
+                'origen'                   => 'MANUAL',
+                'fechaOferta'              => '2026-07-01',
+            ]);
+        $addResponse->assertStatus(200);
+        $proposalId = $addResponse->json('data.proposals')[0]['id'];
+
+        $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals/{$proposalId}/renegotiate", [
                 'materialCost'             => 20000.00,
                 'laborCost'                => 8000.00,
                 'totalCost'                => 28000.00,
                 'deliveryWeeks'            => 12,
                 'negotiatedAdvancePercent' => 15,
                 'description'              => 'Oferta renegociada',
-                'origen'                   => 'RENEGOCIACION',
+                'fechaOferta'              => '2026-07-02',
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_renegotiate_proposal_replaces_original_and_derives_precio_anterior(): void
+    {
+        $project = Project::factory()->confirmed()->create();
+        $contractor = Contractor::factory()->create();
+
+        $addResponse = $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals", [
+                'contractorCode'           => $contractor->code,
+                'materialCost'             => 24000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 32000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 15,
+                'description'              => 'Oferta original',
+                'origen'                   => 'MANUAL',
                 'fechaOferta'              => '2026-07-01',
-                'precioAnterior'           => 32000.00,
-                'precioNuevo'              => 28000.00,
+            ]);
+        $addResponse->assertStatus(200);
+        $originalId = $addResponse->json('data.proposals')[0]['id'];
+
+        $response = $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals/{$originalId}/renegotiate", [
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 15,
+                'description'              => 'Oferta renegociada',
+                'fechaOferta'              => '2026-07-02',
                 'motivo'                   => 'Renegociación directa: el contratista bajó el precio tras revisar cantidades.',
             ]);
 
         $response->assertStatus(200);
-        $proposalId = $response->json('data.proposals')[0]['id'];
+        $activeProposals = $response->json('data.proposals');
+        $this->assertCount(1, $activeProposals);
+        $newId = $activeProposals[0]['id'];
+        $this->assertNotEquals($originalId, $newId);
+
         $this->assertDatabaseHas('project_proposals', [
-            'id' => $proposalId,
+            'id' => $newId,
             'origen' => 'RENEGOCIACION',
             'precio_anterior' => 32000.00,
             'precio_nuevo' => 28000.00,
             'diferencia' => -4000.00,
         ]);
+        $this->assertDatabaseHas('project_proposals', [
+            'id' => $originalId,
+            'replaced_by_id' => $newId,
+        ]);
+    }
+
+    public function test_renegotiate_proposal_requires_separate_motivo_when_advance_also_exceeds_max(): void
+    {
+        $project = Project::factory()->confirmed()->create();
+        $contractor = Contractor::factory()->create();
+
+        AppSetting::where('key', 'anticipo_maximo_porcentaje')->update(['value' => '20']);
+        SettingsService::forget();
+
+        $addResponse = $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals", [
+                'contractorCode'           => $contractor->code,
+                'materialCost'             => 24000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 32000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 15,
+                'description'              => 'Oferta original',
+                'origen'                   => 'MANUAL',
+                'fechaOferta'              => '2026-07-01',
+            ]);
+        $originalId = $addResponse->json('data.proposals')[0]['id'];
+
+        // Renegociación cuyo nuevo anticipo TAMBIÉN excede el máximo — el
+        // motivo de renegociación por sí solo no basta, motivoAnticipoExcedido
+        // es obligatorio de forma independiente.
+        $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals/{$originalId}/renegotiate", [
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 30,
+                'description'              => 'Oferta renegociada',
+                'fechaOferta'              => '2026-07-02',
+                'motivo'                   => 'Renegociación directa: el contratista bajó el precio.',
+            ])
+            ->assertStatus(422);
+
+        $response = $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals/{$originalId}/renegotiate", [
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 30,
+                'description'              => 'Oferta renegociada',
+                'fechaOferta'              => '2026-07-02',
+                'motivo'                   => 'Renegociación directa: el contratista bajó el precio.',
+                'motivoAnticipoExcedido'   => 'Proveedor exige anticipo mayor por escasez de materiales.',
+            ]);
+
+        $response->assertStatus(200);
+        $newId = $response->json('data.proposals')[0]['id'];
+        $this->assertDatabaseHas('project_proposals', [
+            'id' => $newId,
+            'motivo' => 'Renegociación directa: el contratista bajó el precio.',
+            'motivo_anticipo_excedido' => 'Proveedor exige anticipo mayor por escasez de materiales.',
+        ]);
+    }
+
+    public function test_renegotiate_proposal_rejects_fecha_oferta_before_original(): void
+    {
+        $project = Project::factory()->confirmed()->create();
+        $contractor = Contractor::factory()->create();
+
+        $addResponse = $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals", [
+                'contractorCode'           => $contractor->code,
+                'materialCost'             => 24000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 32000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 15,
+                'description'              => 'Oferta original',
+                'origen'                   => 'MANUAL',
+                'fechaOferta'              => '2026-07-10',
+            ]);
+        $proposalId = $addResponse->json('data.proposals')[0]['id'];
+
+        $this->actingAs($this->analista)
+            ->postJson("/api/projects/{$project->id}/proposals/{$proposalId}/renegotiate", [
+                'materialCost'             => 20000.00,
+                'laborCost'                => 8000.00,
+                'totalCost'                => 28000.00,
+                'deliveryWeeks'            => 12,
+                'negotiatedAdvancePercent' => 15,
+                'description'              => 'Oferta renegociada',
+                'fechaOferta'              => '2026-07-05',
+                'motivo'                   => 'Motivo válido',
+            ])
+            ->assertStatus(422);
     }
 
     public function test_full_project_lifecycle(): void

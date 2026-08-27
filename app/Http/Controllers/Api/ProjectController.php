@@ -8,6 +8,7 @@ use App\Http\Requests\ApproveInvestmentRequest;
 use App\Http\Requests\PayProjectRequest;
 use App\Http\Requests\RejectProjectRequest;
 use App\Http\Requests\RejectProposalsRequest;
+use App\Http\Requests\RenegotiateProposalRequest;
 use App\Http\Requests\ResubmitProjectRequest;
 use App\Http\Requests\ReviewProjectRequest;
 use App\Http\Requests\SelectContractorRequest;
@@ -250,25 +251,86 @@ class ProjectController extends Controller
             'contractor_code' => $contractor->code,
             'contractor_name_snapshot' => $contractor->name,
             'material_cost' => $data['materialCost'],
+            'material_items' => $data['materialItems'] ?? null,
             'labor_cost' => $data['laborCost'],
             'total_cost' => $data['totalCost'],
             'delivery_weeks' => $data['deliveryWeeks'],
+            'duration_value' => $data['durationValue'] ?? null,
+            'duration_unit' => $data['durationUnit'] ?? null,
             'negotiated_advance_percent' => $data['negotiatedAdvancePercent'],
             'description' => $data['description'],
             'origen' => $data['origen'],
             'fecha_oferta' => $data['fechaOferta'],
             'created_by' => auth()->id(),
-            'precio_anterior' => $data['precioAnterior'] ?? null,
-            'precio_nuevo' => $data['precioNuevo'] ?? null,
-            'diferencia' => isset($data['precioNuevo'], $data['precioAnterior']) ? $data['precioNuevo'] - $data['precioAnterior'] : null,
-            'motivo' => $data['motivo'] ?? null,
+            'motivo_anticipo_excedido' => $data['motivoAnticipoExcedido'] ?? null,
         ]);
 
         $auditDetails = "Oferta {$proposal->id} cargada por {$contractor->name}.";
-        if ($proposal->motivo) {
-            $auditDetails .= " Motivo: {$proposal->motivo}";
+        if ($proposal->motivo_anticipo_excedido) {
+            $auditDetails .= " Motivo exceso de anticipo: {$proposal->motivo_anticipo_excedido}";
         }
         AuditLog::record($project, 'ANALISTA', 'Carga de propuesta', $auditDetails);
+
+        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+    }
+
+    /**
+     * Renegocia una propuesta ya cargada: reemplaza sus términos por unos
+     * nuevos SIN borrar ni sobrescribir el registro original — precio
+     * anterior, precio nuevo, diferencia y motivo quedan permanentemente
+     * auditables (base del futuro análisis inflacionario de productos). El
+     * precio anterior se toma del total_cost de la propuesta original, nunca
+     * del cliente, para que no pueda quedar desincronizado por error de
+     * tipeo. La propuesta original se marca replaced_by_id y desaparece del
+     * cuadro comparativo activo (ver scope en ProjectResource) pero sigue
+     * existiendo en la base de datos.
+     */
+    public function renegotiateProposal(RenegotiateProposalRequest $request, Project $project, ProjectProposal $proposal)
+    {
+        abort_unless($proposal->project_id === $project->id, 422, 'La propuesta no pertenece al proyecto.');
+        abort_if($proposal->replaced_by_id !== null, 422, 'Esta propuesta ya fue renegociada anteriormente.');
+        abort_if($project->selected_proposal_id === $proposal->id, 422, 'No se puede renegociar una propuesta ya adjudicada.');
+
+        $data = $request->validated();
+        $precioAnterior = (float) $proposal->total_cost;
+        $precioNuevo = (float) $data['totalCost'];
+
+        $renegotiated = DB::transaction(function () use ($project, $proposal, $data, $precioAnterior, $precioNuevo) {
+            $new = $project->proposals()->create([
+                'id' => ProjectProposal::nextId(),
+                'contractor_code' => $proposal->contractor_code,
+                'contractor_name_snapshot' => $proposal->contractor_name_snapshot,
+                'material_cost' => $data['materialCost'],
+                'material_items' => $data['materialItems'] ?? null,
+                'labor_cost' => $data['laborCost'],
+                'total_cost' => $data['totalCost'],
+                'delivery_weeks' => $data['deliveryWeeks'],
+                'duration_value' => $data['durationValue'] ?? null,
+                'duration_unit' => $data['durationUnit'] ?? null,
+                'negotiated_advance_percent' => $data['negotiatedAdvancePercent'],
+                'description' => $data['description'],
+                'origen' => 'RENEGOCIACION',
+                'fecha_oferta' => $data['fechaOferta'],
+                'created_by' => auth()->id(),
+                'precio_anterior' => $precioAnterior,
+                'precio_nuevo' => $precioNuevo,
+                'diferencia' => $precioNuevo - $precioAnterior,
+                'motivo' => $data['motivo'],
+                'motivo_anticipo_excedido' => $data['motivoAnticipoExcedido'] ?? null,
+            ]);
+
+            $proposal->update(['replaced_by_id' => $new->id]);
+
+            return $new;
+        });
+
+        $auditDetails = "Propuesta {$proposal->id} ({$proposal->contractor_name_snapshot}) renegociada como {$renegotiated->id}. " .
+            "Precio anterior: {$precioAnterior}. Precio nuevo: {$precioNuevo}. Diferencia: " . ($precioNuevo - $precioAnterior) . ". " .
+            "Motivo: {$renegotiated->motivo}";
+        if ($renegotiated->motivo_anticipo_excedido) {
+            $auditDetails .= " Motivo exceso de anticipo: {$renegotiated->motivo_anticipo_excedido}";
+        }
+        AuditLog::record($project, 'ANALISTA', 'Renegociación de propuesta', $auditDetails);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
@@ -316,6 +378,7 @@ class ProjectController extends Controller
     {
         abort_unless($proposal->project_id === $project->id, 422, 'La propuesta no pertenece al proyecto.');
         abort_if($project->selected_proposal_id === $proposal->id, 422, 'No se puede eliminar una propuesta adjudicada.');
+        abort_if($proposal->replaced_by_id !== null, 422, 'No se puede eliminar una propuesta renegociada: forma parte del historial auditable.');
 
         $proposal->delete();
         AuditLog::record($project, 'ANALISTA', 'Eliminacion de propuesta', "Propuesta {$proposal->id} retirada del cuadro comparativo.");

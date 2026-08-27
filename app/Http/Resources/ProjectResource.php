@@ -59,15 +59,22 @@ class ProjectResource extends JsonResource
             'dossierAiEvaluatedAt' => optional($this->dossier_ai_evaluated_at)->toIso8601String(),
             'procuraReviewNotes' => $this->procura_review_notes,
             'approvedInvestmentAmount' => $this->approved_investment_amount,
-            'proposals' => $this->proposals->map(fn ($proposal) => [
+            // Excluye propuestas ya renegociadas (replaced_by_id != null) del
+            // cuadro comparativo activo — siguen existiendo en la base de
+            // datos (nunca se borran) y quedan disponibles para auditoría vía
+            // AuditLog, no se pierden ni se muestran acá como "vigentes".
+            'proposals' => $this->proposals->whereNull('replaced_by_id')->map(fn ($proposal) => [
                 'id' => $proposal->id,
                 'contractorCode' => $proposal->contractor_code,
                 'contractorName' => $proposal->contractor_name_snapshot,
                 'contractorRating' => $contractorRatings[$proposal->contractor_code] ?? null,
                 'materialCost' => $proposal->material_cost,
+                'materialItems' => $proposal->material_items,
                 'laborCost' => $proposal->labor_cost,
                 'totalCost' => $proposal->total_cost,
                 'deliveryWeeks' => $proposal->delivery_weeks,
+                'durationValue' => $proposal->duration_value,
+                'durationUnit' => $proposal->duration_unit,
                 'negotiatedAdvancePercent' => $proposal->negotiated_advance_percent,
                 'description' => $proposal->description,
                 'origen' => $proposal->origen,
@@ -77,6 +84,7 @@ class ProjectResource extends JsonResource
                 'precioNuevo' => $proposal->precio_nuevo,
                 'diferencia' => $proposal->diferencia,
                 'motivo' => $proposal->motivo,
+                'motivoAnticipoExcedido' => $proposal->motivo_anticipo_excedido,
             ])->values(),
             'selectedContractorCode' => $this->selected_contractor_code,
             'selectedProposalId' => $this->selected_proposal_id,

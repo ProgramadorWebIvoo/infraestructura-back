@@ -7,7 +7,17 @@ use App\Support\ValidatesImmutableMaterialQuantities;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
-class AddProjectProposalRequest extends FormRequest
+/**
+ * Renegociar una propuesta existente: el "precio anterior" NUNCA se recibe
+ * del cliente — se toma del total_cost de la propuesta que se reemplaza
+ * (ver ProjectController::renegotiateProposal). `motivo` (por qué se
+ * renegoció) siempre es obligatorio — a diferencia de una carga normal, toda
+ * renegociación es una excepción que debe quedar justificada. Es un campo
+ * DISTINTO de `motivoAnticipoExcedido` (por qué el anticipo negociado supera
+ * el máximo de CONFIG APP): ambas condiciones pueden darse a la vez en la
+ * misma renegociación y cada una necesita su propia justificación auditable.
+ */
+class RenegotiateProposalRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -17,7 +27,6 @@ class AddProjectProposalRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'contractorCode' => ['required', 'exists:contractors,code'],
             'materialCost' => ['required', 'numeric', 'min:0'],
             'materialItems' => ['nullable', 'array'],
             'materialItems.*.materialName' => ['required_with:materialItems', 'string'],
@@ -26,39 +35,22 @@ class AddProjectProposalRequest extends FormRequest
             'materialItems.*.unitPrice' => ['required_with:materialItems', 'numeric', 'min:0'],
             'materialItems.*.totalPrice' => ['required_with:materialItems', 'numeric', 'min:0'],
             'materialItems.*.notes' => ['nullable', 'string'],
-            // Explícitamente 0 permitido: hay ofertas donde el contratista no
-            // cobra mano de obra por separado (ya viene incluida en materiales
-            // o es autoinstalación del cliente).
             'laborCost' => ['required', 'numeric', 'min:0'],
             'totalCost' => ['required', 'numeric', 'min:0'],
             'deliveryWeeks' => ['required', 'integer', 'min:0'],
             'durationValue' => ['nullable', 'integer', 'min:0'],
             'durationUnit' => ['nullable', 'string', 'in:dias,semanas,meses'],
-            // No se valida contra el máximo configurado en CONFIG APP: Analistas
-            // puede registrar anticipos negociados por encima de la política
-            // interna (renegociación telefónica/directa con el proveedor). El
-            // máximo configurado solo dispara una alerta visual en el frontend,
-            // nunca bloquea el registro. Tope de sanidad fijo 100%. Cuando se
-            // excede, el motivo pasa a ser obligatorio (ver withValidator()).
             'negotiatedAdvancePercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'description' => ['required', 'string'],
-            // RENEGOCIACION no se elige acá: una renegociación reemplaza una
-            // propuesta ya cargada (ver RenegotiateProposalRequest/
-            // ProjectController::renegotiateProposal) — el precio anterior se
-            // toma del registro existente, no se tipea a mano.
-            'origen' => ['required', 'string', 'in:MANUAL,PORTAL-PROV,SEED-INSERT'],
-            'fechaOferta' => ['required', 'date'],
+            // La renegociación se registra el mismo día o después de la
+            // oferta original que reemplaza — nunca antes (no puede
+            // "renegociarse" algo hacia el pasado) ni en el futuro.
+            'fechaOferta' => ['required', 'date', 'after_or_equal:' . $this->route('proposal')?->fecha_oferta?->toDateString(), 'before_or_equal:today'],
+            'motivo' => ['required', 'string'],
             'motivoAnticipoExcedido' => ['nullable', 'string'],
         ];
     }
 
-    /**
-     * `nullable` hace que Laravel omita cualquier regla siguiente (incluida
-     * una closure) cuando el campo está ausente o es null — por eso esta
-     * validación condicional vive en withValidator() en vez de en rules(),
-     * donde sí se ejecuta siempre, esté `motivoAnticipoExcedido` presente o
-     * no en el payload.
-     */
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {

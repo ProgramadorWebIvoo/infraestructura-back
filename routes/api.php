@@ -129,6 +129,8 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
     Route::delete('/projects/{project}/proposals/{proposal}', [ProjectController::class, 'removeProposal'])
         ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/proposals/{proposal}/renegotiate', [ProjectController::class, 'renegotiateProposal'])
+        ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/submit-comparative', [ProjectController::class, 'submitComparative'])
         ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/import-supplier-proposals', [ProjectController::class, 'importSupplierProposals'])

@@ -17,6 +17,10 @@ class NotificationRuleControllerTest extends TestCase
     {
         Notification::fake();
         $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        // Destinatario distinto del actor — el propio actor no debe recibir
+        // notificación de su propia acción (ver
+        // NotificationDispatcherTest::test_actor_does_not_receive_its_own_notification).
+        $otroSuperadmin = User::factory()->create(['role' => 'SUPERADMIN']);
 
         // Regresión del Hallazgo 1 (auditoría Fase 0-1): NotificationRuleController
         // auditaba con una acción por fila ("notification_rules.{accion}", que no
@@ -28,7 +32,7 @@ class NotificationRuleControllerTest extends TestCase
         ])->assertStatus(200);
 
         $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $superadmin->id,
+            'user_id' => $otroSuperadmin->id,
             'action' => 'Modificacion de reglas de notificacion',
         ]);
     }

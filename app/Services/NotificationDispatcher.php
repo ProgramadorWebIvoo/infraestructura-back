@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Events\NotificationCreated;
 use App\Models\AppNotification;
 use App\Models\Project;
+use App\Models\User;
 use App\Notifications\AdminActionMail;
 use App\Notifications\AdminActionNotification;
 use App\Notifications\ProjectActionMail;
 use App\Notifications\ProjectActionNotification;
 use App\Support\NotificationCatalog;
 use App\Support\NotificationType;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Punto único de notificación de eventos de negocio. Invocado desde
@@ -54,16 +56,17 @@ class NotificationDispatcher
             return;
         }
 
-        $appRecipients = NotificationRuleResolver::recipientsFor($action, 'app');
+        // El propio autor de la acción no necesita que se le notifique algo
+        // que él mismo acaba de hacer (ej. SUPERADMIN rechaza un expediente
+        // y no debe recibir el toast/push de "expediente rechazado" a sí
+        // mismo) — se excluye de ambos canales, no solo de "app".
+        $actorId = auth()->id();
+
+        $appRecipients = NotificationRuleResolver::recipientsFor($action, 'app')
+            ->reject(fn (User $user) => $user->id === $actorId);
         $type = NotificationCatalog::exists($action) ? NotificationCatalog::type($action) : NotificationType::INFORMACION;
 
         foreach ($appRecipients as $user) {
-            if ($project !== null) {
-                $user->notify(new ProjectActionNotification($project, $action, $project->status));
-            } else {
-                $user->notify(new AdminActionNotification($action, $details));
-            }
-
             $appNotification = AppNotification::create([
                 'user_id' => $user->id,
                 'project_id' => $project?->id,
@@ -73,31 +76,59 @@ class NotificationDispatcher
                 'details' => $details,
             ]);
 
-            // Con ShouldBroadcastNow el broadcast es síncrono dentro de este
-            // request — si Reverb está caído, no debe tumbar el flujo de
-            // negocio que originó la notificación (ej. un cambio de estado
-            // de proyecto). La notificación ya quedó persistida arriba; el
-            // push es una mejora, no un requisito para que la acción real
-            // se complete.
-            try {
-                broadcast(new NotificationCreated($appNotification));
-            } catch (\Throwable $e) {
-                report($e);
-            }
+            // Todo lo que sigue son efectos secundarios de "esto ya pasó de
+            // verdad": push nativo, bandeja interna en tiempo real. Se
+            // difieren con afterCommit() para que, si esta llamada ocurre
+            // dentro de un DB::transaction() que termina en rollback (ej.
+            // una operación posterior en el mismo closure lanza excepción),
+            // nunca lleguen a salir. Sin transacción activa, afterCommit()
+            // ejecuta el callback de inmediato — mismo comportamiento que
+            // antes para el caso común.
+            DB::afterCommit(function () use ($user, $project, $action, $details, $appNotification) {
+                if ($project !== null) {
+                    $user->notify(new ProjectActionNotification($project, $action, $project->status));
+                } else {
+                    $user->notify(new AdminActionNotification($action, $details));
+                }
+
+                // Con ShouldBroadcastNow el broadcast es síncrono dentro de
+                // este request — si Reverb está caído, no debe tumbar el
+                // flujo de negocio que originó la notificación (ej. un
+                // cambio de estado de proyecto). La notificación ya quedó
+                // persistida arriba; el push es una mejora, no un requisito
+                // para que la acción real se complete.
+                try {
+                    broadcast(new NotificationCreated($appNotification));
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            });
         }
 
         if (!static::isMailActionAllowed($action)) {
             return;
         }
 
-        $mailRecipients = NotificationRuleResolver::recipientsFor($action, 'mail');
+        $mailRecipients = NotificationRuleResolver::recipientsFor($action, 'mail')
+            ->reject(fn (User $user) => $user->id === $actorId);
 
         foreach ($mailRecipients as $user) {
-            if ($project !== null) {
-                $user->notify(new ProjectActionMail($project, $action, $details));
-            } else {
-                $user->notify(new AdminActionMail($action, $details));
-            }
+            DB::afterCommit(function () use ($user, $project, $action, $details) {
+                // El correo es igual de "mejora, no requisito" que el push
+                // (ver comentario del broadcast arriba): un SMTP mal
+                // configurado o caído no debe convertir una acción de
+                // negocio ya confirmada (y ya respondida como éxito al
+                // cliente, si esto corre de forma síncrona) en un 500.
+                try {
+                    if ($project !== null) {
+                        $user->notify(new ProjectActionMail($project, $action, $details));
+                    } else {
+                        $user->notify(new AdminActionMail($action, $details));
+                    }
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            });
         }
     }
 

@@ -105,6 +105,30 @@ class NotificationDispatcherTest extends TestCase
         ]);
     }
 
+    public function test_actor_does_not_receive_its_own_notification(): void
+    {
+        Notification::fake();
+
+        // El SUPERADMIN que ejecuta la acción también está en la lista de
+        // destinatarios por rol (CREADO -> CIERRE_DE_OBRA + SUPERADMIN/ADMIN)
+        // pero no debe notificarse a sí mismo.
+        $actor = User::factory()->create(['role' => 'SUPERADMIN']);
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        $this->actingAs($actor);
+        AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
+
+        Notification::assertNotSentTo($actor, ProjectActionNotification::class);
+        Notification::assertSentTo($cierre, ProjectActionNotification::class);
+
+        $this->assertDatabaseMissing('app_notifications', [
+            'user_id' => $actor->id,
+            'project_id' => $project->id,
+            'action' => 'Creacion de peticion de obra',
+        ]);
+    }
+
     public function test_non_critical_action_does_not_send_mail(): void
     {
         Notification::fake();

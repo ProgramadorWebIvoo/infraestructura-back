@@ -133,9 +133,9 @@ class ProjectDocumentController extends Controller
                 ? "V{$nextVersion}: {$names}"
                 : $names;
 
-            AuditLog::record($project, 'CIERRE_DE_OBRA', $action, $details);
-
             $this->syncProjectCounts($project);
+
+            AuditLog::record($project, 'CIERRE_DE_OBRA', $action, $details);
         });
 
         return response()->json(['data' => $saved], 201);

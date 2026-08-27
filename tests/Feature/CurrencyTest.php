@@ -16,6 +16,10 @@ class CurrencyTest extends TestCase
     {
         Notification::fake();
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        // Destinatario distinto del actor — el propio actor no debe recibir
+        // notificación de su propia acción (ver
+        // NotificationDispatcherTest::test_actor_does_not_receive_its_own_notification).
+        $otroAdmin = User::factory()->create(['role' => 'SUPERADMIN']);
 
         // Regresión del Hallazgo 1 (auditoría Fase 0-1): CurrencyController
         // auditaba vía ConfigAuditLog::recordAdminAction() sin notificar a
@@ -27,7 +31,7 @@ class CurrencyTest extends TestCase
         ])->assertStatus(201);
 
         $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $admin->id,
+            'user_id' => $otroAdmin->id,
             'action' => 'Alta de moneda',
         ]);
     }

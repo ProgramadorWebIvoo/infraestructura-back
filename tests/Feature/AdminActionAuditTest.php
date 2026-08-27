@@ -170,7 +170,11 @@ class AdminActionAuditTest extends TestCase
     public function test_admin_action_notifies_configured_recipients_via_app_channel(): void
     {
         Notification::fake();
-        $superadmin = $this->actingAsSuperadmin();
+        $this->actingAsSuperadmin();
+        // Un segundo SUPERADMIN, distinto del actor, para verificar que el
+        // canal app sí notifica — el actor nunca recibe su propia acción
+        // (ver NotificationDispatcherTest::test_actor_does_not_receive_its_own_notification).
+        $otroSuperadmin = User::factory()->create(['role' => 'SUPERADMIN']);
 
         $this->postJson('/api/materials/config', [
             'name' => 'Arena',
@@ -185,7 +189,7 @@ class AdminActionAuditTest extends TestCase
         // controller llame notify() aparte, y ya no se queda "solo
         // auditado, sin notificar a nadie" como en la Fase A original.
         $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $superadmin->id,
+            'user_id' => $otroSuperadmin->id,
             'action' => 'Alta de material',
         ]);
     }
@@ -193,7 +197,9 @@ class AdminActionAuditTest extends TestCase
     public function test_admin_action_without_project_sends_mail_when_configured(): void
     {
         Notification::fake();
-        $superadmin = $this->actingAsSuperadmin();
+        $this->actingAsSuperadmin();
+        // Idem: el correo tampoco debe llegar al propio actor.
+        $otroSuperadmin = User::factory()->create(['role' => 'SUPERADMIN']);
 
         // Canal mail nunca tiene fallback automático (a diferencia de app,
         // que cae a SUPERADMIN/ADMIN) — hay que configurar la regla explícita.
@@ -219,7 +225,7 @@ class AdminActionAuditTest extends TestCase
         // NotificationDispatcher solo enviaba mail cuando $project !== null
         // — las acciones administrativas nunca podían mandar correo aunque
         // la matriz/setting tuviera destinatarios configurados en canal mail.
-        Notification::assertSentTo($superadmin, \App\Notifications\AdminActionMail::class);
+        Notification::assertSentTo($otroSuperadmin, \App\Notifications\AdminActionMail::class);
     }
 
     public function test_admin_actions_are_included_in_default_acciones_con_notificacion_app(): void

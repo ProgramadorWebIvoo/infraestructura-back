@@ -101,6 +101,10 @@ class AppSettingCatalog
             'label' => 'Frecuencia de actualización del dashboard (segundos)',
             'description' => 'Cada cuánto se refresca el resumen ejecutivo del dashboard de Presidencia.',
         ],
+        'home_anuncio' => [
+            'label' => 'Aviso en la pantalla de inicio',
+            'description' => 'Mensaje opcional visible para todos los usuarios en la pantalla de inicio (ej. mantenimiento programado). Vacío = no se muestra ningún aviso.',
+        ],
     ];
 
     public static function label(string $key): string

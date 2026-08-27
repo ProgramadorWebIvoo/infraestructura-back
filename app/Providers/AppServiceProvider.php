@@ -3,8 +3,12 @@
 namespace App\Providers;
 
 use App\Notifications\Channels\ExpoChannel;
+use App\Services\NotificationRuleResolver;
+use App\Services\SettingsService;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
@@ -32,6 +36,36 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->configureRateLimiting();
+        $this->invalidateCachesAfterMigrate();
+    }
+
+    /**
+     * NotificationRuleResolver y SettingsService cachean su tabla completa
+     * (`notification_rules`/`app_settings`) por 5 min, invalidando
+     * explícitamente en cada escritura vía UI (CONFIG APP) — pero las
+     * migraciones de seed insertan filas directamente con `DB::table(...)`,
+     * sin pasar por esos servicios, así que nunca disparaban esa
+     * invalidación. Resultado real (reportado por QA): una migración que
+     * agrega una regla de notificación quedaba invisible hasta que el caché
+     * expiraba solo, con la acción cayendo al fallback administrativo pese a
+     * estar bien configurada en BD.
+     *
+     * `Illuminate\Database\Events\MigrationsEnded` no sirve: Laravel no lo
+     * dispara cuando el runner determina "nothing to migrate" (el caso más
+     * común en producción — la mayoría de los deploys no tienen migraciones
+     * pendientes). `CommandFinished` sí se dispara siempre que el comando
+     * corre, sin importar si movió algo — se filtra por nombre de comando
+     * para no invalidar en cada comando artisan random.
+     */
+    protected function invalidateCachesAfterMigrate(): void
+    {
+        Event::listen(CommandFinished::class, function (CommandFinished $event) {
+            if (!str_starts_with($event->command ?? '', 'migrate')) {
+                return;
+            }
+            NotificationRuleResolver::forget();
+            SettingsService::forget();
+        });
     }
 
     /**

@@ -11,16 +11,17 @@ class AddCspHeaders
     {
         $response = $next($request);
 
-        // El WebSocket de Reverb corre en un host/puerto propio, distinto de
-        // la API REST — sin sumarlo a connect-src, el navegador bloquea la
-        // conexión del cliente Echo por CSP (no por un problema de Reverb en
-        // sí). ws/wss según REVERB_SCHEME, coincidiendo con lo que expone
-        // config/reverb.php al frontend.
-        $reverbHost = env('REVERB_HOST');
-        $reverbPort = env('REVERB_PORT', 443);
-        $reverbWsScheme = env('REVERB_SCHEME', 'https') === 'https' ? 'wss' : 'ws';
-        $reverbConnectSrc = $reverbHost
-            ? " {$reverbWsScheme}://{$reverbHost}:{$reverbPort}"
+        // Pusher Channels (WebSocket) corre en su propio dominio, distinto
+        // de la API REST — sin sumarlo a connect-src, el navegador bloquea
+        // la conexión del cliente Echo por CSP (no por un problema de Pusher
+        // en sí). Migrado de Reverb (self-hosted) a Pusher (SaaS) porque el
+        // hosting de producción es cPanel compartido, que no soporta
+        // procesos persistentes de larga duración (artisan reverb:start).
+        // PUSHER_APP_CLUSTER determina el subdominio real (ej. mt1) — debe
+        // coincidir con VITE_PUSHER_APP_CLUSTER del frontend.
+        $pusherCluster = env('PUSHER_APP_CLUSTER');
+        $pusherConnectSrc = $pusherCluster
+            ? " https://sockjs-{$pusherCluster}.pusher.com wss://ws-{$pusherCluster}.pusher.com"
             : '';
 
         $csp = "default-src 'self'; " .
@@ -28,7 +29,7 @@ class AddCspHeaders
                "style-src 'self' 'unsafe-inline'; " .
                "img-src 'self' data:; " .
                "font-src 'self'; " .
-               "connect-src 'self'{$reverbConnectSrc}; " .
+               "connect-src 'self'{$pusherConnectSrc}; " .
                "frame-ancestors 'none'; " .
                "base-uri 'self'; " .
                "form-action 'self'; " .

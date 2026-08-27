@@ -69,6 +69,7 @@ class NotificationCatalog
         // Documentos de proyecto
         'Carga de hojas de calculo/cubicaciones' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Carga de planos de ingenieria' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
+        'Carga de fotografias del sitio de obra' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Carga de correcciones de peticion rechazada' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Carga de nueva version de documento' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Eliminacion de documento adjunto' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],

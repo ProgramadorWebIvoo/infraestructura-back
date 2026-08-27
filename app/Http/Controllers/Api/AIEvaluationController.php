@@ -52,6 +52,22 @@ class AIEvaluationController extends Controller
             'proposals.*.negotiatedAdvancePercent' => ['required', 'numeric', 'min:0', 'max:100'],
             'proposals.*.description'              => ['required', 'string', 'max:2000'],
             'proposals.*.observations'             => ['nullable', 'string', 'max:2000'],
+            'proposals.*.materialItems'                     => ['nullable', 'array'],
+            'proposals.*.materialItems.*.materialName'      => ['required_with:proposals.*.materialItems', 'string', 'max:255'],
+            'proposals.*.materialItems.*.quantity'           => ['required_with:proposals.*.materialItems', 'numeric', 'min:0'],
+            'proposals.*.materialItems.*.unit'               => ['required_with:proposals.*.materialItems', 'string', 'max:50'],
+            'proposals.*.materialItems.*.unitPrice'          => ['required_with:proposals.*.materialItems', 'numeric', 'min:0'],
+            'proposals.*.materialItems.*.totalPrice'         => ['required_with:proposals.*.materialItems', 'numeric', 'min:0'],
+            'proposals.*.materialItems.*.notes'              => ['nullable', 'string', 'max:500'],
+            'proposals.*.durationValue' => ['nullable', 'integer', 'min:0'],
+            'proposals.*.durationUnit'  => ['nullable', 'string', Rule::in(['dias', 'semanas', 'meses'])],
+            'proposals.*.origen'                    => ['nullable', 'string', 'max:50'],
+            'proposals.*.precioAnterior'            => ['nullable', 'numeric'],
+            'proposals.*.precioNuevo'               => ['nullable', 'numeric'],
+            'proposals.*.diferencia'                => ['nullable', 'numeric'],
+            'proposals.*.motivo'                    => ['nullable', 'string', 'max:1000'],
+            'proposals.*.motivoAnticipoExcedido'    => ['nullable', 'string', 'max:1000'],
+            'proposals.*.fechaOferta'               => ['nullable', 'string'],
             'provider' => ['nullable', 'string', Rule::in(['chatgpt', 'gemini', 'claude'])],
         ]);
 
@@ -78,8 +94,30 @@ class AIEvaluationController extends Controller
                 negotiatedAdvancePercent: (float) $prop['negotiatedAdvancePercent'],
                 description:             $prop['description'],
                 observations:            $prop['observations'] ?? null,
+                materialItems:           $prop['materialItems'] ?? null,
+                durationValue:           isset($prop['durationValue']) ? (int) $prop['durationValue'] : null,
+                durationUnit:            $prop['durationUnit'] ?? null,
+                origen:                  $prop['origen'] ?? null,
+                precioAnterior:          isset($prop['precioAnterior']) ? (float) $prop['precioAnterior'] : null,
+                precioNuevo:             isset($prop['precioNuevo']) ? (float) $prop['precioNuevo'] : null,
+                diferencia:              isset($prop['diferencia']) ? (float) $prop['diferencia'] : null,
+                motivo:                  $prop['motivo'] ?? null,
+                motivoAnticipoExcedido:  $prop['motivoAnticipoExcedido'] ?? null,
+                fechaOferta:             $prop['fechaOferta'] ?? null,
             );
         }
+
+        // Lista de materiales auditados del expediente (Cierre de Obra) — se toma
+        // de la BD, no del cliente, para que la IA compare contra la base real.
+        $projectMaterials = $project->materials()->get(['name', 'quantity', 'unit', 'estimated_unit_price', 'condition'])
+            ->map(fn ($m) => [
+                'name'                => $m->name,
+                'quantity'            => (float) $m->quantity,
+                'unit'                => $m->unit,
+                'estimatedUnitPrice'  => (float) $m->estimated_unit_price,
+                'condition'           => $m->condition,
+            ])
+            ->all();
 
         // Construir payload tipado para el servicio AI
         $payload = new EvaluationPayload(
@@ -90,12 +128,16 @@ class AIEvaluationController extends Controller
                 projectLocation:          $data['projectLocation'],
                 projectType:              $data['projectType'],
                 approvedInvestmentAmount: (float) $data['approvedInvestmentAmount'],
+                materials:                $projectMaterials,
+                estimatedTotal:           (float) $project->estimated_total,
             ),
             proposals: $proposalDtos,
         );
 
         try {
             $result = $this->aiService->evaluateWithProvider($payload->toArray(), $data['provider'] ?? null);
+
+            $this->cacheEvaluation($project, $result);
 
             // Log de auditoría
             $this->logEvaluation($project, $result);
@@ -114,6 +156,29 @@ class AIEvaluationController extends Controller
                 'attemptLog' => $this->aiService->getAttemptLog(),
             ], 503);
         }
+    }
+
+    /**
+     * Persiste el resultado en el expediente para que el botón "Evaluación IA"
+     * no dispare una nueva llamada a IA cada vez que se abre el modal — solo
+     * "Re-evaluar" lo hace. Se invalida (columnas puestas a null) en
+     * addProposal/renegotiateProposal/removeProposal, cualquier cambio al
+     * conjunto de propuestas vuelve obsoleto un análisis ya hecho.
+     */
+    private function cacheEvaluation(Project $project, array $result): void
+    {
+        $project->update([
+            'bid_evaluation_ai_winner_code' => $result['winnerContractorCode'] ?? null,
+            'bid_evaluation_ai_winner_name' => $result['winnerContractorName'] ?? null,
+            'bid_evaluation_ai_confidence_score' => $result['confidenceScore'] ?? null,
+            'bid_evaluation_ai_summary' => $result['summary'] ?? null,
+            'bid_evaluation_ai_strengths' => $result['strengths'] ?? [],
+            'bid_evaluation_ai_weaknesses' => $result['weaknesses'] ?? [],
+            'bid_evaluation_ai_risk_factors' => $result['riskFactors'] ?? [],
+            'bid_evaluation_ai_recommendation' => $result['recommendation'] ?? null,
+            'bid_evaluation_ai_provider' => $result['providerUsed'] ?? null,
+            'bid_evaluation_ai_evaluated_at' => now(),
+        ]);
     }
 
     /**

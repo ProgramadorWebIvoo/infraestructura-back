@@ -270,6 +270,7 @@ class ProjectController extends Controller
             $auditDetails .= " Motivo exceso de anticipo: {$proposal->motivo_anticipo_excedido}";
         }
         AuditLog::record($project, 'ANALISTA', 'Carga de propuesta', $auditDetails);
+        $this->invalidateBidEvaluationAiCache($project);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
@@ -331,6 +332,7 @@ class ProjectController extends Controller
             $auditDetails .= " Motivo exceso de anticipo: {$renegotiated->motivo_anticipo_excedido}";
         }
         AuditLog::record($project, 'ANALISTA', 'Renegociación de propuesta', $auditDetails);
+        $this->invalidateBidEvaluationAiCache($project);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
     }
@@ -382,8 +384,30 @@ class ProjectController extends Controller
 
         $proposal->delete();
         AuditLog::record($project, 'ANALISTA', 'Eliminacion de propuesta', "Propuesta {$proposal->id} retirada del cuadro comparativo.");
+        $this->invalidateBidEvaluationAiCache($project);
 
         return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+    }
+
+    /**
+     * Cualquier cambio al conjunto de propuestas (carga, renegociación,
+     * eliminación) vuelve obsoleto un análisis IA cacheado anteriormente —
+     * ver AIEvaluationController::cacheEvaluation().
+     */
+    private function invalidateBidEvaluationAiCache(Project $project): void
+    {
+        $project->update([
+            'bid_evaluation_ai_winner_code' => null,
+            'bid_evaluation_ai_winner_name' => null,
+            'bid_evaluation_ai_confidence_score' => null,
+            'bid_evaluation_ai_summary' => null,
+            'bid_evaluation_ai_strengths' => null,
+            'bid_evaluation_ai_weaknesses' => null,
+            'bid_evaluation_ai_risk_factors' => null,
+            'bid_evaluation_ai_recommendation' => null,
+            'bid_evaluation_ai_provider' => null,
+            'bid_evaluation_ai_evaluated_at' => null,
+        ]);
     }
 
     public function rejectProposals(RejectProposalsRequest $request, Project $project)

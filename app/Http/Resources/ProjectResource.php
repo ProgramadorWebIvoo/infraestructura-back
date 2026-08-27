@@ -57,6 +57,18 @@ class ProjectResource extends JsonResource
             'dossierAiCompletenessFactors' => $this->dossier_ai_completeness_factors,
             'dossierAiProvider' => $this->dossier_ai_provider,
             'dossierAiEvaluatedAt' => optional($this->dossier_ai_evaluated_at)->toIso8601String(),
+            'bidEvaluationAi' => $this->bid_evaluation_ai_evaluated_at === null ? null : [
+                'winnerContractorCode' => $this->bid_evaluation_ai_winner_code,
+                'winnerContractorName' => $this->bid_evaluation_ai_winner_name,
+                'confidenceScore' => $this->bid_evaluation_ai_confidence_score,
+                'summary' => $this->bid_evaluation_ai_summary,
+                'strengths' => $this->bid_evaluation_ai_strengths,
+                'weaknesses' => $this->bid_evaluation_ai_weaknesses,
+                'riskFactors' => $this->bid_evaluation_ai_risk_factors,
+                'recommendation' => $this->bid_evaluation_ai_recommendation,
+                'providerUsed' => $this->bid_evaluation_ai_provider,
+                'evaluatedAt' => optional($this->bid_evaluation_ai_evaluated_at)->toIso8601String(),
+            ],
             'procuraReviewNotes' => $this->procura_review_notes,
             'approvedInvestmentAmount' => $this->approved_investment_amount,
             // Excluye propuestas ya renegociadas (replaced_by_id != null) del

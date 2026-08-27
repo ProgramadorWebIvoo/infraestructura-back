@@ -9,7 +9,15 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        channels: __DIR__.'/../routes/channels.php',
+        // Sin `channels:` acá a propósito: withRouting() registraría
+        // /broadcasting/auth automáticamente bajo el grupo 'web' (sin
+        // Sanctum stateful), compitiendo con el registro real que hace
+        // BroadcastServiceProvider::boot() vía Broadcast::routes(['middleware'
+        // => ['api']]) — con ambos activos, la ruta bajo 'web' gana (se
+        // registra primero) y /broadcasting/auth queda sin
+        // EnsureFrontendRequestsAreStateful, así que la sesión del SPA nunca
+        // autentica ahí aunque el resto de /api/* funcione normal. Sin este
+        // parámetro, BroadcastServiceProvider es la única fuente de verdad.
     )
     ->withMiddleware(function (Middleware $middleware) {
         // Replica exactamente el stack global de app/Http/Kernel.php (L9) —

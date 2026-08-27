@@ -21,6 +21,10 @@ use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\ConfigAuditLogController;
 use App\Http\Controllers\Api\NotificationRuleController;
 use App\Http\Controllers\Api\CurrencyController;
+use App\Http\Controllers\Api\ExchangeRateController;
+use App\Http\Controllers\Api\CatalogCategoryController;
+use App\Http\Controllers\Api\CustomProductResolutionController;
+use App\Http\Controllers\Api\CatalogProductController;
 
 /*
 |--------------------------------------------------------------------------
@@ -99,6 +103,45 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:SUPERADMIN');
     Route::delete('/currencies/{currency}', [CurrencyController::class, 'destroy'])
         ->middleware('role:SUPERADMIN');
+
+    // Histórico de tasas de cambio a USD — exclusivo SUPERADMIN.
+    Route::get('/exchange-rates', [ExchangeRateController::class, 'index'])
+        ->middleware(['role:SUPERADMIN'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/exchange-rates/{currencyCode}/history', [ExchangeRateController::class, 'history'])
+        ->middleware(['role:SUPERADMIN'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::post('/exchange-rates', [ExchangeRateController::class, 'store'])
+        ->middleware('role:SUPERADMIN');
+
+    // Categorías del catálogo maestro de productos — exclusivo SUPERADMIN.
+    Route::get('/catalog-categories', [CatalogCategoryController::class, 'index'])
+        ->middleware(['role:SUPERADMIN'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::post('/catalog-categories', [CatalogCategoryController::class, 'store'])
+        ->middleware('role:SUPERADMIN');
+    Route::patch('/catalog-categories/{catalogCategory}', [CatalogCategoryController::class, 'update'])
+        ->middleware('role:SUPERADMIN');
+    Route::delete('/catalog-categories/{catalogCategory}', [CatalogCategoryController::class, 'destroy'])
+        ->middleware('role:SUPERADMIN');
+
+    // Reclasificación de productos personalizados pendientes — panel de Presidencia.
+    Route::get('/custom-product-resolutions/pending', [CustomProductResolutionController::class, 'pending'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::post('/supplier-material-proposal-lines/{line}/resolve-product', [CustomProductResolutionController::class, 'store'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN');
+
+    // Catálogo maestro consultable — submódulo de Presidencia (solo lectura).
+    Route::get('/catalog/products', [CatalogProductController::class, 'index'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/catalog/products/{catalogProduct}', [CatalogProductController::class, 'show'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/catalog/products/{catalogProduct}/price-history', [CatalogProductController::class, 'priceHistory'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
 
     Route::get('/modules', [ModuleController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/contractors', [ContractorController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

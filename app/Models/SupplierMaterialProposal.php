@@ -43,6 +43,11 @@ class SupplierMaterialProposal extends Model
         return $this->belongsTo(Project::class);
     }
 
+    public function lines()
+    {
+        return $this->hasMany(SupplierMaterialProposalLine::class, 'supplier_material_proposal_id');
+    }
+
     /**
      * Genera el siguiente ID secuencial (SMP-001, SMP-002, ...). Bloquea la
      * última fila para evitar colisiones bajo concurrencia; el caller debe

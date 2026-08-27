@@ -45,4 +45,14 @@ class Contractor extends Model
 
         return 'CON-' . $number;
     }
+
+    public function catalogProducts()
+    {
+        return $this->hasMany(CatalogProductSupplier::class, 'supplier_code', 'code');
+    }
+
+    public function priceHistory()
+    {
+        return $this->hasMany(ProductPriceHistory::class, 'supplier_code', 'code');
+    }
 }

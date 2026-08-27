@@ -7,12 +7,21 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\SupplierProposalResource;
 use App\Models\SupplierInvitation;
 use App\Models\SupplierMaterialProposal;
+use App\Services\CatalogSyncService;
+use App\Services\ProposalLineNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SupplierProposalController extends Controller
 {
     use LogsPublicAccess;
+
+    public function __construct(
+        private readonly ProposalLineNormalizer $lineNormalizer,
+        private readonly CatalogSyncService $catalogSync,
+    ) {
+    }
 
     public function store(Request $request, string $token)
     {
@@ -36,6 +45,18 @@ class SupplierProposalController extends Controller
             'items.*.unitPrice'     => ['required', 'numeric', 'min:0'],
             'items.*.totalPrice'    => ['required', 'numeric', 'min:0'],
             'items.*.notes'         => ['nullable', 'string', 'max:500'],
+            // Campos opcionales que alimentan el catálogo maestro y el
+            // histórico de precios (ProposalLineNormalizer/CatalogSyncService)
+            // — todavía no los envía el formulario público (Fase 3 pendiente),
+            // se validan igual para no requerir tocar este endpoint cuando
+            // el formulario los empiece a mandar.
+            'items.*.quoteCurrency'      => ['nullable', 'string', 'size:3'],
+            'items.*.conditionStatus'    => ['nullable', 'string', 'in:new,used,refurbished'],
+            'items.*.catalogProductId'   => ['nullable', 'integer', 'exists:material_catalog,id'],
+            'items.*.technicalSpecs'     => ['nullable', 'array'],
+            'items.*.warrantyDescription' => ['nullable', 'string', 'max:255'],
+            'items.*.warrantyMonths'     => ['nullable', 'integer', 'min:0', 'max:600'],
+            'items.*.imagePath'          => ['nullable', 'string', 'max:500'],
             'generalNotes'          => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -60,6 +81,23 @@ class SupplierProposalController extends Controller
 
             return $proposal;
         });
+
+        // Normalización de líneas + sincronización de catálogo/histórico:
+        // fuera de la transacción principal a propósito. Si falla (ej. tasa
+        // de cambio faltante para una moneda), la propuesta YA quedó
+        // guardada y el enlace YA quedó marcado como usado — no queremos
+        // que un problema de catálogo le devuelva un error al proveedor
+        // externo ni lo deje reintentar con el mismo enlace de un solo uso.
+        try {
+            $lines = $this->lineNormalizer->normalize($proposal);
+            $this->catalogSync->sync($proposal, $lines);
+        } catch (\Throwable $e) {
+            report($e);
+            Log::warning('No se pudo sincronizar catálogo/histórico para la propuesta.', [
+                'proposal_id' => $proposal->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $this->logPublicAccess($request, 'proposal.submit', "Propuesta: {$proposal->id} / Invitación: {$token} / Proveedor: {$invitation->supplier_name}", $invitation->project);
 

@@ -8,6 +8,11 @@ class SupplierProposalResource extends JsonResource
 {
     public function toArray($request): array
     {
+        // La relación 'lines.catalogProduct' se carga eagerly en el controller
+        // (with()), en UNA sola query batcheada para toda la página — NUNCA
+        // llamar loadMissing() acá: eso corre por-instancia dentro de through(),
+        // sin batchear entre proposals, y reintroduce el N+1 que with() evita.
+        //
         // Si la propuesta tiene líneas estructuradas (después de importar),
         // transformar a formato compatible con frontend (materialName, unitPrice, etc)
         // e incluir campos de estimación (estimatedPriceDisplay, variationLabel, etc).

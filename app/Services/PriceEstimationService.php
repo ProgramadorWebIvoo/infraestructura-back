@@ -70,7 +70,12 @@ class PriceEstimationService
                 source: 'last_quoted',
                 dataPoints: 1,
                 periodMonths: null,
-                referenceDate: $lastQuoted->last_quoted_at,
+                // DB::table() (query builder) devuelve columnas datetime como
+                // string plano, no Carbon — a diferencia de Eloquent, que
+                // castea automáticamente. El DTO espera ?Carbon, así que sin
+                // este parse() esto revienta con TypeError en cuanto se
+                // ejercita el camino de fallback (bug real, detectado por test).
+                referenceDate: \Carbon\Carbon::parse($lastQuoted->last_quoted_at),
             );
         }
 

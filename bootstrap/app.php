@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // TRUSTED_PROXIES desde config/env dinámicamente, algo que el helper
         // nativo trustProxies() no soporta con un valor no estático).
         $middleware->use([
+            \App\Http\Middleware\AttachRequestId::class,
             \App\Http\Middleware\TrustProxies::class,
             \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\PreventRequestsDuringMaintenance::class,

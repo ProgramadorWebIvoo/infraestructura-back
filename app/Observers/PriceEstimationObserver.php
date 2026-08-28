@@ -44,10 +44,10 @@ class PriceEstimationObserver
             $line->load('proposal');
         }
 
-        // Buscar contractor por nombre para obtener su código (supplier_code)
-        // ProductPriceHistory está indexado por supplier_code (ej: CON-303), no por nombre
-        $contractor = Contractor::where('name', $line->proposal->supplier_name)->first();
-        $supplierCode = $contractor?->code ?? $line->proposal->supplier_name;
+        // Resolver supplier_code por nombre (cacheado, case-insensitive) —
+        // ver Contractor::codeForSupplierName(), fuente única compartida
+        // con CatalogSyncService para que ambos resuelvan igual.
+        $supplierCode = Contractor::codeForSupplierName($line->proposal->supplier_name) ?? $line->proposal->supplier_name;
 
         // Obtener EST del servicio
         $est = $this->priceService->getEstimatedPrice(

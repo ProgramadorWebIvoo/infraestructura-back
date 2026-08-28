@@ -181,6 +181,50 @@ class SupplierProposalCatalogSyncTest extends TestCase
         ]);
     }
 
+    /**
+     * Antes, CatalogSyncService::resolveSupplierCode() se llamaba dentro
+     * del foreach de líneas — la MISMA query (LOWER(name) = ...) se repetía
+     * una vez por línea de la propuesta, sin importar que el resultado
+     * fuera idéntico cada vez. Con N líneas, N queries idénticas. Ahora se
+     * resuelve una sola vez por propuesta (Contractor::codeForSupplierName,
+     * cacheado). Este test fija ese comportamiento: consultar cuántas veces
+     * se ejecuta la query de contractors no debe crecer con la cantidad de
+     * líneas de la propuesta.
+     */
+    public function test_resolving_supplier_code_does_not_scale_with_line_count(): void
+    {
+        Contractor::create([
+            'code' => Contractor::nextCode(),
+            'name' => 'Acero del Sur',
+            'specialty' => 'Materiales',
+            'status' => 'active',
+        ]);
+        $invitation = $this->makeInvitation();
+
+        $contractorQueries = 0;
+        \Illuminate\Support\Facades\DB::listen(function ($query) use (&$contractorQueries) {
+            if (str_contains($query->sql, 'contractors') && str_contains($query->sql, 'LOWER')) {
+                $contractorQueries++;
+            }
+        });
+
+        $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
+            'items' => [
+                $this->baseItem(['materialName' => 'Cemento Portland']),
+                $this->baseItem(['materialName' => 'Cabilla 3/8']),
+                $this->baseItem(['materialName' => 'Arena lavada']),
+                $this->baseItem(['materialName' => 'Bloque de 15cm']),
+            ],
+        ])->assertStatus(201);
+
+        $this->assertDatabaseCount('product_price_history', 4);
+        // Con caché de request (Cache::remember), la query SQL real corre
+        // como máximo 1 vez — el resto de resoluciones vienen del store de
+        // caché, no de la BD.
+        $this->assertLessThanOrEqual(1, $contractorQueries);
+    }
+
     public function test_unknown_supplier_skips_catalog_link_but_still_normalizes_line(): void
     {
         $invitation = $this->makeInvitation();

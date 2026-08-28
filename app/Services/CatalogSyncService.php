@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CatalogProductSupplier;
+use App\Models\Contractor;
 use App\Models\MaterialCatalog;
 use App\Models\ProductPriceHistory;
 use App\Models\SupplierMaterialProposal;
@@ -23,7 +24,11 @@ class CatalogSyncService
 {
     public function sync(SupplierMaterialProposal $proposal, array $lines): void
     {
-        DB::transaction(function () use ($proposal, $lines) {
+        // Resuelto UNA vez por propuesta, no por línea — antes se repetía
+        // la misma query idéntica dentro del foreach (N+1 real).
+        $supplierCode = Contractor::codeForSupplierName($proposal->supplier_name);
+
+        DB::transaction(function () use ($proposal, $lines, $supplierCode) {
             foreach ($lines as $line) {
                 /** @var SupplierMaterialProposalLine $line */
                 $catalogProductId = $line->catalog_product_id ?? $this->resolveOrCreateFromCustom($line);
@@ -32,7 +37,6 @@ class CatalogSyncService
                     $line->update(['catalog_product_id' => $catalogProductId]);
                 }
 
-                $supplierCode = $this->resolveSupplierCode($proposal);
                 if (!$supplierCode) {
                     // Proveedor externo sin Contractor registrado todavía (invitación
                     // pública sin alta previa) — no hay a qué CatalogProductSupplier/
@@ -89,11 +93,5 @@ class CatalogSyncService
         ]);
 
         return $created->id;
-    }
-
-    private function resolveSupplierCode(SupplierMaterialProposal $proposal): ?string
-    {
-        return \App\Models\Contractor::whereRaw('LOWER(name) = ?', [mb_strtolower(trim($proposal->supplier_name))])
-            ->value('code');
     }
 }

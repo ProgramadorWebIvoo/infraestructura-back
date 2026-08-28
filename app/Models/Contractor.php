@@ -46,6 +46,34 @@ class Contractor extends Model
         return 'CON-' . $number;
     }
 
+    /**
+     * Resuelve el `code` de un Contractor a partir de su nombre — usado por
+     * CatalogSyncService y PriceEstimationObserver para mapear
+     * supplier_name (texto libre en las propuestas) a supplier_code
+     * (identidad real del proveedor). Antes cada uno tenía su propia query
+     * inline: CatalogSyncService la repetía UNA VEZ POR LÍNEA de la misma
+     * propuesta (N+1 real, mismo resultado cada vez), y el Observer usaba
+     * comparación exacta (`where('name', ...)`) mientras CatalogSyncService
+     * usaba case-insensitive (`whereRaw LOWER(name) = ...`) — dos fuentes
+     * podían resolver distinto para el mismo proveedor según mayúsculas.
+     * Cacheado 1h: el nombre de un Contractor cambia muy rara vez (acción
+     * manual de ADMIN), y una desincronización de hasta 1h es aceptable
+     * frente al costo de invalidar en cada update.
+     */
+    public static function codeForSupplierName(?string $name): ?string
+    {
+        $normalized = mb_strtolower(trim((string) $name));
+        if ($normalized === '') {
+            return null;
+        }
+
+        return \Illuminate\Support\Facades\Cache::remember(
+            "contractor_code_for_name:{$normalized}",
+            3600,
+            fn () => static::whereRaw('LOWER(name) = ?', [$normalized])->value('code')
+        );
+    }
+
     public function catalogProducts()
     {
         return $this->hasMany(CatalogProductSupplier::class, 'supplier_code', 'code');

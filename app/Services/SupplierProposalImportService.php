@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\ProjectProposal;
 use App\Models\SupplierMaterialProposal;
 use App\Models\ProductPriceHistory;
+use Illuminate\Support\Facades\DB;
 
 class SupplierProposalImportService
 {
@@ -71,27 +72,35 @@ class SupplierProposalImportService
             $description = $supplierProposal->general_notes
                 ?? "Propuesta de materiales de {$supplierProposal->supplier_name}. Presupuesto total de materiales: \$" . number_format($totalCost, 2);
 
-            $project->proposals()->create([
-                'id' => ProjectProposal::nextId(),
-                'contractor_code' => $contractor->code,
-                'contractor_name_snapshot' => $contractor->name,
-                'material_cost' => $materialCost,
-                'material_items' => $supplierProposal->items,
-                'quote_currency' => $supplierProposal->quote_currency,
-                'labor_cost' => $laborCost,
-                'total_cost' => $totalCost,
-                'delivery_weeks' => $deliveryWeeks,
-                'duration_value' => $supplierProposal->estimated_days,
-                'duration_unit' => $supplierProposal->duration_unit,
-                'negotiated_advance_percent' => $supplierProposal->advance_percent ?? 0,
-                'description' => $description,
-                'origen' => 'PORTAL-PROV',
-                'fecha_oferta' => now()->toDateString(),
-                'created_by' => auth()->id(),
-            ]);
+            // Transacción por propuesta (no una sola para todo el import):
+            // si falla la línea N, las 1..N-1 ya importadas se quedan —
+            // mismo criterio que el resto del método (skip + continue, no
+            // todo-o-nada). Lo que sí debe ser atómico es "propuesta +
+            // su histórico de precios", para que nunca quede una sin la
+            // otra si algo revienta a mitad de savePriceHistory().
+            DB::transaction(function () use ($project, $supplierProposal, $contractor, $materialCost, $laborCost, $totalCost, $deliveryWeeks, $description) {
+                $project->proposals()->create([
+                    'id' => ProjectProposal::nextId(),
+                    'contractor_code' => $contractor->code,
+                    'contractor_name_snapshot' => $contractor->name,
+                    'material_cost' => $materialCost,
+                    'material_items' => $supplierProposal->items,
+                    'quote_currency' => $supplierProposal->quote_currency,
+                    'labor_cost' => $laborCost,
+                    'total_cost' => $totalCost,
+                    'delivery_weeks' => $deliveryWeeks,
+                    'duration_value' => $supplierProposal->estimated_days,
+                    'duration_unit' => $supplierProposal->duration_unit,
+                    'negotiated_advance_percent' => $supplierProposal->advance_percent ?? 0,
+                    'description' => $description,
+                    'origen' => 'PORTAL-PROV',
+                    'fecha_oferta' => now()->toDateString(),
+                    'created_by' => auth()->id(),
+                ]);
 
-            // Guardar snapshot de precios en product_price_history para trazabilidad
-            $this->savePriceHistory($supplierProposal, $contractor->code);
+                // Guardar snapshot de precios en product_price_history para trazabilidad
+                $this->savePriceHistory($supplierProposal, $contractor->code);
+            });
 
             $existingCodes[] = $contractor->code;
             $imported++;

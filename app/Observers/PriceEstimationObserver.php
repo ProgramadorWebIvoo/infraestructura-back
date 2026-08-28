@@ -18,6 +18,7 @@ class PriceEstimationObserver
         $this->calculateEstimation($line);
         // Invalidar caché general de propuestas cuando se crean líneas
         \App\Support\CacheVersion::bump('supplier_proposals');
+        $this->bumpContractorHistoryCache($line);
     }
 
     public function updating(SupplierMaterialProposalLine $line): void
@@ -26,7 +27,23 @@ class PriceEstimationObserver
         if ($line->isDirty(['unit_price_usd', 'unit_price', 'quote_currency'])) {
             $this->calculateEstimation($line);
             \App\Support\CacheVersion::bump('supplier_proposals');
+            $this->bumpContractorHistoryCache($line);
         }
+    }
+
+    /**
+     * Invalida el histórico consolidado del proveedor (ContractorHistoryService)
+     * cuando entra una cotización nueva o cambia de precio — el mismo evento
+     * que ya escribe en product_price_history vía CatalogSyncService.
+     */
+    private function bumpContractorHistoryCache(SupplierMaterialProposalLine $line): void
+    {
+        if (!$line->relationLoaded('proposal')) {
+            $line->load('proposal');
+        }
+
+        $supplierCode = Contractor::codeForSupplierName($line->proposal->supplier_name) ?? $line->proposal->supplier_name;
+        \App\Support\CacheVersion::bump('contractor_history:' . $supplierCode);
     }
 
     /**

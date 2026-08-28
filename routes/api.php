@@ -163,6 +163,9 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/modules', [ModuleController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/contractors', [ContractorController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/contractors/{contractor}/rating', [ContractorController::class, 'updateRating']);
+    Route::get('/contractors/{contractor}/history', [ContractorController::class, 'history'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/materials', [MaterialController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/supplier-invitations', [SupplierInvitationController::class, 'store']);

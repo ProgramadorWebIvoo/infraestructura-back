@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateContractorRequest;
 use App\Http\Resources\ContractorResource;
 use App\Models\Contractor;
 use App\Models\ConfigAuditLog;
+use App\Services\ContractorHistoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -163,5 +164,18 @@ class ContractorController extends Controller
             'code'   => $contractor->code,
             'rating' => $contractor->rating,
         ]);
+    }
+
+    /**
+     * GET /api/contractors/{contractor}/history — serie mensual de precios
+     * cotizados + top productos + stats, para el panel de detalle de
+     * proveedor (Fase 3.1.3).
+     */
+    public function history(Request $request, Contractor $contractor, ContractorHistoryService $historyService)
+    {
+        $monthsBack = (int) $request->integer('months', 12);
+        $monthsBack = max(1, min($monthsBack, 24));
+
+        return response()->json($historyService->getSupplierHistory($contractor->code, $monthsBack));
     }
 }

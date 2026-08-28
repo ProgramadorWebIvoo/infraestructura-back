@@ -61,6 +61,70 @@ class SupplierInvitationController extends Controller
         ], 201);
     }
 
+    /**
+     * Invitación más reciente para un proveedor+obra, viva o no —
+     * consultada al abrir/reabrir InviteModal para mostrar el enlace ya
+     * generado en vez de forzar a regenerar uno nuevo cada vez, Y para
+     * detectar que un enlace que el modal tenía en memoria como "vigente"
+     * dejó de estarlo mientras el modal seguía abierto (ej. el proveedor
+     * lo usó recién). `status` distingue POR QUÉ dejó de ser válido —
+     * used/expired/replaced — para que el frontend muestre el motivo real
+     * en vez de un genérico "ya no está disponible".
+     */
+    public function latest(Request $request)
+    {
+        $data = $request->validate([
+            'project_id'      => ['required', 'string', 'exists:projects,id'],
+            'supplierContact' => ['required', 'email', 'max:180'],
+        ]);
+
+        // "Más reciente" = la punta de la cadena de reemplazos (la fila que
+        // AÚN NO fue reemplazada por otra, replaced_by IS NULL) — más
+        // confiable que ordenar solo por created_at: timestamp sin
+        // microsegundos, dos invitaciones creadas en el mismo segundo (ej.
+        // clic doble en "Regenerar") empatarían y el orden no sería
+        // determinista. Una invitación con replaced_by seteado siempre es
+        // la vieja de un par, nunca la nueva.
+        $invitation = SupplierInvitation::with('project')
+            ->where('project_id', $data['project_id'])
+            ->where('supplier_contact', $data['supplierContact'])
+            ->whereNull('replaced_by')
+            ->latest('created_at')
+            ->first();
+
+        // Si no hay ninguna "punta" (caso raro: la cadena entera quedó con
+        // replaced_by apuntando a una fila que nunca se creó, o no hay
+        // ninguna invitación en absoluto), cae a la más reciente sin
+        // filtrar — sigue siendo mejor mostrar algo con status correcto
+        // que un null que el frontend no puede explicar.
+        $invitation ??= SupplierInvitation::with('project')
+            ->where('project_id', $data['project_id'])
+            ->where('supplier_contact', $data['supplierContact'])
+            ->latest('created_at')
+            ->first();
+
+        if (!$invitation) {
+            return response()->json(['data' => null]);
+        }
+
+        $status = match (true) {
+            $invitation->used_at !== null => 'used',
+            $invitation->replaced_by !== null => 'replaced',
+            $invitation->expires_at !== null && $invitation->expires_at->isPast() => 'expired',
+            default => 'active',
+        };
+
+        return response()->json(['data' => [
+            'token'        => $invitation->id,
+            'projectTitle' => $invitation->project->title,
+            'supplierName' => $invitation->supplier_name,
+            'supplierContact' => $invitation->supplier_contact,
+            'status'       => $status,
+            'createdAt'    => $invitation->created_at?->format('Y-m-d H:i'),
+            'expiresAt'    => $invitation->expires_at?->format('Y-m-d H:i'),
+        ]]);
+    }
+
     public function publicInfo(Request $request, string $token)
     {
         $invitation = SupplierInvitation::with('project.materials')->find($token);

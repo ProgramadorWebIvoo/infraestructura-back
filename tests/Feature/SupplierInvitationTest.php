@@ -424,4 +424,103 @@ class SupplierInvitationTest extends TestCase
             'errors'   => [],
         ]);
     }
+
+    public function test_latest_returns_null_when_no_invitation_exists(): void
+    {
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson("/api/supplier-invitations/latest?project_id={$this->project->id}&supplierContact=nadie@test.com");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data', null);
+    }
+
+    public function test_latest_returns_the_active_invitation(): void
+    {
+        $this->withHeaders($this->authHeaders())
+            ->postJson('/api/supplier-invitations', [
+                'project_id'      => $this->project->id,
+                'supplierName'    => 'Proveedor Test',
+                'supplierContact' => 'proveedor@test.com',
+            ])->assertStatus(201);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson("/api/supplier-invitations/latest?project_id={$this->project->id}&supplierContact=proveedor@test.com");
+
+        $response->assertStatus(200);
+        $this->assertNotNull($response->json('data.token'));
+        $response->assertJsonPath('data.supplierContact', 'proveedor@test.com');
+        $response->assertJsonPath('data.status', 'active');
+    }
+
+    public function test_latest_reports_used_status_instead_of_null(): void
+    {
+        // Antes devolvía null para un enlace usado (mismo shape que "nunca
+        // existió") — el modal no podía distinguir "genera uno nuevo" de
+        // "el proveedor YA envió su propuesta con este enlace", y seguía
+        // mostrando el enlace viejo como vigente si lo tenía en memoria.
+        $invitation = SupplierInvitation::factory()->used()->create([
+            'project_id'       => $this->project->id,
+            'supplier_contact' => 'usado@test.com',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson("/api/supplier-invitations/latest?project_id={$this->project->id}&supplierContact=usado@test.com");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.token', (string) $invitation->id);
+        $response->assertJsonPath('data.status', 'used');
+    }
+
+    public function test_latest_reports_expired_status_instead_of_null(): void
+    {
+        $invitation = SupplierInvitation::factory()->expired()->create([
+            'project_id'       => $this->project->id,
+            'supplier_contact' => 'expirado@test.com',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson("/api/supplier-invitations/latest?project_id={$this->project->id}&supplierContact=expirado@test.com");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.token', (string) $invitation->id);
+        $response->assertJsonPath('data.status', 'expired');
+    }
+
+    public function test_latest_reports_replaced_status(): void
+    {
+        $invitation = SupplierInvitation::factory()->replaced()->create([
+            'project_id'       => $this->project->id,
+            'supplier_contact' => 'reemplazado@test.com',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson("/api/supplier-invitations/latest?project_id={$this->project->id}&supplierContact=reemplazado@test.com");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.token', (string) $invitation->id);
+        $response->assertJsonPath('data.status', 'replaced');
+    }
+
+    public function test_latest_returns_the_newest_after_regenerating(): void
+    {
+        $this->withHeaders($this->authHeaders())
+            ->postJson('/api/supplier-invitations', [
+                'project_id'      => $this->project->id,
+                'supplierName'    => 'Proveedor Test',
+                'supplierContact' => 'proveedor@test.com',
+            ])->assertStatus(201);
+
+        $second = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/supplier-invitations', [
+                'project_id'      => $this->project->id,
+                'supplierName'    => 'Proveedor Test',
+                'supplierContact' => 'proveedor@test.com',
+            ])->assertStatus(201);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson("/api/supplier-invitations/latest?project_id={$this->project->id}&supplierContact=proveedor@test.com");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.token', $second->json('token'));
+    }
 }

@@ -36,7 +36,16 @@ class DashboardSummaryService
 
     public function getSummary(): array
     {
-        $projects = Project::with(['payments', 'proposals'])->get();
+        // Nota: NO se cachea el resultado completo — el dashboard debe
+        // reflejar cambios de configuración (ej. umbral de "estancado") y de
+        // estado de proyectos al instante; cachear con TTL fijo aquí
+        // reproduciría el mismo anti-patrón señalado en la auditoría
+        // (caché sin invalidación basada en eventos). La optimización real
+        // es limitar columnas cargadas en las relaciones eager-loaded.
+        $projects = Project::with([
+            'payments:id,project_id,amount',
+            'proposals:id,project_id,contractor_code,contractor_name_snapshot,total_cost,negotiated_advance_percent,delivery_weeks',
+        ])->get();
         $stalledThresholdDays = (int) SettingsService::get('proyecto_estancado_umbral_dias', 14);
 
         $totalApproved = 0.0;

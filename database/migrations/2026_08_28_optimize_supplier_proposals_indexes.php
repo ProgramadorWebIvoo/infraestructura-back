@@ -3,43 +3,32 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        // Chequear si los índices ya existen antes de crearlos
-        $this->ensureIndexExists('supplier_material_proposals', 'project_id');
-        $this->ensureIndexExists('supplier_material_proposals', 'submitted_at');
-        $this->ensureIndexExists('supplier_material_proposal_lines', 'supplier_material_proposal_id');
-        $this->ensureIndexExists('supplier_material_proposal_lines', 'catalog_product_id');
-        $this->ensureIndexExists('supplier_material_proposal_lines', ['variation_percent', 'variation_direction']);
-        $this->ensureIndexExists('product_price_history', 'supplier_code');
-        $this->ensureIndexExists('product_price_history', 'catalog_product_id');
+        // Índices ya existentes por columna, portable entre MySQL y SQLite
+        // (tests): crear con try/catch en lugar de INFORMATION_SCHEMA, que
+        // es exclusivo de MySQL y rompe la suite de tests en sqlite.
+        $this->ensureIndex('supplier_material_proposals', ['project_id']);
+        $this->ensureIndex('supplier_material_proposals', ['submitted_at']);
+        $this->ensureIndex('supplier_material_proposal_lines', ['supplier_material_proposal_id']);
+        $this->ensureIndex('supplier_material_proposal_lines', ['catalog_product_id']);
+        $this->ensureIndex('supplier_material_proposal_lines', ['variation_percent', 'variation_direction']);
+        // product_price_history ya tiene índices compuestos que cubren estas
+        // columnas (idx_price_history_product_time, idx_price_history_product_supplier_time)
+        // desde su migración de creación — no se duplican acá.
     }
 
-    private function ensureIndexExists(string $table, string|array $columns): void
+    private function ensureIndex(string $table, array $columns): void
     {
-        $columns = is_array($columns) ? $columns : [$columns];
-        $columnList = implode(',', $columns);
-
-        $result = DB::selectOne(
-            "SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
-             WHERE TABLE_SCHEMA = DATABASE()
-             AND TABLE_NAME = ?
-             AND COLUMN_NAME IN ('" . implode("','", $columns) . "')",
-            [$table]
-        );
-
-        if (!$result) {
-            Schema::table($table, function (Blueprint $table) use ($columns) {
-                if (count($columns) === 1) {
-                    $table->index($columns[0]);
-                } else {
-                    $table->index($columns);
-                }
+        try {
+            Schema::table($table, function (Blueprint $blueprint) use ($columns) {
+                $blueprint->index($columns);
             });
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Índice ya existe (1061 en MySQL, "index already exists" en sqlite) — no-op.
         }
     }
 
@@ -54,11 +43,6 @@ return new class extends Migration
             $table->dropIndex(['supplier_material_proposal_id']);
             $table->dropIndex(['catalog_product_id']);
             $table->dropIndex(['variation_percent', 'variation_direction']);
-        });
-
-        Schema::table('product_price_history', function (Blueprint $table) {
-            $table->dropIndex(['supplier_code']);
-            $table->dropIndex(['catalog_product_id']);
         });
     }
 };

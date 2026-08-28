@@ -17,7 +17,7 @@ class PriceEstimationObserver
     {
         $this->calculateEstimation($line);
         // Invalidar caché general de propuestas cuando se crean líneas
-        \Illuminate\Support\Facades\Cache::tags(['supplier_proposals'])->flush();
+        \App\Support\CacheVersion::bump('supplier_proposals');
     }
 
     public function updating(SupplierMaterialProposalLine $line): void
@@ -25,7 +25,7 @@ class PriceEstimationObserver
         // Recalcular si cambió precio o moneda
         if ($line->isDirty(['unit_price_usd', 'unit_price', 'quote_currency'])) {
             $this->calculateEstimation($line);
-            \Illuminate\Support\Facades\Cache::tags(['supplier_proposals'])->flush();
+            \App\Support\CacheVersion::bump('supplier_proposals');
         }
     }
 

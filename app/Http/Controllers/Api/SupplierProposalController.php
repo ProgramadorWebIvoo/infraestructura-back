@@ -12,6 +12,7 @@ use App\Services\CatalogSyncService;
 use App\Services\DocumentStorageService;
 use App\Services\ProposalLineNormalizer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -210,8 +211,10 @@ class SupplierProposalController extends Controller
 
         $this->logPublicAccess($request, 'proposal.submit', "Propuesta: {$proposal->id} / Invitación: {$token} / Proveedor: {$invitation->supplier_name}", $invitation->project);
 
-        // Invalidar caché de propuestas para este proyecto
-        \Illuminate\Support\Facades\Cache::tags(['supplier_proposals'])->flush();
+        // Invalidar caché de propuestas: incrementa la versión, las entradas
+        // viejas quedan huérfanas (expiran solas por TTL). Funciona con
+        // cualquier driver de caché, a diferencia de Cache::tags().
+        \App\Support\CacheVersion::bump('supplier_proposals');
 
         return response()->json(new SupplierProposalResource($proposal), 201);
     }
@@ -221,15 +224,16 @@ class SupplierProposalController extends Controller
         $perPage = min((int) ($request->get('per_page', 20)), 100);
         $page = (int) $request->get('page', 1);
         $projectId = $request->filled('project_id') ? (string) $request->project_id : null;
+        $version = \App\Support\CacheVersion::get('supplier_proposals');
 
-        // Clave de caché por página + proyecto
+        // Clave de caché por página + proyecto + versión (invalidación)
         $cacheKey = $projectId
-            ? "supplier_proposals:project:{$projectId}:page:{$page}:per:{$perPage}"
-            : "supplier_proposals:page:{$page}:per:{$perPage}";
+            ? "supplier_proposals:v{$version}:project:{$projectId}:page:{$page}:per:{$perPage}"
+            : "supplier_proposals:v{$version}:page:{$page}:per:{$perPage}";
 
-        // Caché 5 minutos con tags para invalidación atómica
+        // Caché 5 minutos — compatible con cualquier driver (file, database, redis)
         return response()->json(
-            \Illuminate\Support\Facades\Cache::tags(['supplier_proposals'])->remember(
+            Cache::remember(
                 $cacheKey,
                 300, // 5 minutos
                 fn () => $this->fetchAndSerializeProposals($projectId, $page, $perPage)
@@ -257,6 +261,6 @@ class SupplierProposalController extends Controller
 
         $paginated = $query->paginate($perPage);
 
-        return $paginated->through(fn ($p) => (new SupplierProposalResource($p))->resolve())->response()->getData(true);
+        return $paginated->through(fn ($p) => (new SupplierProposalResource($p))->resolve())->toArray();
     }
 }

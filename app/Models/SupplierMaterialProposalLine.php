@@ -49,6 +49,23 @@ class SupplierMaterialProposalLine extends Model
         'variation_badge_color',
     ];
 
+    /**
+     * Replica en PHP el CHECK constraint `chk_smpl_product_identity` (solo
+     * activo en MySQL, ver migración de creación de esta tabla) — sin esto,
+     * los tests contra SQLite podrían guardar líneas sin identidad de
+     * producto (ni catálogo ni nombre personalizado) sin que nada lo impida.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $line) {
+            if (is_null($line->catalog_product_id) && blank($line->custom_product_name)) {
+                throw new \InvalidArgumentException(
+                    'La línea debe tener catalog_product_id o custom_product_name.'
+                );
+            }
+        });
+    }
+
     public function proposal()
     {
         return $this->belongsTo(SupplierMaterialProposal::class, 'supplier_material_proposal_id');

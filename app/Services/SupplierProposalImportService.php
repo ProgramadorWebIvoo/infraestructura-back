@@ -6,18 +6,22 @@ use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\ProjectProposal;
 use App\Models\SupplierMaterialProposal;
+use App\Models\ProductPriceHistory;
 
 class SupplierProposalImportService
 {
     /**
      * Importa las propuestas de materiales recibidas del portal de proveedores
      * como propuestas de contratista del proyecto, emparejando por contacto/nombre.
+     * También guarda snapshot de precios en product_price_history para trazabilidad.
      *
      * @return array{imported: int, skipped: int, errors: string[]}
      */
     public function import(Project $project): array
     {
-        $supplierProposals = SupplierMaterialProposal::where('project_id', $project->id)->get();
+        $supplierProposals = SupplierMaterialProposal::where('project_id', $project->id)
+            ->with('lines')
+            ->get();
 
         if ($supplierProposals->isEmpty()) {
             return ['imported' => 0, 'skipped' => 0, 'errors' => []];
@@ -48,7 +52,7 @@ class SupplierProposalImportService
 
             // Calculate values from supplier material proposal
             $materialCost = collect($supplierProposal->items)->sum('totalPrice');
-            $laborCost = 0;
+            $laborCost = $supplierProposal->labor_cost ?? 0;
             $totalCost = $materialCost + $laborCost;
 
             // Convert estimated duration to weeks. Sin dato del proveedor, se deja en 0
@@ -73,6 +77,7 @@ class SupplierProposalImportService
                 'contractor_name_snapshot' => $contractor->name,
                 'material_cost' => $materialCost,
                 'material_items' => $supplierProposal->items,
+                'quote_currency' => $supplierProposal->quote_currency,
                 'labor_cost' => $laborCost,
                 'total_cost' => $totalCost,
                 'delivery_weeks' => $deliveryWeeks,
@@ -85,10 +90,39 @@ class SupplierProposalImportService
                 'created_by' => auth()->id(),
             ]);
 
+            // Guardar snapshot de precios en product_price_history para trazabilidad
+            $this->savePriceHistory($supplierProposal, $contractor->code);
+
             $existingCodes[] = $contractor->code;
             $imported++;
         }
 
         return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+    }
+
+    /**
+     * Guarda snapshot de cada línea de propuesta en product_price_history.
+     * Esto habilita histórico de precios y cálculo de variación posterior.
+     */
+    private function savePriceHistory(SupplierMaterialProposal $proposal, string $supplierCode): void
+    {
+        foreach ($proposal->lines as $line) {
+            // Solo guardar líneas con producto del catálogo (no personalizados)
+            if (!$line->catalog_product_id) {
+                continue;
+            }
+
+            ProductPriceHistory::create([
+                'catalog_product_id' => $line->catalog_product_id,
+                'supplier_code' => $supplierCode,
+                'supplier_material_proposal_line_id' => $line->id,
+                'price_usd' => $line->unit_price_usd, // MVP: solo USD
+                'original_currency' => $line->quote_currency ?? 'USD',
+                'original_price' => $line->unit_price,
+                'fx_rate_to_usd' => 1.0, // MVP: sin conversión
+                'fx_rate_source' => 'usd_only',
+                'quoted_at' => $proposal->submitted_at ?? now(),
+            ]);
+        }
     }
 }

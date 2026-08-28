@@ -15,11 +15,13 @@ class SupplierProposalResource extends JsonResource
             'supplierName'           => $this->supplier_name,
             'supplierCompany'        => $this->supplier_company,
             'supplierContact'        => $this->supplier_contact,
+            'quoteCurrency'          => $this->quote_currency,
             'items'                  => $this->items,
             'generalNotes'           => $this->general_notes,
             'estimatedDays'          => $this->estimated_days,
             'durationUnit'           => $this->duration_unit,
             'advancePercent'         => $this->advance_percent,
+            'laborCost'              => $this->labor_cost,
             'submittedAt'            => optional($this->submitted_at)->format('Y-m-d H:i'),
         ];
     }

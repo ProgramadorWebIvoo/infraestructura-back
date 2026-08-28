@@ -206,6 +206,42 @@ class SupplierInvitationTest extends TestCase
         $response->assertStatus(404);
     }
 
+    public function test_submit_proposal_with_labor_cost(): void
+    {
+        $invitation = SupplierInvitation::factory()->create([
+            'project_id' => $this->project->id,
+        ]);
+
+        $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
+            'items' => [
+                ['materialName' => 'Cemento', 'quantity' => 100, 'unit' => 'kg', 'unitPrice' => 12.50, 'totalPrice' => 1250.00, 'conditionStatus' => 'new', 'warrantyDescription' => 'N/A'],
+            ],
+            'laborCost' => 350.75,
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('laborCost', 350.75);
+        $this->assertDatabaseHas('supplier_material_proposals', ['id' => $response->json('id'), 'labor_cost' => 350.75]);
+    }
+
+    public function test_submit_proposal_without_labor_cost_defaults_to_null(): void
+    {
+        $invitation = SupplierInvitation::factory()->create([
+            'project_id' => $this->project->id,
+        ]);
+
+        $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
+            'items' => [
+                ['materialName' => 'Cemento', 'quantity' => 100, 'unit' => 'kg', 'unitPrice' => 12.50, 'totalPrice' => 1250.00, 'conditionStatus' => 'new', 'warrantyDescription' => 'N/A'],
+            ],
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('laborCost', null);
+    }
+
     public function test_submit_proposal_using_invitation(): void
     {
         $invitation = SupplierInvitation::factory()->create([
@@ -213,6 +249,7 @@ class SupplierInvitationTest extends TestCase
         ]);
 
         $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
             'items' => [
                 [
                     'materialName' => 'Cemento',
@@ -220,6 +257,8 @@ class SupplierInvitationTest extends TestCase
                     'unit'         => 'kg',
                     'unitPrice'    => 12.50,
                     'totalPrice'   => 1250.00,
+                    'conditionStatus' => 'new',
+                    'warrantyDescription' => 'Garantía de fábrica',
                 ],
                 [
                     'materialName' => 'Acero',
@@ -227,6 +266,8 @@ class SupplierInvitationTest extends TestCase
                     'unit'         => 'm',
                     'unitPrice'    => 25.00,
                     'totalPrice'   => 1250.00,
+                    'conditionStatus' => 'new',
+                    'warrantyDescription' => 'Garantía de fábrica',
                 ],
             ],
             'estimatedDays' => 30,
@@ -237,7 +278,7 @@ class SupplierInvitationTest extends TestCase
         $response->assertStatus(201);
         $response->assertJsonStructure([
             'id', 'projectId', 'supplierName', 'supplierCompany',
-            'items', 'estimatedDays', 'durationUnit', 'submittedAt',
+            'quoteCurrency', 'items', 'estimatedDays', 'durationUnit', 'submittedAt',
         ]);
 
         // Invitation should be marked as used
@@ -282,8 +323,9 @@ class SupplierInvitationTest extends TestCase
         ]);
 
         $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
             'items' => [
-                ['materialName' => 'Cemento', 'quantity' => 100, 'unit' => 'kg', 'unitPrice' => 12.50, 'totalPrice' => 1250.00],
+                ['materialName' => 'Cemento', 'quantity' => 100, 'unit' => 'kg', 'unitPrice' => 12.50, 'totalPrice' => 1250.00, 'conditionStatus' => 'new', 'warrantyDescription' => 'Garantía de fábrica'],
             ],
             'advancePercent' => 30,
         ]);

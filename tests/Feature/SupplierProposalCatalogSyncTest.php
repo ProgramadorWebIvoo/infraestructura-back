@@ -18,6 +18,10 @@ use Tests\TestCase;
  * disparado desde SupplierProposalController::store, no las clases de
  * servicio en aislamiento — es la integración la que importa acá (que un
  * envío real del portal público efectivamente alimente catálogo/histórico).
+ *
+ * La moneda es única por PEDIDO (`quoteCurrency` a nivel raíz del payload),
+ * no por línea — un proveedor cotiza todo el pedido en una sola moneda.
+ * `conditionStatus` es obligatorio por línea.
  */
 class SupplierProposalCatalogSyncTest extends TestCase
 {
@@ -37,19 +41,32 @@ class SupplierProposalCatalogSyncTest extends TestCase
         ]);
     }
 
+    private function baseItem(array $overrides = []): array
+    {
+        return array_merge([
+            'materialName' => 'Cemento Portland',
+            'quantity' => 10,
+            'unit' => 'saco',
+            'unitPrice' => 8.5,
+            'totalPrice' => 85,
+            'conditionStatus' => 'new',
+            'warrantyDescription' => 'Garantía de fábrica',
+        ], $overrides);
+    }
+
     public function test_submitting_a_proposal_creates_normalized_lines(): void
     {
         $invitation = $this->makeInvitation();
 
         $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
-            'items' => [
-                ['materialName' => 'Cemento Portland', 'quantity' => 10, 'unit' => 'saco', 'unitPrice' => 8.5, 'totalPrice' => 85],
-            ],
+            'quoteCurrency' => 'USD',
+            'items' => [$this->baseItem()],
         ]);
 
         $response->assertStatus(201);
         $proposalId = $response->json('id') ?? $response->json('data.id');
 
+        $this->assertDatabaseHas('supplier_material_proposals', ['id' => $proposalId, 'quote_currency' => 'USD']);
         $this->assertDatabaseHas('supplier_material_proposal_lines', [
             'supplier_material_proposal_id' => $proposalId,
             'custom_product_name' => 'Cemento Portland',
@@ -58,14 +75,56 @@ class SupplierProposalCatalogSyncTest extends TestCase
         ]);
     }
 
+    public function test_rejects_submission_without_quote_currency(): void
+    {
+        $invitation = $this->makeInvitation();
+
+        $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'items' => [$this->baseItem()],
+        ])->assertStatus(422);
+    }
+
+    public function test_rejects_submission_with_unregistered_currency(): void
+    {
+        $invitation = $this->makeInvitation();
+
+        $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'ZZZ',
+            'items' => [$this->baseItem()],
+        ])->assertStatus(422);
+    }
+
+    public function test_rejects_line_without_condition_status(): void
+    {
+        $invitation = $this->makeInvitation();
+        $item = $this->baseItem();
+        unset($item['conditionStatus']);
+
+        $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
+            'items' => [$item],
+        ])->assertStatus(422);
+    }
+
+    public function test_rejects_line_without_warranty_description(): void
+    {
+        $invitation = $this->makeInvitation();
+        $item = $this->baseItem();
+        unset($item['warrantyDescription']);
+
+        $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
+            'items' => [$item],
+        ])->assertStatus(422);
+    }
+
     public function test_new_custom_product_creates_a_catalog_entry(): void
     {
         $invitation = $this->makeInvitation();
 
         $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
-            'items' => [
-                ['materialName' => 'Varilla 3/8 Corrugada', 'quantity' => 50, 'unit' => 'unidad', 'unitPrice' => 6, 'totalPrice' => 300],
-            ],
+            'quoteCurrency' => 'USD',
+            'items' => [$this->baseItem(['materialName' => 'Varilla 3/8 Corrugada', 'quantity' => 50, 'unit' => 'unidad', 'unitPrice' => 6, 'totalPrice' => 300])],
         ])->assertStatus(201);
 
         $this->assertDatabaseHas('material_catalog', [
@@ -85,9 +144,8 @@ class SupplierProposalCatalogSyncTest extends TestCase
         $invitation = $this->makeInvitation();
 
         $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
-            'items' => [
-                ['materialName' => 'cemento portland', 'quantity' => 5, 'unit' => 'saco', 'unitPrice' => 9, 'totalPrice' => 45],
-            ],
+            'quoteCurrency' => 'USD',
+            'items' => [$this->baseItem(['materialName' => 'cemento portland', 'quantity' => 5, 'unitPrice' => 9, 'totalPrice' => 45])],
         ])->assertStatus(201);
 
         $this->assertDatabaseCount('material_catalog', 1);
@@ -107,9 +165,8 @@ class SupplierProposalCatalogSyncTest extends TestCase
         $invitation = $this->makeInvitation();
 
         $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
-            'items' => [
-                ['materialName' => 'Cemento Portland', 'quantity' => 10, 'unit' => 'saco', 'unitPrice' => 8.5, 'totalPrice' => 85],
-            ],
+            'quoteCurrency' => 'USD',
+            'items' => [$this->baseItem()],
         ])->assertStatus(201);
 
         $this->assertDatabaseCount('product_price_history', 1);
@@ -129,9 +186,8 @@ class SupplierProposalCatalogSyncTest extends TestCase
         $invitation = $this->makeInvitation();
 
         $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
-            'items' => [
-                ['materialName' => 'Cemento Portland', 'quantity' => 10, 'unit' => 'saco', 'unitPrice' => 8.5, 'totalPrice' => 85],
-            ],
+            'quoteCurrency' => 'USD',
+            'items' => [$this->baseItem()],
         ])->assertStatus(201);
 
         $this->assertDatabaseCount('product_price_history', 0);
@@ -143,14 +199,15 @@ class SupplierProposalCatalogSyncTest extends TestCase
         Contractor::create(['code' => Contractor::nextCode(), 'name' => 'Acero del Sur', 'specialty' => 'Materiales', 'status' => 'active']);
 
         $firstInvitation = $this->makeInvitation();
-        $r1 = $this->postJson("/api/public/invitations/{$firstInvitation->id}/proposal", [
-            'items' => [['materialName' => 'Cemento Portland', 'quantity' => 10, 'unit' => 'saco', 'unitPrice' => 8, 'totalPrice' => 80]],
-        ]);
-        $r1->assertStatus(201);
+        $this->postJson("/api/public/invitations/{$firstInvitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
+            'items' => [$this->baseItem(['unitPrice' => 8, 'totalPrice' => 80])],
+        ])->assertStatus(201);
 
         $secondInvitation = $this->makeInvitation();
         $this->postJson("/api/public/invitations/{$secondInvitation->id}/proposal", [
-            'items' => [['materialName' => 'Cemento Portland', 'quantity' => 10, 'unit' => 'saco', 'unitPrice' => 9, 'totalPrice' => 90]],
+            'quoteCurrency' => 'USD',
+            'items' => [$this->baseItem(['unitPrice' => 9, 'totalPrice' => 90])],
         ])->assertStatus(201);
 
         $link = CatalogProductSupplier::where('supplier_code', 'CON-301')->first();
@@ -166,11 +223,11 @@ class SupplierProposalCatalogSyncTest extends TestCase
         $invitation = $this->makeInvitation();
 
         $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
-            'items' => [
-                ['materialName' => 'Cemento Portland', 'quantity' => 10, 'unit' => 'saco', 'unitPrice' => 800, 'totalPrice' => 8000, 'quoteCurrency' => 'ves'],
-            ],
+            'quoteCurrency' => 'ves',
+            'items' => [$this->baseItem(['unitPrice' => 800, 'totalPrice' => 8000])],
         ])->assertStatus(201);
 
+        $this->assertDatabaseHas('supplier_material_proposals', ['quote_currency' => 'VES']);
         $this->assertDatabaseHas('supplier_material_proposal_lines', [
             'quote_currency' => 'VES',
             'unit_price' => 800,
@@ -188,9 +245,8 @@ class SupplierProposalCatalogSyncTest extends TestCase
         $invitation = $this->makeInvitation();
 
         $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
-            'items' => [
-                ['materialName' => 'Cemento Portland', 'quantity' => 10, 'unit' => 'saco', 'unitPrice' => 800, 'totalPrice' => 8000, 'quoteCurrency' => 'ves'],
-            ],
+            'quoteCurrency' => 'ves',
+            'items' => [$this->baseItem(['unitPrice' => 800, 'totalPrice' => 8000])],
         ]);
 
         $response->assertStatus(201);

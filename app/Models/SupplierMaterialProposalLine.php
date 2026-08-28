@@ -22,7 +22,8 @@ class SupplierMaterialProposalLine extends Model
         'unit',
         'technical_specs',
         'warranty_description',
-        'warranty_months',
+        'warranty_value',
+        'warranty_unit',
         'image_path',
         'line_notes',
     ];
@@ -33,7 +34,7 @@ class SupplierMaterialProposalLine extends Model
         'unit_price_usd' => 'float',
         'quantity' => 'float',
         'technical_specs' => 'array',
-        'warranty_months' => 'integer',
+        'warranty_value' => 'integer',
     ];
 
     public function proposal()

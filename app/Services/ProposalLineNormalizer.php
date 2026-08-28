@@ -13,15 +13,10 @@ use App\Models\SupplierMaterialProposalLine;
  * compatibilidad de lo que el proveedor envió — esta clase solo agrega
  * filas derivadas.
  *
- * El formulario público (Fase 3, pendiente) todavía no captura moneda de
- * cotización, condición, specs técnicas ni vínculo a catálogo por línea —
- * hasta que ese trabajo aterrice, cada ítem se normaliza como: moneda USD
- * (fx_rate_to_usd = 1.0), condición "new", y producto personalizado
- * (catalog_product_id = null, ver CatalogSyncService::resolveOrCreate)
- * usando el nombre declarado. Los campos opcionales del item (quoteCurrency,
- * conditionStatus, technicalSpecs, catalogProductId, etc.) se leen si están
- * presentes, así el código no requiere cambios cuando el formulario los
- * empiece a enviar.
+ * La moneda es única por PEDIDO (`SupplierMaterialProposal.quote_currency`),
+ * no por línea — un proveedor cotiza todo el pedido en una sola moneda; no
+ * existe (ni existió nunca en producción) un `quoteCurrency` por ítem, así
+ * que todas las líneas heredan la de la cabecera.
  */
 class ProposalLineNormalizer
 {
@@ -31,11 +26,11 @@ class ProposalLineNormalizer
     public function normalize(SupplierMaterialProposal $proposal): array
     {
         $quotedAt = $proposal->submitted_at ?? now();
+        $currency = strtoupper($proposal->quote_currency ?? 'USD');
+        $fxRate = ExchangeRate::rateFor($currency, $quotedAt);
         $lines = [];
 
         foreach ($proposal->items as $item) {
-            $currency = strtoupper($item['quoteCurrency'] ?? 'USD');
-            $fxRate = ExchangeRate::rateFor($currency, $quotedAt);
             $unitPrice = (float) ($item['unitPrice'] ?? 0);
 
             $lines[] = SupplierMaterialProposalLine::create([
@@ -51,7 +46,8 @@ class ProposalLineNormalizer
                 'unit' => $item['unit'] ?? '',
                 'technical_specs' => $item['technicalSpecs'] ?? [],
                 'warranty_description' => $item['warrantyDescription'] ?? null,
-                'warranty_months' => $item['warrantyMonths'] ?? null,
+                'warranty_value' => $item['warrantyValue'] ?? null,
+                'warranty_unit' => $item['warrantyUnit'] ?? null,
                 'image_path' => $item['imagePath'] ?? null,
                 'line_notes' => $item['notes'] ?? null,
             ]);

@@ -22,6 +22,19 @@ class CatalogCategoryController extends Controller
         return response()->json(['data' => CatalogCategory::orderBy('name')->get()]);
     }
 
+    /**
+     * Lista pública (sin auth) de categorías con su spec_schema — el
+     * formulario del portal de proveedores la usa para saber qué
+     * características técnicas pedir por línea según la categoría elegida.
+     * Mismo shape que index(), sin restricción de rol: spec_schema no es
+     * información sensible, es el propio formulario que el proveedor va a
+     * completar.
+     */
+    public function publicList(): JsonResponse
+    {
+        return response()->json(['data' => CatalogCategory::orderBy('name')->get(['id', 'name', 'parent_id', 'spec_schema'])]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

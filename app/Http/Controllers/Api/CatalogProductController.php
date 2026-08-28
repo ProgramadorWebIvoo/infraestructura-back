@@ -19,7 +19,7 @@ class CatalogProductController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = MaterialCatalog::query()->with('category');
+        $query = MaterialCatalog::query()->with(['category', 'suppliers']);
 
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->integer('category_id'));
@@ -43,6 +43,29 @@ class CatalogProductController extends Controller
             ->paginate(min((int) $request->get('per_page', 20), 100));
 
         return response()->json($products);
+    }
+
+    /**
+     * Búsqueda pública (sin auth) del catálogo maestro — el portal de
+     * proveedores la usa para que el proveedor pueda elegir "ya existe este
+     * producto en catálogo" en vez de declarar todo como personalizado.
+     * Solo id/name/unit/categoryId: nada de precios ni de qué proveedores
+     * lo cotizan (eso es interno).
+     */
+    public function publicSearch(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->get('search', ''));
+        if (mb_strlen($search) < 2) {
+            return response()->json(['data' => []]);
+        }
+
+        $products = MaterialCatalog::where('is_active', true)
+            ->where('name', 'like', "%{$search}%")
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name', 'unit', 'category_id']);
+
+        return response()->json(['data' => $products]);
     }
 
     public function show(MaterialCatalog $catalogProduct): JsonResponse

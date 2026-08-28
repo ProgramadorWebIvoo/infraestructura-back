@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ConfigAuditLog;
 use App\Models\Currency;
+use App\Models\ExchangeRate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,55 @@ class CurrencyController extends Controller
     public function index(): JsonResponse
     {
         return response()->json(['data' => Currency::orderByDesc('is_base')->orderBy('code')->get()]);
+    }
+
+    /**
+     * Lista pública (sin auth) de monedas activas — consumida por el portal
+     * de cotización de proveedores (token de invitación, sin sesión). Solo
+     * expone code/name/symbol/isBase, nada del resto del catálogo admin.
+     */
+    public function activePublicList(): JsonResponse
+    {
+        $currencies = Currency::where('is_active', true)
+            ->orderByDesc('is_base')
+            ->orderBy('code')
+            ->get(['code', 'name', 'symbol', 'is_base'])
+            ->map(fn ($c) => [
+                'code' => $c->code,
+                'name' => $c->name,
+                'symbol' => $c->symbol,
+                'isBase' => $c->is_base,
+            ]);
+
+        return response()->json(['data' => $currencies]);
+    }
+
+    /**
+     * Moneda base vigente + su tasa a USD (1.0 si la base es USD) — abierto
+     * a cualquier autenticado (no exclusivo SUPERADMIN como el resto de este
+     * controller): paneles internos como el Catálogo Maestro necesitan
+     * mostrar montos convertidos a la moneda base sin que quien los ve
+     * tenga permiso para administrar el catálogo de monedas en sí.
+     */
+    public function base(): JsonResponse
+    {
+        $base = Currency::where('is_base', true)->firstOrFail();
+
+        try {
+            $rateToUsd = $base->code === 'USD' ? 1.0 : ExchangeRate::rateFor($base->code, now());
+        } catch (\RuntimeException) {
+            // Base recién cambiada a una moneda sin tasa cargada todavía —
+            // el frontend cae a "no se puede convertir" en vez de recibir
+            // un 500 por un problema de configuración de tasas.
+            $rateToUsd = null;
+        }
+
+        return response()->json(['data' => [
+            'code' => $base->code,
+            'name' => $base->name,
+            'symbol' => $base->symbol,
+            'rateToUsd' => $rateToUsd,
+        ]]);
     }
 
     public function store(Request $request): JsonResponse

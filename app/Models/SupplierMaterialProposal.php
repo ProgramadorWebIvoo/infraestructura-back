@@ -25,17 +25,20 @@ class SupplierMaterialProposal extends Model
         'supplier_name',
         'supplier_company',
         'supplier_contact',
+        'quote_currency',
         'items',
         'general_notes',
         'estimated_days',
         'duration_unit',
         'advance_percent',
+        'labor_cost',
         'submitted_at',
     ];
 
     protected $casts = [
         'items' => 'array',
         'submitted_at' => 'datetime',
+        'labor_cost' => 'float',
     ];
 
     public function project()

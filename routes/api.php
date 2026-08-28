@@ -42,6 +42,16 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middle
 Route::post('/contractors', [ContractorController::class, 'registerPublic'])->middleware('throttle:public-api');
 Route::get('/public/invitations/{token}', [SupplierInvitationController::class, 'publicInfo'])->middleware('throttle:public-api');
 Route::post('/public/invitations/{token}/proposal', [SupplierProposalController::class, 'store'])->middleware('throttle:public-api');
+Route::post('/public/invitations/{token}/proposal-image', [SupplierProposalController::class, 'uploadImage'])->middleware('throttle:public-api');
+Route::get('/public/invitations/{token}/proposal-image/{path}', [SupplierProposalController::class, 'image'])
+    ->where('path', '.*')
+    ->middleware('throttle:public-api');
+
+// Catálogos de referencia para el formulario público de propuesta de
+// materiales (sin auth, consumidos por el enlace de invitación).
+Route::get('/public/currencies', [CurrencyController::class, 'activePublicList'])->middleware('throttle:public-api');
+Route::get('/public/catalog-categories', [CatalogCategoryController::class, 'publicList'])->middleware('throttle:public-api');
+Route::get('/public/catalog-products/search', [CatalogProductController::class, 'publicSearch'])->middleware('throttle:public-api');
 
     
 Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
@@ -90,6 +100,13 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::put('/notification-rules', [NotificationRuleController::class, 'update'])
         ->middleware('role:SUPERADMIN');
+
+    // Moneda base vigente — abierto a cualquier autenticado (el Catálogo
+    // Maestro y otros paneles internos la necesitan para mostrar montos
+    // convertidos, no solo SUPERADMIN). Va ANTES del /currencies genérico
+    // para no colisionar con una futura ruta {currency} de tipo string.
+    Route::get('/currencies/base', [CurrencyController::class, 'base'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
 
     // Catálogo de monedas aceptadas — exclusivo SUPERADMIN.
     Route::get('/currencies', [CurrencyController::class, 'index'])

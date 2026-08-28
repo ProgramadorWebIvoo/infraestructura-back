@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Currency;
+use App\Models\ExchangeRate;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -11,6 +12,43 @@ use Tests\TestCase;
 class CurrencyTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_base_endpoint_is_open_to_any_authenticated_role(): void
+    {
+        $user = User::factory()->create(['role' => 'PRESIDENCIA']);
+
+        $response = $this->actingAs($user)->getJson('/api/currencies/base');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.code', 'USD');
+        $response->assertJsonPath('data.rateToUsd', 1);
+    }
+
+    public function test_base_endpoint_returns_rate_for_non_usd_base(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $eur = Currency::create(['code' => 'EUR', 'name' => 'Euro', 'symbol' => '€', 'is_base' => false, 'is_active' => true]);
+        ExchangeRate::create(['currency_code' => 'EUR', 'rate_to_usd' => 1.08, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
+        $this->actingAs($admin)->postJson("/api/currencies/{$eur->id}/set-base")->assertStatus(200);
+
+        $response = $this->actingAs($admin)->getJson('/api/currencies/base');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.code', 'EUR');
+        $response->assertJsonPath('data.rateToUsd', 1.08);
+    }
+
+    public function test_base_endpoint_returns_null_rate_when_no_exchange_rate_exists(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $eur = Currency::create(['code' => 'EUR', 'name' => 'Euro', 'symbol' => '€', 'is_base' => false, 'is_active' => true]);
+        $this->actingAs($admin)->postJson("/api/currencies/{$eur->id}/set-base")->assertStatus(200);
+
+        $response = $this->actingAs($admin)->getJson('/api/currencies/base');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.rateToUsd', null);
+    }
 
     public function test_creating_a_currency_notifies_recipients(): void
     {

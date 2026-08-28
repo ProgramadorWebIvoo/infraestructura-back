@@ -217,7 +217,7 @@ class SupplierProposalController extends Controller
     {
         $perPage = min((int) ($request->get('per_page', 20)), 100);
 
-        $query = SupplierMaterialProposal::latest('submitted_at');
+        $query = SupplierMaterialProposal::with('lines')->latest('submitted_at');
 
         if ($request->filled('project_id')) {
             $query->where('project_id', $request->project_id);

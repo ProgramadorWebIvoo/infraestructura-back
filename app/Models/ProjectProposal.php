@@ -84,4 +84,48 @@ class ProjectProposal extends Model
     {
         return 'PROP-' . now()->format('Hisv') . '-' . Str::random(4);
     }
+
+    public function getMaterialItemsEnrichedAttribute(): array
+    {
+        $items = $this->material_items ?? [];
+        if (empty($items)) {
+            return $items;
+        }
+
+        $priceService = app(\App\Services\PriceEstimationService::class);
+        $historicalMonths = config('pricing.price_estimation.historical_months', 6);
+
+        return array_map(function ($item) use ($priceService, $historicalMonths) {
+            if (!isset($item['catalog_product_id']) || !$item['catalog_product_id']) {
+                return $item;
+            }
+
+            $est = $priceService->getEstimatedPrice(
+                $item['catalog_product_id'],
+                $this->contractor_code,
+                $historicalMonths
+            );
+
+            if ($est) {
+                $item['estimatedPriceUsd'] = $est->value;
+                $item['estimatedPriceSource'] = $est->source;
+
+                $unitPriceUsd = $item['unit_price_usd'] ?? $item['unitPrice'] ?? 0;
+                if ($est->value > 0) {
+                    $item['variationPercent'] = (($unitPriceUsd - $est->value) / $est->value) * 100;
+
+                    $threshold = 5;
+                    if ($item['variationPercent'] > $threshold) {
+                        $item['variationDirection'] = 'increase';
+                    } elseif ($item['variationPercent'] < -$threshold) {
+                        $item['variationDirection'] = 'decrease';
+                    } else {
+                        $item['variationDirection'] = 'stable';
+                    }
+                }
+            }
+
+            return $item;
+        }, $items);
+    }
 }

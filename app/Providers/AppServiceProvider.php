@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\SupplierMaterialProposalLine;
 use App\Notifications\Channels\ExpoChannel;
+use App\Observers\PriceEstimationObserver;
 use App\Services\NotificationRuleResolver;
 use App\Services\SettingsService;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -23,6 +25,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot()
     {
+        // Register model observers
+        SupplierMaterialProposalLine::observe(PriceEstimationObserver::class);
+
         // Register Expo notification channel
         Notification::extend('expo', function ($app) {
             return $app->make(ExpoChannel::class);

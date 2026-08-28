@@ -385,10 +385,22 @@ class SupplierInvitationTest extends TestCase
             'supplier_name'    => $contractor->name,
             'supplier_contact' => $contractor->email,
             'items'            => [
-                ['name' => 'Material 1', 'quantity' => 10, 'unitPrice' => 100, 'totalPrice' => 1000],
+                [
+                    'materialName'        => 'Material 1',
+                    'quantity'            => 10,
+                    'unitPrice'           => 100,
+                    'totalPrice'          => 1000,
+                    'conditionStatus'     => 'new',
+                    'warrantyDescription' => 'Garantía de fábrica 1 año',
+                    'warrantyValue'       => 12,
+                    'warrantyUnit'        => 'meses',
+                    'imagePath'           => "supplier-proposal-images/{$invitation1->id}/foto.jpg",
+                ],
             ],
-            'duration_unit' => 'dias',
+            'duration_unit'  => 'dias',
             'estimated_days' => 45,
+            'quote_currency' => 'EUR',
+            'labor_cost'     => 250.50,
         ]);
 
         // ANALISTA imports proposals
@@ -404,8 +416,18 @@ class SupplierInvitationTest extends TestCase
             'errors'   => [],
         ]);
 
-        // The proposal should now appear as a ProjectProposal
-        $this->assertCount(1, $this->project->fresh()->proposals);
+        // The proposal should now appear as a ProjectProposal, preserving the
+        // per-line enriched fields (condition/warranty/image) untouched and
+        // carrying over the header-level currency + labor cost.
+        $imported = $this->project->fresh()->proposals->first();
+        $this->assertNotNull($imported);
+        $this->assertSame('EUR', $imported->quote_currency);
+        $this->assertEquals(250.50, $imported->labor_cost);
+        $this->assertSame('new', $imported->material_items[0]['conditionStatus']);
+        $this->assertSame('Garantía de fábrica 1 año', $imported->material_items[0]['warrantyDescription']);
+        $this->assertSame(12, $imported->material_items[0]['warrantyValue']);
+        $this->assertSame('meses', $imported->material_items[0]['warrantyUnit']);
+        $this->assertStringContainsString('foto.jpg', $imported->material_items[0]['imagePath']);
     }
 
     public function test_import_no_supplier_proposals_returns_empty(): void

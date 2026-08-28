@@ -25,6 +25,7 @@ class ProjectProposal extends Model
         'contractor_name_snapshot',
         'material_cost',
         'material_items',
+        'quote_currency',
         'labor_cost',
         'total_cost',
         'delivery_weeks',

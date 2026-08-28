@@ -79,6 +79,28 @@ class SupplierProposalController extends Controller
         ]);
     }
 
+    /**
+     * Sirve la misma imagen para personal interno autenticado (Analistas,
+     * Procura) una vez que la propuesta ya fue importada al expediente —
+     * mismo par {token}/{path} que uploadImage()/image() (imagePath en
+     * material_items YA trae "supplier-proposal-images/{token}/{archivo}",
+     * el frontend solo recorta el prefijo fijo antes de armar esta URL). No
+     * se restringe por dueño del token, a diferencia de image(): cualquier
+     * usuario autenticado puede ver evidencia de cualquier propuesta ya
+     * presentada, sin importar de qué invitación vino.
+     */
+    public function internalImage(string $token, string $path): StreamedResponse
+    {
+        $fullPath = "supplier-proposal-images/{$token}/{$path}";
+        abort_unless(Storage::disk('local')->exists($fullPath), 404);
+
+        return new StreamedResponse(function () use ($fullPath) {
+            echo Storage::disk('local')->get($fullPath);
+        }, 200, [
+            'Content-Type' => Storage::disk('local')->mimeType($fullPath) ?: 'application/octet-stream',
+        ]);
+    }
+
     public function store(Request $request, string $token)
     {
         $invitation = SupplierInvitation::with('project')->find($token);

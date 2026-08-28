@@ -169,6 +169,9 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/supplier-invitations/latest', [SupplierInvitationController::class, 'latest'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/supplier-material-proposals', [SupplierProposalController::class, 'index']);
+    Route::get('/supplier-proposal-images/{token}/{path}', [SupplierProposalController::class, 'internalImage'])
+        ->where('path', '.*')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
 
     // Resumen ejecutivo del dashboard de Presidencia (agregados exactos, sin paginación)
     Route::get('/dashboard/summary', DashboardSummaryController::class)

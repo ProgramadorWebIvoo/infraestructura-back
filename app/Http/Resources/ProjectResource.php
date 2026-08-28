@@ -82,6 +82,7 @@ class ProjectResource extends JsonResource
                 'contractorRating' => $contractorRatings[$proposal->contractor_code] ?? null,
                 'materialCost' => $proposal->material_cost,
                 'materialItems' => $proposal->material_items,
+                'quoteCurrency' => $proposal->quote_currency,
                 'laborCost' => $proposal->labor_cost,
                 'totalCost' => $proposal->total_cost,
                 'deliveryWeeks' => $proposal->delivery_weeks,

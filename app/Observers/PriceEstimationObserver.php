@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\SupplierMaterialProposalLine;
+use App\Models\Contractor;
 use App\Services\PriceEstimationService;
 
 class PriceEstimationObserver
@@ -35,10 +36,20 @@ class PriceEstimationObserver
             return;
         }
 
-        // Obtener EST del servicio (usar supplier_name como identificador)
+        // Cargar la propuesta si no está cargada
+        if (!$line->relationLoaded('proposal')) {
+            $line->load('proposal');
+        }
+
+        // Buscar contractor por nombre para obtener su código (supplier_code)
+        // ProductPriceHistory está indexado por supplier_code (ej: CON-303), no por nombre
+        $contractor = Contractor::where('name', $line->proposal->supplier_name)->first();
+        $supplierCode = $contractor?->code ?? $line->proposal->supplier_name;
+
+        // Obtener EST del servicio
         $est = $this->priceService->getEstimatedPrice(
             $line->catalog_product_id,
-            $line->proposal->supplier_name,
+            $supplierCode,
             config('pricing.price_estimation.historical_months', 6)
         );
 

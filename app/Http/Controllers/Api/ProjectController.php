@@ -22,6 +22,7 @@ use App\Models\ProjectMaterial;
 use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
 use App\Services\DossierEvaluationService;
+use App\Services\ProjectStateMachine;
 use App\Services\RejectionService;
 use App\Services\SupplierProposalImportService;
 use Illuminate\Http\Request;
@@ -29,24 +30,14 @@ use Illuminate\Support\Facades\DB;
 
 class ProjectController extends Controller
 {
-    private const STATUSES = [
-        'CREADO'                => 'CREADO',
-        'REVISADO_CIERRE'       => 'REVISADO_CIERRE',
-        'RECHAZADO_CIERRE'      => 'RECHAZADO_CIERRE',
-        'CONFIRMADO_PROCURA'    => 'CONFIRMADO_PROCURA',
-        'COMPARATIVA_ENVIADA'   => 'COMPARATIVA_ENVIADA',
-        'CONTRATADO'            => 'CONTRATADO',
-        'EN_EJECUCION'          => 'EN_EJECUCION',
-        'VERIFICANDO_FINALIZACION' => 'VERIFICANDO_FINALIZACION',
-        'LISTO_PAGO_FINAL'      => 'LISTO_PAGO_FINAL',
-        'COMPLETADO_PAGADO'     => 'COMPLETADO_PAGADO',
-    ];
+    /** @deprecated Usar ProjectStateMachine::STATUSES — se mantiene como alias durante la transición. */
+    private const STATUSES = ProjectStateMachine::STATUSES;
 
     public function index(Request $request)
     {
         $perPage = min((int) ($request->get('per_page', 20)), 100);
 
-        $query = Project::with(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])->latest('created_date');
+        $query = Project::with(Project::detailRelations())->latest('created_date');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -61,7 +52,7 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     public function store(StoreProjectRequest $request)
@@ -87,7 +78,7 @@ class ProjectController extends Controller
             return $project;
         });
 
-        return (new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])))->response()->setStatusCode(201);
+        return (new ProjectResource($project->load(Project::detailRelations())))->response()->setStatusCode(201);
     }
 
     /**
@@ -108,7 +99,7 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'CIERRE_DE_OBRA', 'Revision tecnica de calculos y planos', $data['notes'] ?? null);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     /**
@@ -119,9 +110,9 @@ class ProjectController extends Controller
      */
     public function evaluateDossier(Project $project, DossierEvaluationService $service)
     {
-        abort_unless(
-            in_array($project->status, [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_CIERRE']], true),
-            422,
+        ProjectStateMachine::assertStatusIn(
+            $project,
+            [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_CIERRE']],
             'Solo se puede evaluar el expediente mientras está pendiente de revisión por Cierre de Obra.'
         );
 
@@ -136,7 +127,7 @@ class ProjectController extends Controller
             ], 503);
         }
 
-        return new ProjectResource($project->fresh()->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->fresh()->load(Project::detailRelations()));
     }
 
     /**
@@ -166,7 +157,7 @@ class ProjectController extends Controller
      */
     public function resubmitProject(ResubmitProjectRequest $request, Project $project)
     {
-        abort_unless($project->status === self::STATUSES['RECHAZADO_CIERRE'], 422, 'Solo se puede reenviar una petición rechazada.');
+        ProjectStateMachine::assertStatus($project, self::STATUSES['RECHAZADO_CIERRE'], 'Solo se puede reenviar una petición rechazada.');
 
         $data = $request->validated();
 
@@ -200,7 +191,7 @@ class ProjectController extends Controller
             return $project;
         });
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     /** Crea los ProjectMaterial de un proyecto a partir del array validado — usado por store() y resubmitProject(). */
@@ -237,7 +228,7 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de presupuesto y envio a licitacion', $data['notes']);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     public function addProposal(AddProjectProposalRequest $request, Project $project)
@@ -272,7 +263,7 @@ class ProjectController extends Controller
         AuditLog::record($project, 'ANALISTA', 'Carga de propuesta', $auditDetails);
         $this->invalidateBidEvaluationAiCache($project);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     /**
@@ -334,7 +325,7 @@ class ProjectController extends Controller
         AuditLog::record($project, 'ANALISTA', 'Renegociación de propuesta', $auditDetails);
         $this->invalidateBidEvaluationAiCache($project);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     public function submitComparative(Project $project)
@@ -344,7 +335,7 @@ class ProjectController extends Controller
         $project->update(['status' => self::STATUSES['COMPARATIVA_ENVIADA']]);
         AuditLog::record($project, 'ANALISTA', 'Carga de cuadro comparativo', 'Comparativa enviada a Procura para adjudicacion.');
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     public function importSupplierProposals(Project $project, SupplierProposalImportService $importService)
@@ -360,7 +351,7 @@ class ProjectController extends Controller
                 'imported' => 0,
                 'skipped' => 0,
                 'errors' => [],
-                'project' => new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])),
+                'project' => new ProjectResource($project->load(Project::detailRelations())),
             ]);
         }
 
@@ -372,7 +363,7 @@ class ProjectController extends Controller
             'imported' => $imported,
             'skipped' => $skipped,
             'errors' => $errors,
-            'project' => new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()])),
+            'project' => new ProjectResource($project->load(Project::detailRelations())),
         ]);
     }
 
@@ -386,7 +377,7 @@ class ProjectController extends Controller
         AuditLog::record($project, 'ANALISTA', 'Eliminacion de propuesta', "Propuesta {$proposal->id} retirada del cuadro comparativo.");
         $this->invalidateBidEvaluationAiCache($project);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     /**
@@ -431,7 +422,7 @@ class ProjectController extends Controller
 
     public function selectContractor(SelectContractorRequest $request, Project $project)
     {
-        abort_unless($project->status === self::STATUSES['COMPARATIVA_ENVIADA'], 422, 'Solo se puede adjudicar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
+        ProjectStateMachine::assertStatus($project, self::STATUSES['COMPARATIVA_ENVIADA'], 'Solo se puede adjudicar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
 
         $data = $request->validated();
 
@@ -445,7 +436,7 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$data['contractorCode']} adjudicado.");
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     public function pay(PayProjectRequest $request, Project $project)
@@ -456,9 +447,9 @@ class ProjectController extends Controller
         // final solo tras verificar calidad — sin esto, FINANZAS podía pagar
         // un proyecto en cualquier estado, incluyendo reabrir uno ya cerrado.
         if ($data['paymentType'] === 'ADVANCE') {
-            abort_unless($project->status === self::STATUSES['CONTRATADO'], 422, 'El anticipo solo se puede liberar con el contratista recién adjudicado (CONTRATADO).');
+            ProjectStateMachine::assertStatus($project, self::STATUSES['CONTRATADO'], 'El anticipo solo se puede liberar con el contratista recién adjudicado (CONTRATADO).');
         } else {
-            abort_unless($project->status === self::STATUSES['LISTO_PAGO_FINAL'], 422, 'El pago final solo se puede liberar tras la verificación de calidad (LISTO_PAGO_FINAL).');
+            ProjectStateMachine::assertStatus($project, self::STATUSES['LISTO_PAGO_FINAL'], 'El pago final solo se puede liberar tras la verificación de calidad (LISTO_PAGO_FINAL).');
         }
 
         ProjectPayment::updateOrCreate(
@@ -474,22 +465,22 @@ class ProjectController extends Controller
         $project->update(['status' => $data['paymentType'] === 'ADVANCE' ? self::STATUSES['EN_EJECUCION'] : self::STATUSES['COMPLETADO_PAGADO']]);
         AuditLog::record($project, 'FINANZAS', $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos', $data['notes'] ?? null);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     public function reportFinished(Project $project)
     {
-        abort_unless($project->status === self::STATUSES['EN_EJECUCION'], 422, 'Solo se puede reportar como finalizada una obra en ejecución (EN_EJECUCION).');
+        ProjectStateMachine::assertStatus($project, self::STATUSES['EN_EJECUCION'], 'Solo se puede reportar como finalizada una obra en ejecución (EN_EJECUCION).');
 
         $project->update(['status' => self::STATUSES['VERIFICANDO_FINALIZACION']]);
         AuditLog::record($project, 'SISTEMA', 'Reporte de obra finalizada', 'La obra fue marcada como finalizada y pendiente de certificacion.');
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     public function verifyCompletion(VerifyCompletionRequest $request, Project $project)
     {
-        abort_unless($project->status === self::STATUSES['VERIFICANDO_FINALIZACION'], 422, 'Solo se puede verificar la finalización de una obra reportada como terminada (VERIFICANDO_FINALIZACION).');
+        ProjectStateMachine::assertStatus($project, self::STATUSES['VERIFICANDO_FINALIZACION'], 'Solo se puede verificar la finalización de una obra reportada como terminada (VERIFICANDO_FINALIZACION).');
 
         $data = $request->validated();
 
@@ -501,7 +492,7 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'CIERRE_DE_OBRA', 'Verificacion de finalizacion y calidad de obra', $data['details'] ?? null);
 
-        return new ProjectResource($project->load(['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()]));
+        return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     private function materialsTotal(array $materials): float

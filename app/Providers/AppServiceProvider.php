@@ -93,6 +93,19 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        /**
+         * Brute-force protection dedicada a /login: el límite de
+         * public-api (10/min por IP) protege contra flood en general, pero
+         * NO protege una cuenta específica si el atacante rota de IP —
+         * puede seguir probando contraseñas contra el mismo email sin
+         * límite. Esta key combina email + IP, así que ataques distribuidos
+         * (muchas IPs, mismo email) siguen acotados por email.
+         */
+        RateLimiter::for('login', function (Request $request) {
+            $email = strtolower((string) $request->input('email'));
+            return Limit::perMinutes(15, 5)->by($email . '|' . $request->ip());
+        });
+
         RateLimiter::for('catalog', function (Request $request) {
             return Limit::perMinute(200)->by($request->user()?->id ?: $request->ip());
         });

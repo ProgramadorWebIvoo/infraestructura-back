@@ -21,18 +21,8 @@ class DashboardSummaryService
         'LISTO_PAGO_FINAL',
     ];
 
-    /** Orden canónico del flujo, usado para ordenar el funnel. */
-    private const STATUS_ORDER = [
-        'CREADO'                => 0,
-        'REVISADO_CIERRE'       => 1,
-        'CONFIRMADO_PROCURA'    => 2,
-        'COMPARATIVA_ENVIADA'   => 3,
-        'CONTRATADO'            => 4,
-        'EN_EJECUCION'          => 5,
-        'VERIFICANDO_FINALIZACION' => 6,
-        'LISTO_PAGO_FINAL'      => 7,
-        'COMPLETADO_PAGADO'     => 8,
-    ];
+    /** Orden canónico del flujo, usado para ordenar el funnel. Fuente única: ProjectStateMachine::STATUS_ORDER. */
+    private const STATUS_ORDER = ProjectStateMachine::STATUS_ORDER;
 
     public function getSummary(): array
     {

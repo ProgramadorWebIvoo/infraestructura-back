@@ -37,7 +37,7 @@ use App\Http\Controllers\Api\CatalogProductController;
 |
 */
 
-Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:public-api');
+Route::post('/login', [AuthController::class, 'login'])->middleware(['throttle:public-api', 'throttle:login']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:public-api');
 Route::post('/contractors', [ContractorController::class, 'registerPublic'])->middleware('throttle:public-api');
 Route::get('/public/invitations/{token}', [SupplierInvitationController::class, 'publicInfo'])->middleware('throttle:public-api');

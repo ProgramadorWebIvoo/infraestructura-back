@@ -97,6 +97,17 @@ class Project extends Model
     }
 
     /**
+     * Relaciones estándar para el detalle completo de un proyecto — usado
+     * por prácticamente todos los endpoints de ProjectController (17
+     * ocurrencias idénticas antes de esta extracción). Cambiar qué se
+     * incluye en el "detalle de proyecto" ahora es un solo punto de edición.
+     */
+    public static function detailRelations(): array
+    {
+        return ['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()];
+    }
+
+    /**
      * Genera el siguiente ID secuencial (PRJ-001, PRJ-002, ...). Bloquea la
      * última fila para evitar colisiones bajo concurrencia; el caller debe
      * envolver la creación en una transacción.

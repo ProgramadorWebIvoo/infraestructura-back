@@ -20,6 +20,22 @@ class PriceEstimationService
         string $supplierCode,
         int $monthsBack = 6
     ): ?PriceEstimate {
+        // Clave de caché: identifica unívocamente la estimación
+        $cacheKey = "price_estimate:{$catalogProductId}:{$supplierCode}:{$monthsBack}";
+
+        // Caché 24 horas — EST cambia lentamente, no necesita ser inmediato
+        return \Illuminate\Support\Facades\Cache::remember(
+            $cacheKey,
+            86400, // 24 horas
+            fn () => $this->computeEstimatedPrice($catalogProductId, $supplierCode, $monthsBack)
+        );
+    }
+
+    private function computeEstimatedPrice(
+        int $catalogProductId,
+        string $supplierCode,
+        int $monthsBack = 6
+    ): ?PriceEstimate {
         // 1. Intentar promedio histórico
         $historicalData = DB::table('product_price_history')
             ->where('catalog_product_id', $catalogProductId)

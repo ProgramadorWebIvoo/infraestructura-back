@@ -210,19 +210,53 @@ class SupplierProposalController extends Controller
 
         $this->logPublicAccess($request, 'proposal.submit', "Propuesta: {$proposal->id} / Invitación: {$token} / Proveedor: {$invitation->supplier_name}", $invitation->project);
 
+        // Invalidar caché de propuestas para este proyecto
+        \Illuminate\Support\Facades\Cache::tags(['supplier_proposals'])->flush();
+
         return response()->json(new SupplierProposalResource($proposal), 201);
     }
 
     public function index(Request $request)
     {
         $perPage = min((int) ($request->get('per_page', 20)), 100);
+        $page = (int) $request->get('page', 1);
+        $projectId = $request->filled('project_id') ? (string) $request->project_id : null;
 
-        $query = SupplierMaterialProposal::with('lines.catalogProduct')->latest('submitted_at');
+        // Clave de caché por página + proyecto
+        $cacheKey = $projectId
+            ? "supplier_proposals:project:{$projectId}:page:{$page}:per:{$perPage}"
+            : "supplier_proposals:page:{$page}:per:{$perPage}";
 
-        if ($request->filled('project_id')) {
-            $query->where('project_id', $request->project_id);
+        // Caché 5 minutos con tags para invalidación atómica
+        return response()->json(
+            \Illuminate\Support\Facades\Cache::tags(['supplier_proposals'])->remember(
+                $cacheKey,
+                300, // 5 minutos
+                fn () => $this->fetchAndSerializeProposals($projectId, $page, $perPage)
+            )
+        );
+    }
+
+    private function fetchAndSerializeProposals(?string $projectId, int $page, int $perPage): array
+    {
+        $query = SupplierMaterialProposal::query()
+            ->select('id', 'project_id', 'project_title_snapshot', 'supplier_name', 'supplier_company',
+                     'supplier_contact', 'quote_currency', 'items', 'general_notes', 'estimated_days',
+                     'duration_unit', 'advance_percent', 'labor_cost', 'submitted_at')
+            ->with([
+                'lines' => fn ($q) => $q->select('id', 'supplier_material_proposal_id', 'catalog_product_id',
+                                                 'quantity', 'unit', 'unit_price_usd', 'line_notes', 'condition_status',
+                                                 'estimated_price_usd', 'estimated_price_source', 'variation_percent', 'variation_direction'),
+                'lines.catalogProduct:id,name',
+            ])
+            ->latest('submitted_at');
+
+        if ($projectId) {
+            $query->where('project_id', $projectId);
         }
 
-        return response()->json($query->paginate($perPage)->through(fn ($p) => (new SupplierProposalResource($p))->resolve()));
+        $paginated = $query->paginate($perPage);
+
+        return $paginated->through(fn ($p) => (new SupplierProposalResource($p))->resolve())->response()->getData(true);
     }
 }

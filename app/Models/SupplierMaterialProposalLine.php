@@ -26,6 +26,10 @@ class SupplierMaterialProposalLine extends Model
         'warranty_unit',
         'image_path',
         'line_notes',
+        'estimated_price_usd',
+        'estimated_price_source',
+        'variation_percent',
+        'variation_direction',
     ];
 
     protected $casts = [
@@ -35,6 +39,14 @@ class SupplierMaterialProposalLine extends Model
         'quantity' => 'float',
         'technical_specs' => 'array',
         'warranty_value' => 'integer',
+        'estimated_price_usd' => 'float',
+        'variation_percent' => 'float',
+    ];
+
+    protected $appends = [
+        'estimated_price_display',
+        'variation_label',
+        'variation_badge_color',
     ];
 
     public function proposal()
@@ -60,5 +72,33 @@ class SupplierMaterialProposalLine extends Model
     public function isCustom(): bool
     {
         return is_null($this->catalog_product_id);
+    }
+
+    public function getEstimatedPriceDisplayAttribute(): string
+    {
+        if (!$this->estimated_price_usd) {
+            return '—';
+        }
+        return '$' . number_format($this->estimated_price_usd, 2);
+    }
+
+    public function getVariationLabelAttribute(): string
+    {
+        if (!$this->variation_percent) {
+            return '—';
+        }
+        $sign = $this->variation_percent >= 0 ? '+' : '';
+        return $sign . number_format($this->variation_percent, 2) . '%';
+    }
+
+    public function getVariationBadgeColorAttribute(): string
+    {
+        if ($this->variation_direction === 'increase') {
+            return 'danger';
+        }
+        if ($this->variation_direction === 'decrease') {
+            return 'success';
+        }
+        return 'neutral';
     }
 }

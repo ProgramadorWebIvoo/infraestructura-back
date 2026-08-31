@@ -103,21 +103,91 @@ class SyncExchangeRatesTest extends TestCase
         $fetcher->fetch();
     }
 
-    // ===== BCV SCRAPER FETCHER TESTS (placeholder) =====
+    // ===== BCV SCRAPER FETCHER TESTS =====
 
-    public function test_bcv_scraper_returns_expected_structure(): void
+    public function test_bcv_scraper_parses_html_correctly(): void
     {
-        $this->markTestSkipped('BCV selectors need to be identified first');
+        $htmlResponse = <<<'HTML'
+        <html>
+            <body>
+                <div data-currency="USD" class="rate-container">
+                    <span class="rate-value">794.99</span>
+                </div>
+                <div data-currency="EUR" class="rate-container">
+                    <span class="rate-value">922.69</span>
+                </div>
+            </body>
+        </html>
+        HTML;
+
+        Http::fake([
+            'bcv.org.ve/*' => Http::response($htmlResponse, 200),
+        ]);
+
+        $fetcher = new BcvScraperFetcher();
+        $result = $fetcher->fetch();
+
+        $this->assertEquals(794.99, $result['currencies']['USD']);
+        $this->assertEquals(922.69, $result['currencies']['EUR']);
+        $this->assertEquals('BCV_SCRAPING', $result['source']);
+        $this->assertStringMatches('/\d{4}-\d{2}-\d{2}/', $result['date']);
     }
 
     public function test_bcv_scraper_throws_on_network_error(): void
     {
-        $this->markTestSkipped('BCV selectors need to be identified first');
+        Http::fake([
+            'bcv.org.ve/*' => Http::response([], 500),
+        ]);
+
+        $fetcher = new BcvScraperFetcher();
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('BCV scraping failed');
+
+        $fetcher->fetch();
     }
 
     public function test_bcv_scraper_extracts_rates_with_regex(): void
     {
-        $this->markTestSkipped('BCV selectors need to be identified first');
+        $htmlResponse = <<<'HTML'
+        <html>
+            <body>
+                <div data-currency="USD" class="rate-container">
+                    <span class="rate-value">1.234,56</span>
+                </div>
+                <div data-currency="EUR" class="rate-container">
+                    <span class="rate-value">2.345,67</span>
+                </div>
+            </body>
+        </html>
+        HTML;
+
+        Http::fake([
+            'bcv.org.ve/*' => Http::response($htmlResponse, 200),
+        ]);
+
+        $fetcher = new BcvScraperFetcher();
+        $result = $fetcher->fetch();
+
+        // El regex debe limpiar "1.234,56" a 1234.56
+        $this->assertIsFloat($result['currencies']['USD']);
+        $this->assertGreaterThan(0, $result['currencies']['USD']);
+    }
+
+    public function test_bcv_scraper_throws_when_selectors_not_found(): void
+    {
+        $htmlResponse = '<html><body>No rates found</body></html>';
+
+        Http::fake([
+            'bcv.org.ve/*' => Http::response($htmlResponse, 200),
+        ]);
+
+        $fetcher = new BcvScraperFetcher();
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('Could not extract');
+
+        $fetcher->fetch();
     }
 
     // ===== SYNC SERVICE TESTS =====

@@ -11,6 +11,7 @@ class ContractorResource extends JsonResource
         return [
             'code'               => $this->code,
             'name'               => $this->name,
+            'rif'                => $this->rif,
             'specialty'          => $this->specialty,
             'rating'             => $this->rating,
             'email'              => $this->email,

@@ -14,6 +14,7 @@ class ContractorFactory extends Factory
         return [
             'code' => 'CON-' . fake()->unique()->randomNumber(4),
             'name' => fake()->company(),
+            'rif' => 'J-' . fake()->unique()->numerify('########-#'),
             'specialty' => fake()->randomElement(['Construcción Civil', 'Electricidad', 'Plomería', 'Estructuras Metálicas', 'Pintura']),
             'rating' => fake()->randomFloat(1, 3.0, 5.0),
             'email' => fake()->email(),

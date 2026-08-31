@@ -158,7 +158,7 @@ class SupplierProposalCatalogSyncTest extends TestCase
     {
         Contractor::create([
             'code' => Contractor::nextCode(),
-            'name' => 'Acero del Sur',
+            'name' => 'Acero del Sur', 'rif' => 'J-12345678-9',
             'specialty' => 'Materiales',
             'status' => 'active',
         ]);
@@ -195,7 +195,7 @@ class SupplierProposalCatalogSyncTest extends TestCase
     {
         Contractor::create([
             'code' => Contractor::nextCode(),
-            'name' => 'Acero del Sur',
+            'name' => 'Acero del Sur', 'rif' => 'J-12345678-9',
             'specialty' => 'Materiales',
             'status' => 'active',
         ]);
@@ -240,7 +240,7 @@ class SupplierProposalCatalogSyncTest extends TestCase
 
     public function test_repeated_quote_increments_quote_count_and_updates_last_price(): void
     {
-        Contractor::create(['code' => Contractor::nextCode(), 'name' => 'Acero del Sur', 'specialty' => 'Materiales', 'status' => 'active']);
+        Contractor::create(['code' => Contractor::nextCode(), 'name' => 'Acero del Sur', 'rif' => 'J-12345678-9', 'specialty' => 'Materiales', 'status' => 'active']);
 
         $firstInvitation = $this->makeInvitation();
         $this->postJson("/api/public/invitations/{$firstInvitation->id}/proposal", [

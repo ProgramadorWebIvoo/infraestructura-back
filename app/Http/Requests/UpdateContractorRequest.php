@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Controllers\Api\ContractorController;
+use App\Models\Contractor;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -14,10 +15,26 @@ class UpdateContractorRequest extends FormRequest
         return true;
     }
 
+    /** Ver StoreContractorRequest::prepareForValidation — mismo motivo. */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('rif')) {
+            $this->merge(['rif' => Contractor::normalizeRif($this->input('rif'))]);
+        }
+    }
+
     public function rules(): array
     {
         return [
             'name'      => ['sometimes', 'string', 'max:180'],
+            'rif'       => [
+                'sometimes',
+                'required',
+                'string',
+                'max:15',
+                'regex:' . Contractor::RIF_REGEX,
+                Rule::unique('contractors', 'rif')->ignore($this->route('contractor')?->code, 'code'),
+            ],
             'specialty' => ['sometimes', 'string', 'max:180'],
             'email'     => ['sometimes', 'nullable', 'email', 'max:180'],
             'phone'     => ['sometimes', 'nullable', 'string', 'max:40'],

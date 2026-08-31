@@ -246,6 +246,7 @@ class RoleMiddlewareTest extends TestCase
         // Contractor registration is public
         $response = $this->postJson('/api/contractors', [
             'name'      => 'Test Contractor',
+            'rif'       => 'J-78901234-5',
             'specialty' => 'General',
             'email'     => 'test@test.com',
         ]);

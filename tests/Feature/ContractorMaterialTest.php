@@ -71,6 +71,7 @@ class ContractorMaterialTest extends TestCase
         $response = $this->withHeaders($this->headers())
             ->postJson('/api/contractors/config', [
                 'name'      => 'Constructora del Sur',
+                'rif'       => 'J-12345678-9',
                 'specialty' => 'Construcción Civil',
                 'email'     => 'contacto@constructorasur.com',
             ]);
@@ -93,6 +94,7 @@ class ContractorMaterialTest extends TestCase
         $response = $this->withHeaders($this->headers())
             ->postJson('/api/contractors/config', [
                 'name'      => 'Constructora del Norte',
+                'rif'       => 'J-23456789-0',
                 'specialty' => 'Plomería',
                 'phone'     => '+58 412-1234567',
             ]);
@@ -141,6 +143,7 @@ class ContractorMaterialTest extends TestCase
         $response = $this->withHeaders($this->headers())
             ->postJson('/api/contractors/config', [
                 'name'      => '<script>alert("xss")</script>Constructora',
+                'rif'       => 'J-34567890-1',
                 'specialty' => '<b>Especialidad</b>',
                 'email'     => 'test@test.com',
             ]);
@@ -208,6 +211,7 @@ class ContractorMaterialTest extends TestCase
     {
         $response = $this->postJson('/api/contractors', [
             'name'      => 'Proveedor Público',
+            'rif'       => 'V-45678901-2',
             'specialty' => 'Electricidad',
             'email'     => 'proveedor@test.com',
         ]);
@@ -218,6 +222,29 @@ class ContractorMaterialTest extends TestCase
             'registration_source' => 'PUBLIC_PORTAL',
         ]);
         $this->assertStringStartsWith('CON-', $response->json('code'));
+    }
+
+    /**
+     * Bug real detectado en QA: RIF_REGEX permite guiones opcionales en 2
+     * posiciones ("V123456789", "V-123456789", "V12345678-9",
+     * "V-12345678-9" son 4 strings distintos para el MISMO RIF), y
+     * `unique:contractors,rif` compara el string literal — sin normalizar
+     * antes de validar, un mismo RIF con guiones en formato distinto se
+     * registraba dos veces sin que la regla unique lo detectara.
+     */
+    public function test_public_registration_rejects_same_rif_in_different_dash_format(): void
+    {
+        Contractor::factory()->create(['rif' => 'V-45678901-2']);
+
+        $response = $this->postJson('/api/contractors', [
+            'name'      => 'Otro Proveedor',
+            'rif'       => 'V456789012', // mismo RIF, sin guiones
+            'specialty' => 'Electricidad',
+            'email'     => 'otro@test.com',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['rif']);
     }
 
     public function test_active_contractors_listed_in_public_endpoint(): void

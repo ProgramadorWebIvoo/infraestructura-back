@@ -329,6 +329,7 @@ class NotificationDispatcherTest extends TestCase
         // auditado. Con AuditLog::record() aceptando ?Project, ahora sí.
         $response = $this->postJson('/api/contractors', [
             'name' => 'Constructora XYZ',
+            'rif' => 'J-67890123-4',
             'specialty' => 'Electricidad',
             'email' => 'contacto@xyz.com',
         ]);

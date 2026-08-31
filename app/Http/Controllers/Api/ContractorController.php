@@ -31,6 +31,7 @@ class ContractorController extends Controller
         $data = $request->validated();
 
         $data['name'] = strip_tags($data['name']);
+        $data['rif'] = strtoupper(strip_tags($data['rif']));
         $data['specialty'] = strip_tags($data['specialty']);
         if (isset($data['email'])) $data['email'] = strip_tags($data['email']);
         if (isset($data['phone'])) $data['phone'] = strip_tags($data['phone']);
@@ -63,6 +64,7 @@ class ContractorController extends Controller
         $data = $request->validated();
 
         if (isset($data['name']))      $data['name'] = strip_tags($data['name']);
+        if (isset($data['rif']))        $data['rif'] = strtoupper(strip_tags($data['rif']));
         if (isset($data['specialty']))  $data['specialty'] = strip_tags($data['specialty']);
         if (isset($data['email']))      $data['email'] = strip_tags($data['email']);
         if (isset($data['phone']))      $data['phone'] = strip_tags($data['phone']);
@@ -108,7 +110,7 @@ class ContractorController extends Controller
     {
         return Contractor::where('status', 'ACTIVE')
             ->orderBy('name')
-            ->get(['code', 'name', 'specialty', 'rating', 'email', 'phone', 'status']);
+            ->get(['code', 'name', 'rif', 'specialty', 'rating', 'email', 'phone', 'status']);
     }
 
     /**
@@ -116,9 +118,18 @@ class ContractorController extends Controller
      */
     public function registerPublic(Request $request)
     {
+        // Normalizar ANTES de validar: 'unique:contractors,rif' compara el
+        // string literal en BD, así que dos formatos de guiones distintos
+        // del mismo RIF (J123456789 vs J-12345678-9) no chocarían entre sí
+        // sin normalizar primero (ver Contractor::normalizeRif).
+        if ($request->has('rif')) {
+            $request->merge(['rif' => Contractor::normalizeRif($request->input('rif'))]);
+        }
+
         $data = $request->validate([
             'code' => ['nullable', 'string', 'max:30', 'unique:contractors,code'],
             'name' => ['required', 'string', 'max:180'],
+            'rif' => ['required', 'string', 'max:15', 'regex:' . Contractor::RIF_REGEX, 'unique:contractors,rif'],
             'specialty' => ['required', 'string', 'max:180'],
             'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
             'email' => ['required', 'email', 'max:180'],
@@ -127,6 +138,7 @@ class ContractorController extends Controller
 
         // Sanitización server-side: eliminar etiquetas HTML/XML de campos de texto
         $data['name'] = strip_tags($data['name']);
+        $data['rif'] = strtoupper(strip_tags($data['rif']));
         $data['specialty'] = strip_tags($data['specialty']);
         $data['email'] = strip_tags($data['email']);
         if (isset($data['phone'])) $data['phone'] = strip_tags($data['phone']);

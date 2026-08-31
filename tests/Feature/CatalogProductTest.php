@@ -62,7 +62,7 @@ class CatalogProductTest extends TestCase
 
     public function test_filters_by_supplier_code(): void
     {
-        Contractor::create(['code' => 'CON-301', 'name' => 'Acero del Sur', 'specialty' => 'Materiales', 'status' => 'active']);
+        Contractor::create(['code' => 'CON-301', 'name' => 'Acero del Sur', 'rif' => 'J-12345678-9', 'specialty' => 'Materiales', 'status' => 'active']);
         $product = MaterialCatalog::create(['name' => 'Cemento Portland', 'unit' => 'saco', 'estimated_unit_price' => 8, 'is_active' => true]);
         $other = MaterialCatalog::create(['name' => 'Varilla 3/8', 'unit' => 'unidad', 'estimated_unit_price' => 5, 'is_active' => true]);
         CatalogProductSupplier::create(['catalog_product_id' => $product->id, 'supplier_code' => 'CON-301', 'last_quoted_at' => now(), 'last_quoted_price_usd' => 8]);
@@ -77,7 +77,7 @@ class CatalogProductTest extends TestCase
 
     public function test_show_returns_product_with_suppliers(): void
     {
-        Contractor::create(['code' => 'CON-301', 'name' => 'Acero del Sur', 'specialty' => 'Materiales', 'status' => 'active']);
+        Contractor::create(['code' => 'CON-301', 'name' => 'Acero del Sur', 'rif' => 'J-12345678-9', 'specialty' => 'Materiales', 'status' => 'active']);
         $product = MaterialCatalog::create(['name' => 'Cemento Portland', 'unit' => 'saco', 'estimated_unit_price' => 8, 'is_active' => true]);
         CatalogProductSupplier::create(['catalog_product_id' => $product->id, 'supplier_code' => 'CON-301', 'last_quoted_at' => now(), 'last_quoted_price_usd' => 8]);
         $presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
@@ -91,7 +91,7 @@ class CatalogProductTest extends TestCase
 
     public function test_price_history_returns_ordered_series(): void
     {
-        Contractor::create(['code' => 'CON-301', 'name' => 'Acero del Sur', 'specialty' => 'Materiales', 'status' => 'active']);
+        Contractor::create(['code' => 'CON-301', 'name' => 'Acero del Sur', 'rif' => 'J-12345678-9', 'specialty' => 'Materiales', 'status' => 'active']);
         $product = MaterialCatalog::create(['name' => 'Cemento Portland', 'unit' => 'saco', 'estimated_unit_price' => 8, 'is_active' => true]);
         ProductPriceHistory::create([
             'catalog_product_id' => $product->id, 'supplier_code' => 'CON-301',

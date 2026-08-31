@@ -16,6 +16,7 @@ class Contractor extends Model
     protected $fillable = [
         'code',
         'name',
+        'rif',
         'specialty',
         'rating',
         'email',
@@ -23,6 +24,38 @@ class Contractor extends Model
         'registration_source',
         'status',
     ];
+
+    /**
+     * Formato RIF venezolano: letra de tipo de contribuyente (V/E/J/P/G) +
+     * 8 dígitos + dígito verificador, con o sin guiones (J-12345678-9 o
+     * J123456789). No valida el dígito verificador matemáticamente —
+     * solo la forma, igual que el resto de validaciones de formato del
+     * sistema (ej. email).
+     */
+    public const RIF_REGEX = '/^[VEJPGvejpg]-?\d{8}-?\d$/';
+
+    /**
+     * Normaliza un RIF a un único formato canónico ("J-12345678-9") antes de
+     * validar/guardar. RIF_REGEX acepta guiones opcionales en 2 posiciones
+     * independientes — "J123456789", "J-123456789", "J12345678-9" y
+     * "J-12345678-9" son 4 strings distintos que representan el MISMO RIF,
+     * pero `unique:contractors,rif` compara el string literal en la BD: sin
+     * normalizar antes de validar, dos formatos distintos del mismo RIF no
+     * chocan entre sí y la regla unique queda burlada en la práctica
+     * (bug real detectado en QA: mismo RIF registrado dos veces con guiones
+     * en posiciones distintas). Si el input no matchea el formato esperado
+     * se devuelve tal cual, sin normalizar — la regla `regex` en el Request
+     * es la que lo rechaza después.
+     */
+    public static function normalizeRif(?string $rif): ?string
+    {
+        $rif = strtoupper(trim((string) $rif));
+        if (!preg_match('/^([VEJPG])-?(\d{8})-?(\d)$/', $rif, $m)) {
+            return $rif;
+        }
+
+        return "{$m[1]}-{$m[2]}-{$m[3]}";
+    }
 
     protected $casts = [
         'rating' => 'float',

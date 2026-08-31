@@ -106,6 +106,15 @@ class CurrencyController extends Controller
             'is_active' => ['sometimes', 'boolean'],
         ]);
 
+        // Moneda oficial BCV: estructura inmutable (name/symbol fijos, no se
+        // duplica ni se borra) — solo is_active es editable, para poder
+        // desactivarla y que deje de buscarse su tasa a diario sin perder su
+        // histórico en exchange_rates ni las líneas de propuesta que ya la
+        // referencian.
+        if ($currency->is_official && (array_key_exists('name', $data) || array_key_exists('symbol', $data))) {
+            abort(422, 'No se puede modificar el nombre ni el símbolo de una moneda oficial del BCV.');
+        }
+
         if (($data['is_active'] ?? true) === false && $currency->is_base) {
             abort(422, 'No se puede desactivar la moneda base.');
         }
@@ -146,6 +155,7 @@ class CurrencyController extends Controller
     public function destroy(Currency $currency): JsonResponse
     {
         abort_if($currency->is_base, 422, 'No se puede eliminar la moneda base.');
+        abort_if($currency->is_official, 422, 'No se puede eliminar una moneda oficial del BCV — desactívala en su lugar.');
 
         $code = $currency->code;
         $currency->delete();

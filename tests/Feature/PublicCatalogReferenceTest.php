@@ -21,7 +21,7 @@ class PublicCatalogReferenceTest extends TestCase
     public function test_public_currencies_lists_only_active_ones(): void
     {
         Currency::create(['code' => 'VES', 'name' => 'Bolívar', 'symbol' => 'Bs', 'is_base' => false, 'is_active' => true]);
-        Currency::create(['code' => 'EUR', 'name' => 'Euro', 'symbol' => '€', 'is_base' => false, 'is_active' => false]);
+        Currency::where('code', 'EUR')->update(['is_active' => false]);
 
         $response = $this->getJson('/api/public/currencies');
 

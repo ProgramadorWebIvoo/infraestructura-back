@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConfigAuditLog;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
+use App\Services\ExchangeRate\ExchangeRateSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -71,5 +72,21 @@ class ExchangeRateController extends Controller
         );
 
         return response()->json(['data' => [...$rate->toArray(), 'currencyName' => $currency?->name, 'auditLog' => $auditLog->toApiPayload()]], 201);
+    }
+
+    public function sync(ExchangeRateSyncService $syncService): JsonResponse
+    {
+        try {
+            $syncService->sync();
+            return response()->json([
+                'success' => true,
+                'message' => '✅ Tasas sincronizadas exitosamente',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al sincronizar tasas: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

@@ -130,6 +130,8 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/exchange-rates', [ExchangeRateController::class, 'store'])
         ->middleware('role:SUPERADMIN');
+    Route::post('/exchange-rates/sync', [ExchangeRateController::class, 'sync'])
+        ->middleware('role:SUPERADMIN');
 
     // Categorías del catálogo maestro de productos — exclusivo SUPERADMIN.
     Route::get('/catalog-categories', [CatalogCategoryController::class, 'index'])

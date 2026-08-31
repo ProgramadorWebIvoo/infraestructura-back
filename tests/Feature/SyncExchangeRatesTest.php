@@ -317,4 +317,42 @@ class SyncExchangeRatesTest extends TestCase
 
         $this->assertEquals(2, ExchangeRate::where('currency_code', 'USD')->count());
     }
+
+    // ===== COMMAND TESTS =====
+
+    public function test_sync_exchange_rates_command_succeeds(): void
+    {
+        Http::fake([
+            'rates.dolarvzla.com/*' => Http::response([
+                'current' => [
+                    'date' => '2026-08-31',
+                    'usd' => 794.9917,
+                    'eur' => 922.69121677,
+                ],
+                'changePercentage' => [
+                    'usd' => 0.42,
+                    'eur' => 0.088,
+                ],
+            ], 200),
+        ]);
+
+        $this->artisan('sync:exchange-rates')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('exchange_rates', [
+            'currency_code' => 'USD',
+            'source' => 'DOLARVZLA_API',
+        ]);
+    }
+
+    public function test_sync_exchange_rates_command_fails_gracefully(): void
+    {
+        Http::fake([
+            'rates.dolarvzla.com/*' => Http::response([], 500),
+            'bcv.org.ve/*' => Http::response([], 500),
+        ]);
+
+        $this->artisan('sync:exchange-rates')
+            ->assertExitCode(1);
+    }
 }

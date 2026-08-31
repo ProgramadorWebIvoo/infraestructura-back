@@ -26,13 +26,15 @@ class Contractor extends Model
     ];
 
     /**
-     * Formato RIF venezolano: letra de tipo de contribuyente (V/E/J/P/G) +
-     * 8 dígitos + dígito verificador, con o sin guiones (J-12345678-9 o
-     * J123456789). No valida el dígito verificador matemáticamente —
-     * solo la forma, igual que el resto de validaciones de formato del
-     * sistema (ej. email).
+     * Formato RIF venezolano de persona jurídica: todo proveedor del
+     * sistema es una empresa, así que la letra es siempre "J" — no hay otras
+     * letras posibles (V/E/P/G son de persona natural/otros, no aplican
+     * acá). 8 dígitos + dígito verificador, con o sin guiones (J-12345678-9
+     * o J123456789). No valida el dígito verificador matemáticamente — solo
+     * la forma, igual que el resto de validaciones de formato del sistema
+     * (ej. email).
      */
-    public const RIF_REGEX = '/^[VEJPGvejpg]-?\d{8}-?\d$/';
+    public const RIF_REGEX = '/^[Jj]-?\d{8}-?\d$/';
 
     /**
      * Normaliza un RIF a un único formato canónico ("J-12345678-9") antes de
@@ -50,7 +52,7 @@ class Contractor extends Model
     public static function normalizeRif(?string $rif): ?string
     {
         $rif = strtoupper(trim((string) $rif));
-        if (!preg_match('/^([VEJPG])-?(\d{8})-?(\d)$/', $rif, $m)) {
+        if (!preg_match('/^(J)-?(\d{8})-?(\d)$/', $rif, $m)) {
             return $rif;
         }
 

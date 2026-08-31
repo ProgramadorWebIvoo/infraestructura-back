@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Contractor;
 use App\Models\MaterialCatalog;
+use App\Models\Project;
+use App\Models\ProjectProposal;
 use App\Models\SupplierMaterialProposal;
 use App\Services\ContractorHistoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -97,6 +99,116 @@ class ContractorHistoryServiceTest extends TestCase
         $this->assertSame('Cemento', $history['topProducts'][0]['productName']);
         $this->assertSame(2, $history['topProducts'][0]['quoteCount']);
         $this->assertSame(10.0, $history['topProducts'][0]['variationPercent']);
+    }
+
+    public function test_custom_products_lists_only_custom_origin_products_with_price_trend(): void
+    {
+        $customProduct = MaterialCatalog::factory()->create(['name' => 'Rejilla a medida', 'is_custom_origin' => true]);
+        $catalogProduct = MaterialCatalog::factory()->create(['name' => 'Cemento', 'is_custom_origin' => false]);
+        $contractor = Contractor::factory()->create();
+
+        $this->createPriceHistoryRow($customProduct, $contractor, 100.0, now()->subMonths(2));
+        $this->createPriceHistoryRow($customProduct, $contractor, 130.0, now()->subMonths(1));
+        $this->createPriceHistoryRow($catalogProduct, $contractor, 50.0, now()->subMonths(1));
+
+        $history = $this->service->getSupplierHistory($contractor->code, 6);
+
+        $this->assertCount(1, $history['customProducts']);
+        $this->assertSame('Rejilla a medida', $history['customProducts'][0]['productName']);
+        $this->assertSame(2, $history['customProducts'][0]['quoteCount']);
+        $this->assertSame(100.0, $history['customProducts'][0]['firstPriceUsd']);
+        $this->assertSame(130.0, $history['customProducts'][0]['lastPriceUsd']);
+        $this->assertSame(30.0, $history['customProducts'][0]['variationPercent']);
+        $this->assertSame(1, $history['stats']['customProductCount']);
+    }
+
+    public function test_custom_products_empty_when_supplier_has_no_custom_origin_quotes(): void
+    {
+        $catalogProduct = MaterialCatalog::factory()->create(['is_custom_origin' => false]);
+        $contractor = Contractor::factory()->create();
+
+        $this->createPriceHistoryRow($catalogProduct, $contractor, 50.0, now()->subMonths(1));
+
+        $history = $this->service->getSupplierHistory($contractor->code, 6);
+
+        $this->assertSame([], $history['customProducts']);
+        $this->assertSame(0, $history['stats']['customProductCount']);
+    }
+
+    public function test_project_history_lists_projects_bid_on_and_flags_the_awarded_one(): void
+    {
+        $contractor = Contractor::factory()->create();
+        $awardedProject = Project::factory()->create(['title' => 'Ampliación de galpón']);
+        $lostProject = Project::factory()->create(['title' => 'Pintura de fachada']);
+
+        $awardedProposal = ProjectProposal::factory()->create([
+            'project_id' => $awardedProject->id,
+            'contractor_code' => $contractor->code,
+            'fecha_oferta' => now()->subDays(10)->toDateString(),
+        ]);
+        $awardedProject->update(['selected_proposal_id' => $awardedProposal->id, 'selected_contractor_code' => $contractor->code]);
+
+        ProjectProposal::factory()->create([
+            'project_id' => $lostProject->id,
+            'contractor_code' => $contractor->code,
+            'fecha_oferta' => now()->subDays(5)->toDateString(),
+        ]);
+
+        $history = $this->service->getSupplierHistory($contractor->code, 6);
+
+        $this->assertCount(2, $history['projects']);
+        $this->assertSame(2, $history['stats']['totalProjectsBidOn']);
+        $this->assertSame(1, $history['stats']['awardedProjectCount']);
+
+        $awardedEntry = collect($history['projects'])->firstWhere('projectId', $awardedProject->id);
+        $this->assertTrue($awardedEntry['isAwarded']);
+        $lostEntry = collect($history['projects'])->firstWhere('projectId', $lostProject->id);
+        $this->assertFalse($lostEntry['isAwarded']);
+
+        // No debe filtrar montos de pago/costo — deliberadamente fuera de alcance.
+        $this->assertArrayNotHasKey('totalCost', $awardedEntry);
+        $this->assertArrayNotHasKey('materialCost', $awardedEntry);
+    }
+
+    public function test_project_history_flags_superseded_and_withdrawn_proposals(): void
+    {
+        $contractor = Contractor::factory()->create();
+        $project = Project::factory()->create();
+
+        $original = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $contractor->code,
+        ]);
+        $renegotiated = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $contractor->code,
+            'origen' => 'RENEGOCIACION',
+        ]);
+        $original->update(['replaced_by_id' => $renegotiated->id]);
+
+        $withdrawn = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $contractor->code,
+        ]);
+        $withdrawn->delete();
+
+        $history = $this->service->getSupplierHistory($contractor->code, 6);
+        $byProposalId = collect($history['projects'])->keyBy('proposalId');
+
+        $this->assertTrue($byProposalId[$original->id]['isSuperseded']);
+        $this->assertFalse($byProposalId[$renegotiated->id]['isSuperseded']);
+        $this->assertTrue($byProposalId[$withdrawn->id]['isWithdrawn']);
+    }
+
+    public function test_project_history_empty_when_contractor_never_bid(): void
+    {
+        $contractor = Contractor::factory()->create();
+
+        $history = $this->service->getSupplierHistory($contractor->code, 6);
+
+        $this->assertSame([], $history['projects']);
+        $this->assertSame(0, $history['stats']['totalProjectsBidOn']);
+        $this->assertSame(0, $history['stats']['awardedProjectCount']);
     }
 
     public function test_stats_include_contractor_rating_and_totals(): void

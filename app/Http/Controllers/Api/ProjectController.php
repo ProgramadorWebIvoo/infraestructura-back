@@ -261,6 +261,7 @@ class ProjectController extends Controller
             $auditDetails .= " Motivo exceso de anticipo: {$proposal->motivo_anticipo_excedido}";
         }
         AuditLog::record($project, 'ANALISTA', 'Carga de propuesta', $auditDetails);
+        \App\Support\CacheVersion::bump('contractor_history:' . $contractor->code);
         $this->invalidateBidEvaluationAiCache($project);
 
         return new ProjectResource($project->load(Project::detailRelations()));
@@ -324,6 +325,7 @@ class ProjectController extends Controller
         }
         AuditLog::record($project, 'ANALISTA', 'Renegociación de propuesta', $auditDetails);
         $this->invalidateBidEvaluationAiCache($project);
+        \App\Support\CacheVersion::bump('contractor_history:' . $proposal->contractor_code);
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }
@@ -376,6 +378,7 @@ class ProjectController extends Controller
         $proposal->delete();
         AuditLog::record($project, 'ANALISTA', 'Eliminacion de propuesta', "Propuesta {$proposal->id} retirada del cuadro comparativo.");
         $this->invalidateBidEvaluationAiCache($project);
+        \App\Support\CacheVersion::bump('contractor_history:' . $proposal->contractor_code);
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }
@@ -411,9 +414,14 @@ class ProjectController extends Controller
             'Rechazo de cuadro comparativo',
             $request->validated(),
             function (Project $project, array $payload) {
+                $affectedContractorCodes = $project->proposals()->pluck('contractor_code')->unique();
                 $project->proposals()->delete();
                 $project->selected_contractor_code = null;
                 $project->selected_proposal_id = null;
+
+                foreach ($affectedContractorCodes as $code) {
+                    \App\Support\CacheVersion::bump('contractor_history:' . $code);
+                }
             }
         );
 
@@ -435,6 +443,7 @@ class ProjectController extends Controller
         ]);
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$data['contractorCode']} adjudicado.");
+        \App\Support\CacheVersion::bump('contractor_history:' . $data['contractorCode']);
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }

@@ -62,6 +62,11 @@ class ProjectProposal extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function project()
+    {
+        return $this->belongsTo(Project::class, 'project_id');
+    }
+
     /** La propuesta de renegociación que reemplazó a esta (si aplica). */
     public function replacedBy()
     {

@@ -33,4 +33,16 @@ class ContractorNormalizeRifTest extends TestCase
         $this->assertSame('', Contractor::normalizeRif(''));
         $this->assertSame('', Contractor::normalizeRif(null));
     }
+
+    /**
+     * Todo proveedor del sistema es persona jurídica (empresa) — la letra
+     * del RIF es siempre "J". V/E/P/G (persona natural, extranjero,
+     * pasaporte, gobierno) no aplican y deben quedar sin normalizar, para
+     * que RIF_REGEX (solo J) los rechace después.
+     */
+    public function test_leaves_non_j_letters_unchanged(): void
+    {
+        $this->assertSame('V-12345678-9', Contractor::normalizeRif('V-12345678-9'));
+        $this->assertSame('E12345678-9', Contractor::normalizeRif('E12345678-9'));
+    }
 }

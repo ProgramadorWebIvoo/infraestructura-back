@@ -211,7 +211,7 @@ class ContractorMaterialTest extends TestCase
     {
         $response = $this->postJson('/api/contractors', [
             'name'      => 'Proveedor Público',
-            'rif'       => 'V-45678901-2',
+            'rif'       => 'J-45678901-2',
             'specialty' => 'Electricidad',
             'email'     => 'proveedor@test.com',
         ]);
@@ -226,19 +226,19 @@ class ContractorMaterialTest extends TestCase
 
     /**
      * Bug real detectado en QA: RIF_REGEX permite guiones opcionales en 2
-     * posiciones ("V123456789", "V-123456789", "V12345678-9",
-     * "V-12345678-9" son 4 strings distintos para el MISMO RIF), y
+     * posiciones ("J123456789", "J-123456789", "J12345678-9",
+     * "J-12345678-9" son 4 strings distintos para el MISMO RIF), y
      * `unique:contractors,rif` compara el string literal — sin normalizar
      * antes de validar, un mismo RIF con guiones en formato distinto se
      * registraba dos veces sin que la regla unique lo detectara.
      */
     public function test_public_registration_rejects_same_rif_in_different_dash_format(): void
     {
-        Contractor::factory()->create(['rif' => 'V-45678901-2']);
+        Contractor::factory()->create(['rif' => 'J-45678901-2']);
 
         $response = $this->postJson('/api/contractors', [
             'name'      => 'Otro Proveedor',
-            'rif'       => 'V456789012', // mismo RIF, sin guiones
+            'rif'       => 'J456789012', // mismo RIF, sin guiones
             'specialty' => 'Electricidad',
             'email'     => 'otro@test.com',
         ]);

@@ -26,9 +26,15 @@ class CurrencyTest extends TestCase
 
     public function test_base_endpoint_returns_rate_for_non_usd_base(): void
     {
+        // rate_to_usd guarda la tasa BCV en bolívares por unidad de moneda
+        // (ver ExchangeRate::rateBetween), no una tasa directa "a dólares" —
+        // hace falta sembrar la tasa BCV de AMBAS monedas (USD y EUR) para
+        // que la conversión EUR -> USD se pueda calcular vía el bolívar como
+        // pivote: 108/100 = 1.08 dólares por euro.
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);
         $eur = Currency::where('code', 'EUR')->firstOrFail();
-        ExchangeRate::create(['currency_code' => 'EUR', 'rate_to_usd' => 1.08, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
+        ExchangeRate::create(['currency_code' => 'USD', 'rate_to_usd' => 100, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
+        ExchangeRate::create(['currency_code' => 'EUR', 'rate_to_usd' => 108, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
         $this->actingAs($admin)->postJson("/api/currencies/{$eur->id}/set-base")->assertStatus(200);
 
         $response = $this->actingAs($admin)->getJson('/api/currencies/base');

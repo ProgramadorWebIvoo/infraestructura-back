@@ -262,20 +262,28 @@ class SupplierProposalCatalogSyncTest extends TestCase
 
     public function test_non_usd_quote_is_converted_using_latest_exchange_rate(): void
     {
-        Currency::create(['code' => 'VES', 'name' => 'Bolívar', 'symbol' => 'Bs', 'is_base' => false, 'is_active' => true]);
-        ExchangeRate::create(['currency_code' => 'VES', 'rate_to_usd' => 0.01, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
+        // exchange_rates.rate_to_usd guarda la tasa BCV en bolívares por
+        // unidad de moneda (ver DolarVzlaApiFetcher/BcvScraperFetcher: es lo
+        // que realmente sincroniza el sistema para USD/EUR) — NO una tasa
+        // directa "a dólares". La conversión entre dos monedas usa el
+        // bolívar como pivote común vía ExchangeRate::rateBetween(): 200/100
+        // = 2.0 unidades de USD por cada "GBQ" (moneda ficticia de prueba,
+        // is_base=false, USD sigue siendo la base del sistema en este test).
+        Currency::create(['code' => 'GBQ', 'name' => 'Moneda de prueba', 'symbol' => 'G', 'is_base' => false, 'is_active' => true]);
+        ExchangeRate::create(['currency_code' => 'USD', 'rate_to_usd' => 100, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
+        ExchangeRate::create(['currency_code' => 'GBQ', 'rate_to_usd' => 200, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
         $invitation = $this->makeInvitation();
 
         $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
-            'quoteCurrency' => 'ves',
+            'quoteCurrency' => 'gbq',
             'items' => [$this->baseItem(['unitPrice' => 800, 'totalPrice' => 8000])],
         ])->assertStatus(201);
 
-        $this->assertDatabaseHas('supplier_material_proposals', ['quote_currency' => 'VES']);
+        $this->assertDatabaseHas('supplier_material_proposals', ['quote_currency' => 'GBQ']);
         $this->assertDatabaseHas('supplier_material_proposal_lines', [
-            'quote_currency' => 'VES',
+            'quote_currency' => 'GBQ',
             'unit_price' => 800,
-            'unit_price_usd' => 8,
+            'unit_price_usd' => 1600,
         ]);
     }
 

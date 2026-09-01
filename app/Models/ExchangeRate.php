@@ -29,17 +29,15 @@ class ExchangeRate extends Model
     }
 
     /**
-     * Tasa vigente más reciente para una moneda a una fecha dada. USD
-     * siempre es 1.0 explícito (no un caso especial) para mantener uniforme
-     * la fórmula price_usd = original_price * fx_rate_to_usd en el resto
-     * del sistema.
+     * Tasa BCV cruda (bolívares por unidad de moneda) vigente más reciente a
+     * una fecha dada. `rate_to_usd` es el nombre histórico de la columna,
+     * pero el dato real que guarda (ver DolarVzlaApiFetcher/BcvScraperFetcher)
+     * es la tasa BCV a bolívares — igual para USD que para EUR u otra moneda
+     * que se agregue. No confundir con "tasa a dólares": para eso ver
+     * `rateBetween()`.
      */
-    public static function rateFor(string $currencyCode, \DateTimeInterface $at): float
+    public static function bcvRateFor(string $currencyCode, \DateTimeInterface $at): float
     {
-        if ($currencyCode === 'USD') {
-            return 1.0;
-        }
-
         $rate = static::query()
             ->where('currency_code', $currencyCode)
             ->where('effective_at', '<=', $at)
@@ -51,5 +49,22 @@ class ExchangeRate extends Model
         }
 
         return (float) $rate->rate_to_usd;
+    }
+
+    /**
+     * Tasa de conversión entre dos monedas cualquiera (multiplicador: monto
+     * en `$from` × esta tasa = monto en `$to`), usando el bolívar como pivote
+     * común vía `bcvRateFor()`. Esto es lo correcto para convertir, por
+     * ejemplo, EUR -> USD (o EUR -> la moneda base vigente, sea cual sea):
+     * NO se puede multiplicar directamente por `bcvRateFor('EUR', ...)` — eso
+     * da bolívares, no dólares. Ver bug corregido en ProposalLineNormalizer.
+     */
+    public static function rateBetween(string $from, string $to, \DateTimeInterface $at): float
+    {
+        if ($from === $to) {
+            return 1.0;
+        }
+
+        return static::bcvRateFor($from, $at) / static::bcvRateFor($to, $at);
     }
 }

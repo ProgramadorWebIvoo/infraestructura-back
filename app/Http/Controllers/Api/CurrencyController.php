@@ -56,7 +56,7 @@ class CurrencyController extends Controller
         $base = Currency::where('is_base', true)->firstOrFail();
 
         try {
-            $rateToUsd = $base->code === 'USD' ? 1.0 : ExchangeRate::rateFor($base->code, now());
+            $rateToUsd = ExchangeRate::rateBetween($base->code, 'USD', now());
         } catch (\RuntimeException) {
             // Base recién cambiada a una moneda sin tasa cargada todavía —
             // el frontend cae a "no se puede convertir" en vez de recibir

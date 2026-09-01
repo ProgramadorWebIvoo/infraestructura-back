@@ -11,7 +11,8 @@
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.7",
-        "pusher/pusher-php-server": "^7.3"
+        "pusher/pusher-php-server": "^7.3",
+        "symfony/dom-crawler": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",

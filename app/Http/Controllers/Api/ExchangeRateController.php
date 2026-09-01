@@ -80,7 +80,7 @@ class ExchangeRateController extends Controller
             $syncService->sync();
             return response()->json([
                 'success' => true,
-                'message' => '✅ Tasas sincronizadas exitosamente',
+                'message' => 'Tasas sincronizadas exitosamente',
             ]);
         } catch (\Exception $e) {
             return response()->json([

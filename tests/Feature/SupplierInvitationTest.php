@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AppSetting;
 use App\Models\Contractor;
+use App\Models\ExchangeRate;
 use App\Models\Project;
 use App\Models\SupplierInvitation;
 use App\Models\SupplierMaterialProposal;
@@ -368,6 +369,15 @@ class SupplierInvitationTest extends TestCase
 
     public function test_import_supplier_proposals_as_project_proposals(): void
     {
+        // Tasas BCV de prueba: 108 Bs/EUR y 100 Bs/USD -> 1.08 USD por EUR
+        // (ver ExchangeRate::rateBetween, pivote en bolívares, no tasa
+        // directa "a dólares"). Esta propuesta se crea directamente en BD
+        // (no vía el endpoint público), así que no pasa por
+        // ProposalLineNormalizer y el import cae al fallback de conversión
+        // sobre los totales originales — ejercitando ambos caminos.
+        ExchangeRate::create(['currency_code' => 'USD', 'rate_to_usd' => 100, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
+        ExchangeRate::create(['currency_code' => 'EUR', 'rate_to_usd' => 108, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
+
         $contractor = Contractor::factory()->create([
             'name'  => 'Proveedor Test',
             'email' => 'proveedor@test.com',
@@ -417,12 +427,23 @@ class SupplierInvitationTest extends TestCase
         ]);
 
         // The proposal should now appear as a ProjectProposal, preserving the
-        // per-line enriched fields (condition/warranty/image) untouched and
-        // carrying over the header-level currency + labor cost.
+        // per-line enriched fields (condition/warranty/image) untouched.
+        // material_cost/labor_cost/total_cost are converted to the base
+        // currency (USD) so the rest of the system — budget semaphore, bid
+        // comparison, adjudication — keeps comparing like-for-like; the
+        // original EUR amounts and the exact rate used are preserved
+        // separately for full traceability (never lost, always auditable).
         $imported = $this->project->fresh()->proposals->first();
         $this->assertNotNull($imported);
         $this->assertSame('EUR', $imported->quote_currency);
-        $this->assertEquals(250.50, $imported->labor_cost);
+        $this->assertEqualsWithDelta(270.54, $imported->labor_cost, 0.001);
+        $this->assertEqualsWithDelta(1080.0, $imported->material_cost, 0.001);
+        $this->assertEqualsWithDelta(1350.54, $imported->total_cost, 0.001);
+        $this->assertEquals(250.50, $imported->labor_cost_original);
+        $this->assertEquals(1000, $imported->material_cost_original);
+        $this->assertEquals(1250.50, $imported->total_cost_original);
+        $this->assertEqualsWithDelta(1.08, $imported->fx_rate_to_base, 0.0001);
+        $this->assertSame('USD', $imported->base_currency_at_import);
         $this->assertSame('new', $imported->material_items[0]['conditionStatus']);
         $this->assertSame('Garantía de fábrica 1 año', $imported->material_items[0]['warrantyDescription']);
         $this->assertSame(12, $imported->material_items[0]['warrantyValue']);

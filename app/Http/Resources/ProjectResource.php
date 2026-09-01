@@ -83,6 +83,16 @@ class ProjectResource extends JsonResource
                 'materialCost' => $proposal->material_cost,
                 'materialItems' => $proposal->material_items_enriched,
                 'quoteCurrency' => $proposal->quote_currency,
+                // Trazabilidad de conversión de moneda (null cuando la
+                // propuesta ya estaba en la moneda base al importar — ver
+                // SupplierProposalImportService). materialCost/laborCost/
+                // totalCost arriba SIEMPRE están en la moneda base; estos
+                // son los montos ORIGINALES tal como cotizó el proveedor.
+                'materialCostOriginal' => $proposal->material_cost_original,
+                'laborCostOriginal' => $proposal->labor_cost_original,
+                'totalCostOriginal' => $proposal->total_cost_original,
+                'fxRateToBase' => $proposal->fx_rate_to_base,
+                'baseCurrencyAtImport' => $proposal->base_currency_at_import,
                 'laborCost' => $proposal->labor_cost,
                 'totalCost' => $proposal->total_cost,
                 'deliveryWeeks' => $proposal->delivery_weeks,

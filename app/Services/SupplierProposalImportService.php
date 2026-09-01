@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Contractor;
+use App\Models\Currency;
+use App\Models\ExchangeRate;
 use App\Models\Project;
 use App\Models\ProjectProposal;
 use App\Models\SupplierMaterialProposal;
@@ -15,6 +17,18 @@ class SupplierProposalImportService
      * Importa las propuestas de materiales recibidas del portal de proveedores
      * como propuestas de contratista del proyecto, emparejando por contacto/nombre.
      * También guarda snapshot de precios en product_price_history para trazabilidad.
+     *
+     * Conversión de moneda: material_cost/labor_cost/total_cost SIEMPRE quedan
+     * en la moneda BASE vigente (Currency::is_base) — es lo que el resto del
+     * sistema (semáforo de presupuesto, comparativas de Procura, adjudicación)
+     * asume al leerlos, y así se preserva sin tocar ese código. Cuando el
+     * proveedor cotizó en una moneda distinta, se guarda además el monto
+     * ORIGINAL (material_cost_original/labor_cost_original/total_cost_original),
+     * la tasa efectivamente usada (fx_rate_to_base) y contra qué moneda base
+     * se calculó (base_currency_at_import) — trazabilidad total y reversible:
+     * ninguna conversión destruye el dato con el que el proveedor cotizó
+     * realmente, y el histórico sigue siendo interpretable aunque la moneda
+     * base cambie más adelante.
      *
      * @return array{imported: int, skipped: int, errors: string[]}
      */
@@ -51,9 +65,35 @@ class SupplierProposalImportService
                 continue;
             }
 
-            // Calculate values from supplier material proposal
-            $materialCost = collect($supplierProposal->items)->sum('totalPrice');
-            $laborCost = $supplierProposal->labor_cost ?? 0;
+            // Montos tal como los cotizó el proveedor, en quote_currency —
+            // nunca se pierden, se guardan como "_original" más abajo.
+            $materialCostOriginal = collect($supplierProposal->items)->sum('totalPrice');
+            $laborCostOriginal = $supplierProposal->labor_cost ?? 0;
+            $totalCostOriginal = $materialCostOriginal + $laborCostOriginal;
+
+            $baseCurrency = Currency::where('is_base', true)->value('code') ?? 'USD';
+            $quoteCurrency = strtoupper($supplierProposal->quote_currency ?? $baseCurrency);
+            $quotedAt = $supplierProposal->submitted_at ?? now();
+
+            if ($quoteCurrency === $baseCurrency) {
+                $fxRateToBase = 1.0;
+                $materialCost = $materialCostOriginal;
+                $laborCost = $laborCostOriginal;
+            } else {
+                $fxRateToBase = ExchangeRate::rateBetween($quoteCurrency, $baseCurrency, $quotedAt);
+                // Materiales: sumar unit_price_usd (ya en moneda base, ver
+                // ProposalLineNormalizer) × quantity de cada línea normalizada
+                // en vez de reconvertir el JSON crudo — evita duplicar la
+                // lógica de conversión en dos lugares y usa el mismo dato ya
+                // persistido que ve el detalle de línea por línea. Fallback
+                // defensivo si por algún motivo no hay líneas (no debería
+                // pasar: se normalizan al recibir la cotización del portal).
+                $materialCost = $supplierProposal->lines->isNotEmpty()
+                    ? $supplierProposal->lines->sum(fn ($line) => $line->unit_price_usd * $line->quantity)
+                    : round($materialCostOriginal * $fxRateToBase, 4);
+                $laborCost = round($laborCostOriginal * $fxRateToBase, 4);
+            }
+
             $totalCost = $materialCost + $laborCost;
 
             // Convert estimated duration to weeks. Sin dato del proveedor, se deja en 0
@@ -78,7 +118,13 @@ class SupplierProposalImportService
             // todo-o-nada). Lo que sí debe ser atómico es "propuesta +
             // su histórico de precios", para que nunca quede una sin la
             // otra si algo revienta a mitad de savePriceHistory().
-            DB::transaction(function () use ($project, $supplierProposal, $contractor, $materialCost, $laborCost, $totalCost, $deliveryWeeks, $description) {
+            $isConverted = $quoteCurrency !== $baseCurrency;
+
+            DB::transaction(function () use (
+                $project, $supplierProposal, $contractor, $materialCost, $laborCost, $totalCost,
+                $materialCostOriginal, $laborCostOriginal, $totalCostOriginal, $fxRateToBase,
+                $baseCurrency, $isConverted, $deliveryWeeks, $description,
+            ) {
                 $project->proposals()->create([
                     'id' => ProjectProposal::nextId(),
                     'contractor_code' => $contractor->code,
@@ -86,6 +132,11 @@ class SupplierProposalImportService
                     'material_cost' => $materialCost,
                     'material_items' => $supplierProposal->items,
                     'quote_currency' => $supplierProposal->quote_currency,
+                    'material_cost_original' => $isConverted ? $materialCostOriginal : null,
+                    'labor_cost_original' => $isConverted ? $laborCostOriginal : null,
+                    'total_cost_original' => $isConverted ? $totalCostOriginal : null,
+                    'fx_rate_to_base' => $isConverted ? $fxRateToBase : null,
+                    'base_currency_at_import' => $isConverted ? $baseCurrency : null,
                     'labor_cost' => $laborCost,
                     'total_cost' => $totalCost,
                     'delivery_weeks' => $deliveryWeeks,
@@ -125,11 +176,16 @@ class SupplierProposalImportService
                 'catalog_product_id' => $line->catalog_product_id,
                 'supplier_code' => $supplierCode,
                 'supplier_material_proposal_line_id' => $line->id,
-                'price_usd' => $line->unit_price_usd, // MVP: solo USD
+                // unit_price_usd ya viene calculado correctamente contra la
+                // moneda base por ProposalLineNormalizer (rateBetween, no la
+                // tasa BCV cruda) — reusar ese valor real en vez de hardcodear
+                // fx_rate_to_usd=1.0 como antes, que era incorrecto para
+                // cualquier propuesta que no fuera USD.
+                'price_usd' => $line->unit_price_usd,
                 'original_currency' => $line->quote_currency ?? 'USD',
                 'original_price' => $line->unit_price,
-                'fx_rate_to_usd' => 1.0, // MVP: sin conversión
-                'fx_rate_source' => 'usd_only',
+                'fx_rate_to_usd' => $line->fx_rate_to_usd,
+                'fx_rate_source' => $line->quote_currency && $line->quote_currency !== 'USD' ? 'bcv_rate' : 'usd_only',
                 'quoted_at' => $proposal->submitted_at ?? now(),
             ]);
         }

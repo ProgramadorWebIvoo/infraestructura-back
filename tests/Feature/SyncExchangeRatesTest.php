@@ -22,8 +22,12 @@ class SyncExchangeRatesTest extends TestCase
     {
         parent::setUp();
 
-        Currency::create(['code' => 'USD', 'name' => 'US Dollar', 'symbol' => '$', 'is_official' => true, 'is_active' => true]);
-        Currency::create(['code' => 'EUR', 'name' => 'Euro', 'symbol' => '€', 'is_official' => true, 'is_active' => true]);
+        // USD/EUR ya vienen sembradas por la migración
+        // 2026_08_31_120100_seed_bcv_official_currencies (corre en cada
+        // RefreshDatabase) — updateOrCreate en vez de create para no chocar
+        // con el UNIQUE constraint de currencies.code.
+        Currency::updateOrCreate(['code' => 'USD'], ['name' => 'US Dollar', 'symbol' => '$', 'is_official' => true, 'is_active' => true]);
+        Currency::updateOrCreate(['code' => 'EUR'], ['name' => 'Euro', 'symbol' => '€', 'is_official' => true, 'is_active' => true]);
         Currency::create(['code' => 'VES', 'name' => 'Bolívar', 'symbol' => 'Bs', 'is_official' => false, 'is_active' => true]);
 
         User::factory()->create(['role' => 'SUPERADMIN']);

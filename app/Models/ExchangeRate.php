@@ -52,12 +52,23 @@ class ExchangeRate extends Model
     }
 
     /**
-     * Tasa de conversión entre dos monedas cualquiera (multiplicador: monto
-     * en `$from` × esta tasa = monto en `$to`), usando el bolívar como pivote
-     * común vía `bcvRateFor()`. Esto es lo correcto para convertir, por
-     * ejemplo, EUR -> USD (o EUR -> la moneda base vigente, sea cual sea):
-     * NO se puede multiplicar directamente por `bcvRateFor('EUR', ...)` — eso
-     * da bolívares, no dólares. Ver bug corregido en ProposalLineNormalizer.
+     * Tasa de conversión entre dos monedas usando bolívares como pivote.
+     *
+     * Fórmula: bcvRateFor($from) / bcvRateFor($to)
+     *
+     * Ejemplo: EUR → BRL
+     *   = bcvRateFor('EUR', $at) / bcvRateFor('BRL', $at)
+     *   = 862.15 Bs./EUR / 210.43 Bs./BRL
+     *   = 4.1 BRL/EUR (1 EUR = 4.1 BRL)
+     *
+     * Nota: Usa bolívares como pivote neutral para evitar inconsistencias
+     * si la "moneda base" del sistema cambia en el futuro. La tasa resultante
+     * es independiente de USD o cualquier otra moneda elegida como "base".
+     *
+     * @param string $from Código de moneda origen (EUR, BRL, USD)
+     * @param string $to Código de moneda destino
+     * @param DateTimeInterface $at Fecha de cotización (obtiene tasa vigente a esa fecha)
+     * @return float Tasa cruzada (multiplicador: monto_from × tasa = monto_to)
      */
     public static function rateBetween(string $from, string $to, \DateTimeInterface $at): float
     {

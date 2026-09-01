@@ -10,6 +10,7 @@ use App\Models\ProjectProposal;
 use App\Models\SupplierMaterialProposal;
 use App\Models\ProductPriceHistory;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SupplierProposalImportService
 {
@@ -80,7 +81,20 @@ class SupplierProposalImportService
                 $materialCost = $materialCostOriginal;
                 $laborCost = $laborCostOriginal;
             } else {
-                $fxRateToBase = ExchangeRate::rateBetween($quoteCurrency, $baseCurrency, $quotedAt);
+                // Usar ConversionService para obtener tasa (con caché + outdated detection)
+                $conversionResult = app(ConversionService::class)->convert(
+                    1.0,
+                    $quoteCurrency,
+                    $baseCurrency,
+                    $quotedAt
+                );
+                $fxRateToBase = $conversionResult->rate;
+
+                // Alertar si tasa está outdated (>24 horas)
+                if ($conversionResult->isOutdated) {
+                    Log::warning("Tasa de cambio outdated: {$quoteCurrency}→{$baseCurrency} tiene >24h. Cotización: {$quotedAt}");
+                }
+
                 // Materiales: sumar unit_price_usd (ya en moneda base, ver
                 // ProposalLineNormalizer) × quantity de cada línea normalizada
                 // en vez de reconvertir el JSON crudo — evita duplicar la

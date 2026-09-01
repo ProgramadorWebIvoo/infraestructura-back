@@ -17,12 +17,14 @@ class ProductPriceHistory extends Model
         'catalog_product_id',
         'supplier_code',
         'supplier_material_proposal_line_id',
+        'project_proposal_id',
         'price_usd',
         'original_currency',
         'original_price',
         'fx_rate_to_usd',
         'fx_rate_source',
         'quoted_at',
+        'origin',
     ];
 
     protected $casts = [

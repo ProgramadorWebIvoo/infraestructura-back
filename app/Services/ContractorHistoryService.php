@@ -53,7 +53,11 @@ class ContractorHistoryService
                 'material_catalog.name as product_name',
                 'material_catalog.is_custom_origin',
                 'product_price_history.price_usd',
+                'product_price_history.original_currency',
+                'product_price_history.original_price',
+                'product_price_history.fx_rate_to_usd',
                 'product_price_history.quoted_at',
+                'product_price_history.origin',
             ])
             ->orderBy('product_price_history.quoted_at')
             ->get();
@@ -73,15 +77,28 @@ class ContractorHistoryService
      * Serie mensual: cantidad de cotizaciones + precio promedio por mes,
      * rellenando con cero los meses sin actividad para que el frontend
      * dibuje una serie continua de $monthsBack puntos.
+     *
+     * Todos los precios ya están normalizados a USD en product_price_history
+     * (price_usd). Este método detecta si hay múltiples monedas originales
+     * para que el frontend pueda indicar "Incluye conversiones" si corresponde.
      */
     private function buildMonthlySeries($rows, int $monthsBack): array
     {
         $byMonth = [];
+        $hasCurrencies = [];
+
         foreach ($rows as $row) {
             $month = substr($row->quoted_at, 0, 7); // 'YYYY-MM'
             $byMonth[$month]['sum'] = ($byMonth[$month]['sum'] ?? 0) + (float) $row->price_usd;
             $byMonth[$month]['count'] = ($byMonth[$month]['count'] ?? 0) + 1;
+            $byMonth[$month]['currencies'][] = $row->original_currency ?? 'USD';
         }
+
+        // Detectar si hay múltiples monedas en todo el período
+        foreach ($byMonth as $monthData) {
+            $hasCurrencies = array_merge($hasCurrencies, $monthData['currencies']);
+        }
+        $uniqueCurrencies = array_unique($hasCurrencies);
 
         $series = [];
         for ($i = $monthsBack - 1; $i >= 0; $i--) {
@@ -91,6 +108,7 @@ class ContractorHistoryService
                 'month' => $month,
                 'quoteCount' => $entry['count'] ?? 0,
                 'avgPriceUsd' => $entry ? round($entry['sum'] / $entry['count'], 2) : null,
+                'hasMultipleCurrencies' => count($uniqueCurrencies) > 1,
             ];
         }
 
@@ -101,6 +119,9 @@ class ContractorHistoryService
      * Top 5 productos por volumen de cotizaciones, con variación entre la
      * primera y última cotización del período — misma fórmula que
      * PriceHistorySparkline en el frontend (changePercent).
+     *
+     * Ahora incluye lastCurrency para indicar en qué moneda fue la última
+     * cotización, permitiendo al frontend mostrar "15.00 USD" o "16.00 EUR".
      */
     private function buildTopProducts($rows): array
     {
@@ -109,13 +130,16 @@ class ContractorHistoryService
             $id = $row->catalog_product_id;
             $byProduct[$id]['name'] ??= $row->product_name;
             $byProduct[$id]['prices'][] = (float) $row->price_usd;
+            $byProduct[$id]['currencies'][] = $row->original_currency ?? 'USD';
         }
 
         $products = [];
         foreach ($byProduct as $id => $data) {
             $prices = $data['prices'];
+            $currencies = $data['currencies'];
             $first = $prices[0];
             $last = end($prices);
+            $lastCurrency = end($currencies);
             $variationPercent = $first > 0 ? (($last - $first) / $first) * 100 : 0;
 
             $products[] = [
@@ -123,6 +147,7 @@ class ContractorHistoryService
                 'productName' => $data['name'],
                 'quoteCount' => count($prices),
                 'lastPriceUsd' => $last,
+                'lastCurrency' => $lastCurrency,
                 'variationPercent' => round($variationPercent, 1),
             ];
         }
@@ -141,6 +166,8 @@ class ContractorHistoryService
      * que ver su evolución de precio acá es la única forma de rastrear si un
      * proveedor está subiendo precios en un producto que aún no tiene
      * histórico "oficial" de catálogo.
+     *
+     * Incluye lastCurrency para mantener consistencia con buildTopProducts().
      */
     private function buildCustomProducts($rows): array
     {
@@ -154,13 +181,16 @@ class ContractorHistoryService
             $byProduct[$id]['name'] ??= $row->product_name;
             $byProduct[$id]['prices'][] = (float) $row->price_usd;
             $byProduct[$id]['dates'][] = $row->quoted_at;
+            $byProduct[$id]['currencies'][] = $row->original_currency ?? 'USD';
         }
 
         $products = [];
         foreach ($byProduct as $id => $data) {
             $prices = $data['prices'];
+            $currencies = $data['currencies'];
             $first = $prices[0];
             $last = end($prices);
+            $lastCurrency = end($currencies);
             $variationPercent = $first > 0 ? (($last - $first) / $first) * 100 : 0;
 
             $products[] = [
@@ -169,6 +199,7 @@ class ContractorHistoryService
                 'quoteCount' => count($prices),
                 'firstPriceUsd' => $first,
                 'lastPriceUsd' => $last,
+                'lastCurrency' => $lastCurrency,
                 'variationPercent' => round($variationPercent, 1),
                 'firstQuotedAt' => $data['dates'][0],
                 'lastQuotedAt' => end($data['dates']),

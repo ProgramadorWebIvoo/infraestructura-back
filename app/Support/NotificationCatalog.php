@@ -32,6 +32,7 @@ class NotificationCatalog
     private const TYPE_OVERRIDES = [
         'Rechazo de cuadro comparativo' => NotificationType::ACCION_REQUERIDA,
         'Rechazo de petición de obra' => NotificationType::ACCION_REQUERIDA,
+        'Rechazo de propuesta de marketing' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de restablecimiento de contrasena' => NotificationType::INFORMACION,
         'Alta de proveedor' => NotificationType::EXITO,
         'Alta de material' => NotificationType::EXITO,
@@ -59,6 +60,7 @@ class NotificationCatalog
         'Liberacion total de fondos' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
         'Reporte de obra finalizada' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Verificacion de finalizacion y calidad de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
+        'Congelación manual de tasa de cambio' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
         'Evaluacion inteligente de propuestas' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Envio de invitacion a proveedor' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Rechazo de petición de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
@@ -115,6 +117,16 @@ class NotificationCatalog
 
         // Administración: matriz de notificaciones
         'Modificacion de reglas de notificacion' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
+
+        // Marketing (creacion y aprobacion de piezas publicitarias)
+        'Creacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
+        'Modificacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
+        'Eliminacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
+        'Envio a revision de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
+        'Aprobacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
+        'Rechazo de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => true],
+        'Carga de adjunto de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
+        'Eliminacion de adjunto de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
     ];
 
     /** @return string[] */

@@ -21,8 +21,10 @@ use App\Models\Project;
 use App\Models\ProjectMaterial;
 use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
+use App\Models\ProjectRateFreeze;
 use App\Services\DossierEvaluationService;
 use App\Services\ProjectStateMachine;
+use App\Services\RateFreezeService;
 use App\Services\RejectionService;
 use App\Services\SupplierProposalImportService;
 use Illuminate\Http\Request;
@@ -428,19 +430,30 @@ class ProjectController extends Controller
         return new ProjectResource($project);
     }
 
-    public function selectContractor(SelectContractorRequest $request, Project $project)
+    public function selectContractor(SelectContractorRequest $request, Project $project, RateFreezeService $rateFreezeService)
     {
         ProjectStateMachine::assertStatus($project, self::STATUSES['COMPARATIVA_ENVIADA'], 'Solo se puede adjudicar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
 
         $data = $request->validated();
 
-        abort_unless($project->proposals()->whereKey($data['proposalId'])->exists(), 422, 'La propuesta no pertenece al proyecto.');
+        $selectedProposal = $project->proposals()->whereKey($data['proposalId'])->first();
+        abort_unless($selectedProposal, 422, 'La propuesta no pertenece al proyecto.');
 
-        $project->update([
-            'status' => self::STATUSES['CONTRATADO'],
-            'selected_contractor_code' => $data['contractorCode'],
-            'selected_proposal_id' => $data['proposalId'],
-        ]);
+        DB::transaction(function () use ($project, $data, $selectedProposal, $rateFreezeService) {
+            $project->update([
+                'status' => self::STATUSES['CONTRATADO'],
+                'selected_contractor_code' => $data['contractorCode'],
+                'selected_proposal_id' => $data['proposalId'],
+            ]);
+
+            // Congela la tasa BCV vigente para este proyecto (si el trigger
+            // está habilitado en CONFIG APP) — ver RateFreezeService.
+            $rateFreezeService->freezeForTrigger(
+                $project,
+                ProjectRateFreeze::TRIGGER_CONTRATADO,
+                (float) $selectedProposal->total_cost
+            );
+        });
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$data['contractorCode']} adjudicado.");
         \App\Support\CacheVersion::bump('contractor_history:' . $data['contractorCode']);
@@ -448,7 +461,7 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(Project::detailRelations()));
     }
 
-    public function pay(PayProjectRequest $request, Project $project)
+    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService)
     {
         $data = $request->validated();
 
@@ -461,17 +474,28 @@ class ProjectController extends Controller
             ProjectStateMachine::assertStatus($project, self::STATUSES['LISTO_PAGO_FINAL'], 'El pago final solo se puede liberar tras la verificación de calidad (LISTO_PAGO_FINAL).');
         }
 
-        ProjectPayment::updateOrCreate(
-            ['project_id' => $project->id, 'payment_type' => $data['paymentType']],
-            [
-                'proposal_id' => $project->selected_proposal_id,
-                'amount' => $data['amount'],
-                'paid_date' => $data['paidDate'] ?? now()->toDateString(),
-                'notes' => $data['notes'] ?? null,
-            ]
-        );
+        DB::transaction(function () use ($project, $data, $rateFreezeService) {
+            ProjectPayment::updateOrCreate(
+                ['project_id' => $project->id, 'payment_type' => $data['paymentType']],
+                [
+                    'proposal_id' => $project->selected_proposal_id,
+                    'amount' => $data['amount'],
+                    'paid_date' => $data['paidDate'] ?? now()->toDateString(),
+                    'notes' => $data['notes'] ?? null,
+                ]
+            );
 
-        $project->update(['status' => $data['paymentType'] === 'ADVANCE' ? self::STATUSES['EN_EJECUCION'] : self::STATUSES['COMPLETADO_PAGADO']]);
+            $project->update(['status' => $data['paymentType'] === 'ADVANCE' ? self::STATUSES['EN_EJECUCION'] : self::STATUSES['COMPLETADO_PAGADO']]);
+
+            // Congela la tasa BCV vigente para el monto de este pago (si el
+            // trigger está habilitado en CONFIG APP) — ver RateFreezeService.
+            $rateFreezeService->freezeForTrigger(
+                $project,
+                $data['paymentType'] === 'ADVANCE' ? ProjectRateFreeze::TRIGGER_PAGO_ANTICIPO : ProjectRateFreeze::TRIGGER_PAGO_FINIQUITO,
+                (float) $data['amount']
+            );
+        });
+
         AuditLog::record($project, 'FINANZAS', $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos', $data['notes'] ?? null);
 
         return new ProjectResource($project->load(Project::detailRelations()));

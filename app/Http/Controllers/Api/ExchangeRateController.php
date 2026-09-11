@@ -77,7 +77,13 @@ class ExchangeRateController extends Controller
     public function sync(ExchangeRateSyncService $syncService): JsonResponse
     {
         try {
-            $syncService->sync();
+            if (!$syncService->sync()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo obtener la tasa de ninguna fuente (API ni scraping).',
+                ], 500);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Tasas sincronizadas exitosamente',

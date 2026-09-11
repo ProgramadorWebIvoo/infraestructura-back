@@ -21,7 +21,11 @@ class SyncExchangeRatesCommand extends Command
         $this->info('🔄 Iniciando sync de tasas BCV...');
 
         try {
-            $this->syncService->sync();
+            if (!$this->syncService->sync()) {
+                $this->error('❌ Sync falló: no se pudo obtener la tasa de ninguna fuente');
+                return self::FAILURE;
+            }
+
             $this->info('✅ Sync completado exitosamente');
             return self::SUCCESS;
         } catch (\Exception $e) {

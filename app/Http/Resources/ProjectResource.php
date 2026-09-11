@@ -120,6 +120,13 @@ class ProjectResource extends JsonResource
             'documents' => $this->whenLoaded('documents', fn () =>
                 ProjectDocumentResource::collection($this->documents)
             ),
+            // Congelaciones de tasa de cambio (ver RateFreezeService) — el
+            // frontend usa la activa (supersededById null) de cada trigger
+            // para mostrar el monto en Bs. fijo en vez de recalcularlo con
+            // la tasa BCV del día.
+            'rateFreezes' => $this->whenLoaded('rateFreezes', fn () =>
+                ProjectRateFreezeResource::collection($this->rateFreezes)
+            ),
         ];
     }
 }

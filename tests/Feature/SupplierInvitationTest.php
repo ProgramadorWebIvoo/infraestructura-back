@@ -451,6 +451,58 @@ class SupplierInvitationTest extends TestCase
         $this->assertStringContainsString('foto.jpg', $imported->material_items[0]['imagePath']);
     }
 
+    /**
+     * Cuando la propuesta se recibe vía el endpoint público (pasa por
+     * CatalogSyncService, que ya crea product_price_history por línea al
+     * momento de la sumisión), importarla como ANALISTA no debe duplicar
+     * esas filas — antes SupplierProposalImportService::savePriceHistory()
+     * las volvía a crear sin chequear si ya existían para la misma
+     * supplier_material_proposal_line_id.
+     */
+    public function test_import_does_not_duplicate_price_history_already_logged_on_submission(): void
+    {
+        $contractor = Contractor::factory()->create([
+            'name'  => 'Proveedor Test',
+            'email' => 'proveedor@test.com',
+        ]);
+
+        $invitation = SupplierInvitation::factory()->create([
+            'project_id'       => $this->project->id,
+            'supplier_name'    => $contractor->name,
+            'supplier_contact' => $contractor->email,
+        ]);
+
+        $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
+            'items' => [
+                [
+                    'materialName' => 'Cemento',
+                    'quantity'     => 100,
+                    'unit'         => 'kg',
+                    'unitPrice'    => 12.50,
+                    'totalPrice'   => 1250.00,
+                    'conditionStatus' => 'new',
+                    'warrantyDescription' => 'Garantía de fábrica',
+                ],
+            ],
+            'estimatedDays' => 30,
+            'durationUnit'  => 'dias',
+        ])->assertStatus(201);
+
+        // CatalogSyncService ya debió loggear 1 fila para esta línea.
+        $this->assertEquals(1, \App\Models\ProductPriceHistory::count());
+
+        $analista = User::factory()->create(['role' => 'ANALISTA']);
+        $this->withHeaders([
+            'Authorization' => 'Bearer ' . $analista->createToken('test')->plainTextToken,
+        ])->postJson("/api/projects/{$this->project->id}/import-supplier-proposals")
+            ->assertStatus(200)
+            ->assertJson(['imported' => 1, 'skipped' => 0, 'errors' => []]);
+
+        // No debe haber duplicado la fila al importar.
+        $this->assertEquals(1, \App\Models\ProductPriceHistory::count());
+    }
+
     public function test_import_no_supplier_proposals_returns_empty(): void
     {
         $project = Project::factory()->create();

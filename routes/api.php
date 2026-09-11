@@ -5,9 +5,12 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContractorController;
+use App\Http\Controllers\Api\MarketingProjectController;
+use App\Http\Controllers\Api\MarketingProjectAttachmentController;
 use App\Http\Controllers\Api\ModuleController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectDocumentController;
+use App\Http\Controllers\Api\ProjectRateFreezeController;
 use App\Http\Controllers\Api\SupplierInvitationController;
 use App\Http\Controllers\Api\SupplierProposalController;
 use App\Http\Controllers\Api\UserController;
@@ -182,6 +185,35 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/dashboard/summary', DashboardSummaryController::class)
         ->middleware('role:PRESIDENCIA,SUPERADMIN');
 
+    // Marketing — flujo de creación/aprobación de piezas publicitarias
+    // (impresiones, viniles, pendones), separado del flujo de obra.
+    Route::middleware('role:MARKETING,ADMIN,SUPERADMIN')->group(function () {
+        Route::get('/marketing-projects', [MarketingProjectController::class, 'index'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+        Route::post('/marketing-projects', [MarketingProjectController::class, 'store']);
+        Route::get('/marketing-projects/{marketingProject}', [MarketingProjectController::class, 'show'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+        Route::patch('/marketing-projects/{marketingProject}', [MarketingProjectController::class, 'update']);
+        Route::delete('/marketing-projects/{marketingProject}', [MarketingProjectController::class, 'destroy']);
+        Route::post('/marketing-projects/{marketingProject}/submit', [MarketingProjectController::class, 'submit']);
+
+        Route::get('/marketing-projects/{marketingProject}/attachments', [MarketingProjectAttachmentController::class, 'index'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+        Route::post('/marketing-projects/{marketingProject}/attachments', [MarketingProjectAttachmentController::class, 'upload']);
+        Route::delete('/marketing-projects/{marketingProject}/attachments/{attachment}', [MarketingProjectAttachmentController::class, 'destroy']);
+        Route::get('/marketing-projects/{marketingProject}/attachments/{attachment}/download', [MarketingProjectAttachmentController::class, 'download'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+        Route::get('/marketing-projects/{marketingProject}/attachments/{attachment}/preview', [MarketingProjectAttachmentController::class, 'preview'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    });
+
+    // Aprobación/rechazo — reservado a administración, separado del rol
+    // MARKETING que solo crea/edita/envía a revisión.
+    Route::post('/marketing-projects/{marketingProject}/approve', [MarketingProjectController::class, 'approve'])
+        ->middleware('role:ADMIN,SUPERADMIN');
+    Route::post('/marketing-projects/{marketingProject}/reject', [MarketingProjectController::class, 'reject'])
+        ->middleware('role:ADMIN,SUPERADMIN');
+
     Route::apiResource('projects', ProjectController::class)->only(['index', 'store', 'show']);
 
     // Rutas protegidas por rol (matriz de permisos auditoría)
@@ -211,6 +243,9 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/payments', [ProjectController::class, 'pay'])
         ->middleware('role:FINANZAS,ADMIN,SUPERADMIN');
+    Route::get('/projects/{project}/rate-freezes', [ProjectRateFreezeController::class, 'index']);
+    Route::post('/projects/{project}/rate-freezes', [ProjectRateFreezeController::class, 'store'])
+        ->middleware('role:SUPERADMIN');
     Route::post('/projects/{project}/report-finished', [ProjectController::class, 'reportFinished'])
         ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/verify-completion', [ProjectController::class, 'verifyCompletion'])

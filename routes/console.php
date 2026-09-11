@@ -33,3 +33,23 @@ Schedule::command('queue:work --queue=default --max-time=60 --max-jobs=50 --stop
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Sync de tasas de cambio BCV: Lunes-Viernes a las 10:00 AM VE.
+// ->timezone() explícito porque config('app.timezone') es 'UTC' (sin
+// 'app.schedule_timezone' configurado) — sin esto, dailyAt() corre a las
+// 10:00 UTC = 6:00 AM VE, antes de que el BCV publique la tasa oficial del
+// día. Antes vivía en app/Console/Kernel.php, que en Laravel 11+ (bootstrap
+// vía Application::configure(), sin binding de App\Console\Kernel) nunca se
+// invoca — el sync automático nunca corrió, solo el disparo manual desde el
+// panel (POST /exchange-rates/sync) funcionaba.
+Schedule::command('sync:exchange-rates')
+    ->timezone('America/Caracas')
+    ->dailyAt('10:00')
+    ->weekdays()
+    ->name('sync_exchange_rates')
+    ->onSuccess(function () {
+        \Log::info('✅ Exchange rates synced successfully');
+    })
+    ->onFailure(function () {
+        \Log::error('❌ Exchange rates sync failed');
+    });

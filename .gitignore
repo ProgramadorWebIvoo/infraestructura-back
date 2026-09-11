@@ -16,7 +16,9 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
-
+.mcp.json
+.claude
+graphify-out
 # Plan interno de trabajo (no distribuir vía git)
 /docs/PLAN-MAESTRO-90-DIAS.md
 /docs/FASE0-AUDITORIA-TECNICA.md

@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Facades\DB;
 use App\Models\ProjectProposal;
 use App\Models\ProductPriceHistory;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Rellena product_price_history con propuestas de proyectos existentes (MANUAL, RENEGOCIACION).
@@ -18,7 +19,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $this->command->info("Sincronizando propuestas de proyectos existentes a product_price_history...");
+        Log::info('Sincronizando propuestas de proyectos existentes a product_price_history...');
 
         $count = 0;
         $skipped = 0;
@@ -74,23 +75,23 @@ return new class extends Migration
 
                     $count++;
                 } catch (\Exception $e) {
-                    $this->command->warn("Error sincronizando propuesta {$proposal->id}: " . $e->getMessage());
+                    Log::warning("Error sincronizando propuesta {$proposal->id}: " . $e->getMessage());
                     $skipped++;
                 }
             }
         }
 
-        $this->command->info("Sincronización completada: $count registros creados, $skipped omitidos");
+        Log::info("Sincronización completada: $count registros creados, $skipped omitidos");
     }
 
     public function down(): void
     {
-        $this->command->info("Eliminando registros backfill de project_proposals...");
+        Log::info('Eliminando registros backfill de project_proposals...');
 
         // Eliminar solo los que están marcados como BACKFILL
         ProductPriceHistory::where('fx_rate_source', 'PROJECT_PROPOSAL_BACKFILL')
             ->delete();
 
-        $this->command->info("Eliminación completada");
+        Log::info('Eliminación completada');
     }
 };

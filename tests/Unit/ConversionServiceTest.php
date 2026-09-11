@@ -2,28 +2,42 @@
 
 namespace Tests\Unit;
 
+use App\Models\Currency;
 use App\Models\ExchangeRate;
 use App\Services\ConversionService;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
-use Mockery\MockInterface;
-use PHPUnit\Framework\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
+/**
+ * Usa datos reales en SQLite (RefreshDatabase) en vez de mockear
+ * ExchangeRate::rateBetween() con Mockery::mock('overload:...').
+ *
+ * Los mocks "overload" reemplazan la clase globalmente para el resto del
+ * proceso PHP (Mockery::close() no lo revierte) — como rateBetween() es un
+ * método estático, esto rompía cualquier test posterior en la misma
+ * ejecución que usara ExchangeRate::create() (ej. SyncExchangeRatesTest),
+ * con "Call to a member function __call() on null". Sembrar filas reales
+ * evita el problema y prueba la lógica real de bcvRateFor()/rateBetween().
+ */
 class ConversionServiceTest extends TestCase
 {
+    use RefreshDatabase;
+
     private ConversionService $service;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->service = new ConversionService();
-        Cache::shouldReceive('remember')->andReturnUsing(fn ($key, $ttl, $callback) => $callback());
-    }
 
-    protected function tearDown(): void
-    {
-        \Mockery::close();
-        parent::tearDown();
+        // USD/EUR ya vienen sembradas por la migración
+        // 2026_08_31_120100_seed_bcv_official_currencies (corre en cada
+        // RefreshDatabase) — updateOrCreate en vez de create para no chocar
+        // con el UNIQUE constraint de currencies.code.
+        Currency::updateOrCreate(['code' => 'USD'], ['name' => 'US Dollar', 'symbol' => '$', 'is_official' => true, 'is_active' => true]);
+        Currency::updateOrCreate(['code' => 'EUR'], ['name' => 'Euro', 'symbol' => '€', 'is_official' => true, 'is_active' => true]);
+        Currency::create(['code' => 'BRL', 'name' => 'Real', 'symbol' => 'R$', 'is_official' => false, 'is_active' => true]);
     }
 
     /**
@@ -40,13 +54,10 @@ class ConversionServiceTest extends TestCase
 
     /**
      * Test 2: Tasa de cambio vigente se calcula correctamente usando rateBetween
-     * Mock: rateBetween('EUR', 'USD', now()) retorna 0.92
      */
     public function test_convert_with_valid_rates(): void
     {
-        // Mock ExchangeRate::rateBetween()
-        $this->mockRateBetween('EUR', 'USD', 0.92);
-        $this->mockLatestRateDate('EUR', 'USD', now());
+        $this->seedPairRate('EUR', 'USD', 0.92);
 
         $result = $this->service->convert(100, 'EUR', 'USD');
 
@@ -56,12 +67,10 @@ class ConversionServiceTest extends TestCase
 
     /**
      * Test 3: Conversión cruzada EUR → BRL (a través de bolívares)
-     * Mock: rateBetween('EUR', 'BRL', now()) retorna 4.6
      */
     public function test_convert_cross_rate_eur_to_brl(): void
     {
-        $this->mockRateBetween('EUR', 'BRL', 4.6);
-        $this->mockLatestRateDate('EUR', 'BRL', now());
+        $this->seedPairRate('EUR', 'BRL', 4.6);
 
         $result = $this->service->convert(100, 'EUR', 'BRL');
 
@@ -71,16 +80,13 @@ class ConversionServiceTest extends TestCase
 
     /**
      * Test 4: Detección de tasa outdated (>24 horas)
-     * Nota: Como simplificamos getLatestRateDate() para retornar asOfDate,
-     * este test verifica que se calcula correctamente con una fecha antigua.
      */
     public function test_convert_detects_outdated_rate(): void
     {
         $oldDate = now()->subHours(25);
 
-        $this->mockRateBetween('EUR', 'USD', 0.92);
+        $this->seedPairRate('EUR', 'USD', 0.92, $oldDate->copy()->subHour());
 
-        // Convertir usando una fecha antigua
         $result = $this->service->convert(100, 'EUR', 'USD', $oldDate);
 
         $this->assertTrue($result->isOutdated);
@@ -92,7 +98,8 @@ class ConversionServiceTest extends TestCase
      */
     public function test_convert_throws_when_rates_unavailable(): void
     {
-        $this->mockRateBetweenThrows('EUR', 'INVALID_CURRENCY');
+        // EUR tiene tasa sembrada; INVALID_CURRENCY no existe en exchange_rates.
+        $this->seedRate('EUR', 92);
 
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Tasas de cambio no disponibles');
@@ -109,11 +116,7 @@ class ConversionServiceTest extends TestCase
     public function test_sum_items_multiple_currencies(): void
     {
         // EUR → USD = 0.92
-        $this->mockRateBetween('EUR', 'USD', 0.92);
-        $this->mockLatestRateDate('EUR', 'USD', now());
-
-        // USD → USD = 1.0 (identity)
-        $this->mockRateBetween('USD', 'USD', 1.0);
+        $this->seedPairRate('EUR', 'USD', 0.92);
 
         $items = [
             [
@@ -139,7 +142,7 @@ class ConversionServiceTest extends TestCase
      */
     public function test_get_rate_returns_current_rate(): void
     {
-        $this->mockRateBetween('EUR', 'USD', 0.92);
+        $this->seedPairRate('EUR', 'USD', 0.92);
 
         $rate = $this->service->getRate('EUR', 'USD');
 
@@ -148,10 +151,14 @@ class ConversionServiceTest extends TestCase
 
     /**
      * Test 8: getRate() retorna 0 en caso de error
-     * Nota: Requiere Facade root, se valida manualmente en integración
      */
-    // Comentado: Unit tests no tienen acceso a Facades
-    // public function test_get_rate_returns_zero_on_error(): void { ... }
+    public function test_get_rate_returns_zero_on_error(): void
+    {
+        // Ni EUR ni INVALID_CURRENCY tienen tasa sembrada.
+        $rate = $this->service->getRate('EUR', 'INVALID_CURRENCY');
+
+        $this->assertEquals(0, $rate);
+    }
 
     /**
      * Test 9: Redondeo a 2 decimales
@@ -159,7 +166,7 @@ class ConversionServiceTest extends TestCase
     public function test_convert_rounds_to_two_decimals(): void
     {
         // 100.456 EUR × 1.0869565 ≈ 109.196...
-        $this->mockRateBetween('EUR', 'USD', 1.0869565);
+        $this->seedPairRate('EUR', 'USD', 1.0869565);
 
         $result = $this->service->convert(100.456, 'EUR', 'USD');
 
@@ -175,8 +182,7 @@ class ConversionServiceTest extends TestCase
      */
     public function test_convert_rate_precision_six_decimals(): void
     {
-        $this->mockRateBetween('EUR', 'USD', 0.918765);
-        $this->mockLatestRateDate('EUR', 'USD', now());
+        $this->seedPairRate('EUR', 'USD', 0.918765);
 
         $result = $this->service->convert(1000, 'EUR', 'USD');
 
@@ -186,30 +192,29 @@ class ConversionServiceTest extends TestCase
         $this->assertLessThanOrEqual(6, $afterDecimal);
     }
 
-    // ========== HELPERS PARA MOCKS ==========
+    // ========== HELPERS PARA SEMBRAR TASAS REALES ==========
 
-    private function mockRateBetween(string $from, string $to, float $rate): void
+    /**
+     * Siembra una tasa BCV cruda (Bs./unidad) para una moneda a una fecha.
+     */
+    private function seedRate(string $currencyCode, float $bcvRate, ?Carbon $effectiveAt = null): void
     {
-        \Mockery::mock('overload:' . ExchangeRate::class)
-            ->makePartial()
-            ->shouldReceive('rateBetween')
-            ->with($from, $to, \Mockery::type('DateTimeInterface'))
-            ->andReturn($rate);
+        ExchangeRate::create([
+            'currency_code' => $currencyCode,
+            'rate_to_usd' => $bcvRate,
+            'source' => 'TEST_SEED',
+            'effective_at' => $effectiveAt ?? now(),
+        ]);
     }
 
-    private function mockLatestRateDate(string $from, string $to, Carbon $date): void
+    /**
+     * Siembra tasas BCV para que rateBetween($from, $to) = $ratio, usando
+     * 100 Bs. como referencia arbitraria para $to.
+     */
+    private function seedPairRate(string $from, string $to, float $ratio, ?Carbon $effectiveAt = null): void
     {
-        // Mock interno en ConversionService que obtiene la fecha más reciente
-        // Este mock es más complejo, así que lo manejamos en el test con mockRateBetween
-    }
-
-    private function mockRateBetweenThrows(string $from, string $to): void
-    {
-        \Mockery::mock('overload:' . ExchangeRate::class)
-            ->makePartial()
-            ->shouldReceive('rateBetween')
-            ->with($from, $to, \Mockery::type('DateTimeInterface'))
-            ->andThrow(new \RuntimeException("No hay tasa de cambio"));
+        $this->seedRate($to, 100, $effectiveAt);
+        $this->seedRate($from, 100 * $ratio, $effectiveAt);
     }
 
     private function assertAlmostEqual(float $expected, float $actual, float $tolerance = 0.01): void

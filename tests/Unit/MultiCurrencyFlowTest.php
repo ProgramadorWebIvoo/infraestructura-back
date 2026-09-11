@@ -3,32 +3,38 @@
 namespace Tests\Unit;
 
 use App\DTO\ConversionResult;
+use App\Models\Currency;
+use App\Models\ExchangeRate;
 use App\Services\ConversionService;
-use PHPUnit\Framework\TestCase;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 /**
- * Tests unitarios que validan el flujo multi-moneda COMPLETO:
+ * Tests que validan el flujo multi-moneda COMPLETO:
  * EUR/BRL → USD conversión → EST/VAR% cálculos
  *
- * Estos tests validan la lógica sin dependencias de BD.
+ * Usa datos reales en SQLite (RefreshDatabase) en vez de
+ * Mockery::mock('overload:...') sobre Cache/ExchangeRate — esos mocks
+ * reemplazan la clase para el resto del proceso PHP (Mockery::close() no
+ * lo revierte), lo que rompía otros tests del mismo run que usaran
+ * ExchangeRate::create() o el facade Cache real (ver ConversionServiceTest
+ * para el mismo fix).
  */
 class MultiCurrencyFlowTest extends TestCase
 {
+    use RefreshDatabase;
+
     private ConversionService $conversionService;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->conversionService = new ConversionService();
-        \Mockery::mock('overload:Illuminate\Support\Facades\Cache')
-            ->shouldReceive('remember')
-            ->andReturnUsing(fn ($key, $ttl, $callback) => $callback());
-    }
 
-    protected function tearDown(): void
-    {
-        \Mockery::close();
-        parent::tearDown();
+        Currency::updateOrCreate(['code' => 'USD'], ['name' => 'US Dollar', 'symbol' => '$', 'is_official' => true, 'is_active' => true]);
+        Currency::updateOrCreate(['code' => 'EUR'], ['name' => 'Euro', 'symbol' => '€', 'is_official' => true, 'is_active' => true]);
+        Currency::create(['code' => 'BRL', 'name' => 'Real', 'symbol' => 'R$', 'is_official' => false, 'is_active' => true]);
     }
 
     /**
@@ -43,10 +49,9 @@ class MultiCurrencyFlowTest extends TestCase
     {
         // Paso 1: Proveedor cota 100 EUR
         $quotedPrice = 100;
-        $quotedCurrency = 'EUR';
 
         // Paso 2: Convertir a USD (0.92 tasa EUR/USD)
-        $this->mockRateBetween('EUR', 'USD', 0.92);
+        $this->seedPairRate('EUR', 'USD', 0.92);
         $conversionResult = $this->conversionService->convert($quotedPrice, 'EUR', 'USD');
 
         $proposalPriceUsd = $conversionResult->amountConverted;
@@ -72,10 +77,9 @@ class MultiCurrencyFlowTest extends TestCase
     public function test_brl_quotation_flow(): void
     {
         $quotedPrice = 500;
-        $quotedCurrency = 'BRL';
 
         // Convertir a USD (0.20 tasa BRL/USD)
-        $this->mockRateBetween('BRL', 'USD', 0.20);
+        $this->seedPairRate('BRL', 'USD', 0.20);
         $conversionResult = $this->conversionService->convert($quotedPrice, 'BRL', 'USD');
 
         $proposalPriceUsd = $conversionResult->amountConverted;
@@ -91,25 +95,20 @@ class MultiCurrencyFlowTest extends TestCase
     }
 
     /**
-     * Escenario 3: Múltiples cotizaciones en distintas monedas
-     * Nota: Simplificado porque sumItems no puede mockearse adecuadamente en Unit tests
-     * El flujo real se valida con los tests del ConversionService
+     * Escenario 3: Múltiples cotizaciones en distintas monedas, vía sumItems() real.
      */
     public function test_mixed_currency_calculation_logic(): void
     {
-        // Validar lógica de cálculo sin llamar a sumItems (que usa mocks complejos)
-        $eur_total = 10 * 100; // 1000 EUR
-        $brl_total = 20 * 5;   // 100 BRL
+        $this->seedPairRate('EUR', 'USD', 0.92);
+        $this->seedPairRate('BRL', 'USD', 0.20);
 
-        // Conversiones individuales
-        $eur_to_usd = 1000 * 0.92; // 920 USD
-        $brl_to_usd = 100 * 0.20;  // 20 USD
+        $total = $this->conversionService->sumItems([
+            ['quantity' => 10, 'unitPrice' => 100, 'quoteCurrency' => 'EUR'],
+            ['quantity' => 20, 'unitPrice' => 5, 'quoteCurrency' => 'BRL'],
+        ], 'USD');
 
-        $total_usd = $eur_to_usd + $brl_to_usd; // 940 USD
-
-        $this->assertAlmostEqual(920, $eur_to_usd, 0.01);
-        $this->assertAlmostEqual(20, $brl_to_usd, 0.01);
-        $this->assertAlmostEqual(940, $total_usd, 0.01);
+        // (10×100 EUR × 0.92) + (20×5 BRL × 0.20) = 920 + 20 = 940 USD
+        $this->assertAlmostEqual(940, $total, 0.01);
     }
 
     /**
@@ -149,7 +148,7 @@ class MultiCurrencyFlowTest extends TestCase
     {
         $oldDate = now()->subHours(25);
 
-        $this->mockRateBetween('EUR', 'USD', 0.92);
+        $this->seedPairRate('EUR', 'USD', 0.92, $oldDate->copy()->subHour());
 
         // Convertir con fecha antigua
         $result = $this->conversionService->convert(100, 'EUR', 'USD', $oldDate);
@@ -165,24 +164,17 @@ class MultiCurrencyFlowTest extends TestCase
      */
     public function test_chained_conversion_precision(): void
     {
-        // Paso 1: EUR 100 → USD (tasa 0.92)
-        $eur_amount = 100;
-        $eur_to_usd_rate = 0.92;
-        $usd_amount = $eur_amount * $eur_to_usd_rate;
+        $this->seedPairRate('EUR', 'USD', 0.92);
+        $this->seedPairRate('BRL', 'USD', 0.20);
 
-        // Paso 2: USD 92 → BRL (tasa inversa: 1/0.20 = 5.0)
-        $brl_to_usd_rate = 0.20;
-        $usd_to_brl_rate = 1 / $brl_to_usd_rate; // 5.0
-        $brl_amount = $usd_amount * $usd_to_brl_rate;
+        $usdResult = $this->conversionService->convert(100, 'EUR', 'USD');
+        $brlResult = $this->conversionService->convert($usdResult->amountConverted, 'USD', 'BRL');
 
         // Verificar NO es: 100 × 0.92 × 0.20 = 18.4 (INCORRECTO)
         // Sino es: 100 × 0.92 × 5 = 460 (CORRECTO)
-        $this->assertAlmostEqual(92, $usd_amount, 0.01, "EUR 100 @ 0.92 = USD 92");
-        $this->assertAlmostEqual(460, $brl_amount, 0.01, "USD 92 @ 5.0 = BRL 460");
-
-        // Verificar NO es este cálculo incorrecto
-        $incorrect = $eur_amount * $eur_to_usd_rate * $brl_to_usd_rate;
-        $this->assertNotAlmostEqual(18.4, $brl_amount, 0.01, "No debe ser 18.4 BRL");
+        $this->assertAlmostEqual(92, $usdResult->amountConverted, 0.01, "EUR 100 @ 0.92 = USD 92");
+        $this->assertAlmostEqual(460, $brlResult->amountConverted, 0.01, "USD 92 @ 5.0 = BRL 460");
+        $this->assertNotAlmostEqual(18.4, $brlResult->amountConverted, 0.01, "No debe ser 18.4 BRL");
     }
 
     /**
@@ -214,13 +206,27 @@ class MultiCurrencyFlowTest extends TestCase
 
     // ========== HELPERS ==========
 
-    private function mockRateBetween(string $from, string $to, float $rate): void
+    /**
+     * Siembra una tasa BCV cruda (Bs./unidad) para una moneda a una fecha.
+     */
+    private function seedRate(string $currencyCode, float $bcvRate, ?Carbon $effectiveAt = null): void
     {
-        \Mockery::mock('overload:App\Models\ExchangeRate')
-            ->makePartial()
-            ->shouldReceive('rateBetween')
-            ->with($from, $to, \Mockery::type('DateTimeInterface'))
-            ->andReturn($rate);
+        ExchangeRate::create([
+            'currency_code' => $currencyCode,
+            'rate_to_usd' => $bcvRate,
+            'source' => 'TEST_SEED',
+            'effective_at' => $effectiveAt ?? now(),
+        ]);
+    }
+
+    /**
+     * Siembra tasas BCV para que rateBetween($from, $to) = $ratio, usando
+     * 100 Bs. como referencia arbitraria para $to.
+     */
+    private function seedPairRate(string $from, string $to, float $ratio, ?Carbon $effectiveAt = null): void
+    {
+        $this->seedRate($to, 100, $effectiveAt);
+        $this->seedRate($from, 100 * $ratio, $effectiveAt);
     }
 
     private function determineVariationDirection(float $varPercent): string

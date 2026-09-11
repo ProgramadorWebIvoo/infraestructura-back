@@ -186,6 +186,16 @@ class SupplierProposalImportService
                 continue;
             }
 
+            // CatalogSyncService ya crea una entrada para esta línea al
+            // momento de la sumisión del portal (mismo
+            // supplier_material_proposal_line_id) — evitar duplicarla acá
+            // cuando el ANALISTA importa la misma propuesta, o se infla el
+            // histórico usado por PriceEstimationService con peso doble.
+            $alreadyLogged = ProductPriceHistory::where('supplier_material_proposal_line_id', $line->id)->exists();
+            if ($alreadyLogged) {
+                continue;
+            }
+
             ProductPriceHistory::create([
                 'catalog_product_id' => $line->catalog_product_id,
                 'supplier_code' => $supplierCode,

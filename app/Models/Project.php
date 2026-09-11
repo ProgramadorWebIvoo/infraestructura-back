@@ -86,6 +86,11 @@ class Project extends Model
         return $this->hasMany(ProjectPayment::class);
     }
 
+    public function rateFreezes()
+    {
+        return $this->hasMany(ProjectRateFreeze::class);
+    }
+
     public function documents()
     {
         return $this->hasMany(ProjectDocument::class);
@@ -104,7 +109,7 @@ class Project extends Model
      */
     public static function detailRelations(): array
     {
-        return ['materials', 'proposals', 'payments', 'documents' => fn ($q) => $q->latestVersionOnly()];
+        return ['materials', 'proposals', 'payments', 'rateFreezes.frozenByUser:id,name', 'documents' => fn ($q) => $q->latestVersionOnly()];
     }
 
     /**

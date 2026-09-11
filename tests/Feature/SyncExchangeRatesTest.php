@@ -95,9 +95,7 @@ class SyncExchangeRatesTest extends TestCase
     public function test_dolarvzla_fetcher_throws_on_timeout(): void
     {
         Http::fake([
-            'rates.dolarvzla.com/*' => Http::sequence()
-                ->push('', 0)
-                ->whenEmpty(Http::response([], 500)),
+            'rates.dolarvzla.com/*' => fn () => throw new \Illuminate\Http\Client\ConnectionException('Connection timed out'),
         ]);
 
         $fetcher = new DolarVzlaApiFetcher();
@@ -134,7 +132,7 @@ class SyncExchangeRatesTest extends TestCase
         $this->assertEquals(794.99, $result['currencies']['USD']);
         $this->assertEquals(922.69, $result['currencies']['EUR']);
         $this->assertEquals('BCV_SCRAPING', $result['source']);
-        $this->assertStringMatches('/\d{4}-\d{2}-\d{2}/', $result['date']);
+        $this->assertMatchesRegularExpression('/\d{4}-\d{2}-\d{2}/', $result['date']);
     }
 
     public function test_bcv_scraper_throws_on_network_error(): void
@@ -249,7 +247,7 @@ class SyncExchangeRatesTest extends TestCase
         $dolarVzlaFetcher = new DolarVzlaApiFetcher();
 
         $bcvScraperFetcher = $this->createMock(BcvScraperFetcher::class);
-        $bcvScraperFetcher->method('fetch')->willThrow(new Exception('Scraper failed'));
+        $bcvScraperFetcher->method('fetch')->willThrowException(new Exception('Scraper failed'));
 
         $syncService = new ExchangeRateSyncService(
             $dolarVzlaFetcher,
@@ -274,7 +272,7 @@ class SyncExchangeRatesTest extends TestCase
         $dolarVzlaFetcher = new DolarVzlaApiFetcher();
 
         $bcvScraperFetcher = $this->createMock(BcvScraperFetcher::class);
-        $bcvScraperFetcher->method('fetch')->willThrow(new Exception('Scraper failed'));
+        $bcvScraperFetcher->method('fetch')->willThrowException(new Exception('Scraper failed'));
 
         $syncService = new ExchangeRateSyncService(
             $dolarVzlaFetcher,

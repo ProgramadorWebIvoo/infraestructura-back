@@ -2,10 +2,12 @@
 
 namespace App\Services\ExchangeRate;
 
+use App\Models\AppNotification;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
 use App\Models\ConfigAuditLog;
 use App\Models\User;
+use App\Support\NotificationType;
 use Illuminate\Support\Facades\DB;
 use Exception;
 
@@ -16,7 +18,7 @@ class ExchangeRateSyncService
         private BcvScraperFetcher $bcvScraperFetcher,
     ) {}
 
-    public function sync(): void
+    public function sync(): bool
     {
         try {
             $data = $this->tryDolarVzlaApi();
@@ -25,11 +27,13 @@ class ExchangeRateSyncService
                 $data = $this->tryBcvScraping();
             } catch (Exception $fallbackError) {
                 $this->notifySuperadminFailure($e, $fallbackError);
-                return;
+                return false;
             }
         }
 
         $this->saveRates($data);
+
+        return true;
     }
 
     private function tryDolarVzlaApi(): array
@@ -71,10 +75,11 @@ class ExchangeRateSyncService
         $superadmins = User::where('role', 'SUPERADMIN')->get();
 
         foreach ($superadmins as $user) {
-            $user->notifications()->create([
+            AppNotification::create([
+                'user_id' => $user->id,
                 'action' => 'Fallo en sync de tasas de cambio',
-                'message' => "No se pudo obtener tasa BCV (API: {$primary->getMessage()}, Scraping: {$fallback->getMessage()})",
-                'url' => '/config-app#monedas',
+                'type' => NotificationType::ERROR,
+                'details' => "No se pudo obtener tasa BCV (API: {$primary->getMessage()}, Scraping: {$fallback->getMessage()})",
             ]);
         }
 

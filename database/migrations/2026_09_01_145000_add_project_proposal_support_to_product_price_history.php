@@ -18,15 +18,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('product_price_history', function (Blueprint $table) {
-            // Hacer nullable el FK a SupplierMaterialProposalLine
-            $table->dropForeign('fk_pph_proposal_line');
+            // Hacer nullable el FK a SupplierMaterialProposalLine.
+            // SQLite (usado en tests) no soporta dropForeign() por nombre —
+            // Doctrine DBAL recrea la tabla al hacer ->change(), preservando
+            // la FK "fk_pph_proposal_line" existente automáticamente. En
+            // MySQL/Postgres (producción) ->change() también altera la
+            // columna in-place sin tocar la FK. Ver 2026_08_13_000003 para
+            // el mismo patrón.
             $table->foreignId('supplier_material_proposal_line_id')
                 ->nullable()
                 ->change();
-            $table->foreign('supplier_material_proposal_line_id', 'fk_pph_proposal_line')
-                ->nullable()
-                ->references('id')
-                ->on('supplier_material_proposal_lines');
 
             // Agregar referencia a ProjectProposal
             $table->string('project_proposal_id', 40)->nullable()->after('supplier_material_proposal_line_id');
@@ -44,18 +45,16 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('product_price_history', function (Blueprint $table) {
-            $table->dropForeignKey('fk_pph_proposal_line');
-            $table->dropIndex('origin');
+            // dropForeign/dropIndex por array de columnas (no por nombre) es
+            // lo único compatible con SQLite — ver comentario en up().
             $table->dropForeign(['project_proposal_id']);
+            $table->dropIndex(['origin']);
+            $table->dropColumn(['project_proposal_id', 'origin']);
 
-            // Revertir nullable en supplier_material_proposal_line_id
+            // Revertir nullable en supplier_material_proposal_line_id,
+            // preservando la FK existente igual que en up().
             $table->foreignId('supplier_material_proposal_line_id')
                 ->change();
-            $table->foreign('supplier_material_proposal_line_id', 'fk_pph_proposal_line')
-                ->references('id')
-                ->on('supplier_material_proposal_lines');
-
-            $table->dropColumn(['project_proposal_id', 'origin']);
         });
     }
 };

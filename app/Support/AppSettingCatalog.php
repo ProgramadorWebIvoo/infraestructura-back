@@ -105,6 +105,18 @@ class AppSettingCatalog
             'label' => 'Aviso en la pantalla de inicio',
             'description' => 'Mensaje opcional visible para todos los usuarios en la pantalla de inicio (ej. mantenimiento programado). Vacío = no se muestra ningún aviso.',
         ],
+        'congelar_tasa_en_contratacion' => [
+            'label' => 'Congelar tasa al contratar',
+            'description' => 'Al adjudicar un contratista (CONTRATADO), fija la tasa BCV vigente en ese momento — los montos en Bs. de este proyecto dejan de recalcularse con la tasa del día.',
+        ],
+        'congelar_tasa_en_pago_anticipo' => [
+            'label' => 'Congelar tasa en pago de anticipo',
+            'description' => 'Al liberar el anticipo, fija la tasa BCV vigente en ese momento para el monto del anticipo.',
+        ],
+        'congelar_tasa_en_pago_finiquito' => [
+            'label' => 'Congelar tasa en pago de finiquito',
+            'description' => 'Al liberar el pago final, fija la tasa BCV vigente en ese momento para el monto del finiquito.',
+        ],
     ];
 
     public static function label(string $key): string

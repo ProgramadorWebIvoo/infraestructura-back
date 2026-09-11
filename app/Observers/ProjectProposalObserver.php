@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
  * Las propuestas del portal (PORTAL-PROV) se sincronizan automáticamente vía
  * CatalogSyncService en SupplierMaterialProposalLine. Este observer agrega
  * el mismo mecanismo para propuestas de Analistas, preservando:
- * - price_usd (siempre en USD, ya convertido en frontend)
+ * - price_usd (total_price de cada línea × fx_rate_to_base, convertido acá)
  * - original_currency (quoteCurrency de la propuesta)
  * - original_price (totalCostOriginal si existe, sino totalCost)
  * - fx_rate_to_usd (fxRateToBase o calculada)
@@ -32,7 +32,7 @@ class ProjectProposalObserver
         // Resincronizar si cambió precio o moneda
         if ($proposal->isDirty(['total_cost', 'quote_currency', 'material_cost', 'labor_cost'])) {
             // Eliminar registros anteriores de esta propuesta
-            ProductPriceHistory::where('proposal_id', $proposal->id)->delete();
+            ProductPriceHistory::where('project_proposal_id', $proposal->id)->delete();
             $this->syncProposalToPriceHistory($proposal);
             $this->bumpContractorHistoryCache($proposal);
         }
@@ -57,13 +57,16 @@ class ProjectProposalObserver
         // Caso 1: Propuesta con material_items detallado (nuevo formato)
         if (is_array($proposal->material_items) && count($proposal->material_items) > 0) {
             foreach ($proposal->material_items as $item) {
-                // item es ProposalMaterialItem: tiene materialName, quantity, unitPrice, totalPrice
+                // item es ProposalMaterialItem: tiene catalogProductId, materialName, quantity, unitPrice, totalPrice
+                $catalogProductId = $item['catalog_product_id'] ?? null;
+                $originalPrice = (float) ($item['total_price'] ?? 0);
+
                 $this->createPriceHistoryEntry(
-                    catalogProductId: $item['material_name'] ?? null, // ← Problema: no hay catalog_product_id
+                    catalogProductId: $catalogProductId !== null ? (int) $catalogProductId : null,
                     supplierCode: $proposal->contractor_code,
-                    priceUsd: (float) ($item['total_price'] ?? 0),
+                    priceUsd: $originalPrice * $fxRateToUsd,
                     originalCurrency: $quoteCurrency,
-                    originalPrice: (float) ($item['total_price'] ?? 0), // ← En moneda original
+                    originalPrice: $originalPrice, // ← En moneda original
                     fxRateToUsd: $fxRateToUsd,
                     quotedAt: $quotedAt,
                     proposalId: $proposal->id,

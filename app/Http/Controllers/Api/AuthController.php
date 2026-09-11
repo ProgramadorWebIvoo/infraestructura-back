@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Rules\StrongPassword;
+use App\Services\AccessResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -14,6 +15,10 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
+    public function __construct(private AccessResolver $accessResolver)
+    {
+    }
+
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -115,11 +120,24 @@ class AuthController extends Controller
 
     /**
      * GET /api/auth/permissions
-     * Matriz de rutas SPA permitidas por rol (config/permissions.php).
+     * Vistas SPA efectivas del usuario autenticado: default de su rol
+     * (role_view_access) mezclado con sus overrides individuales
+     * (user_view_access) — ver AccessResolver::resolveViews(). Ya no es una
+     * matriz por rol; el frontend recibe directamente su lista resuelta.
      */
     public function permissions(Request $request)
     {
-        return response()->json(config('permissions', []));
+        return response()->json($this->accessResolver->resolveViews($request->user()));
+    }
+
+    /**
+     * GET /api/auth/tabs
+     * Tabs visibles por vista para el usuario autenticado (default de la
+     * definición + overrides individuales) — ver AccessResolver::resolveTabs().
+     */
+    public function tabs(Request $request)
+    {
+        return response()->json($this->accessResolver->resolveTabs($request->user()));
     }
 
     public function logout(Request $request)

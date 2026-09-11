@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\AccessAdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContractorController;
 use App\Http\Controllers\Api\MarketingProjectController;
@@ -60,6 +61,7 @@ Route::get('/public/catalog-products/search', [CatalogProductController::class, 
 Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::get('/auth/permissions', [AuthController::class, 'permissions']);
+    Route::get('/auth/tabs', [AuthController::class, 'tabs']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Push notifications
@@ -270,6 +272,8 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         Route::patch('/users/{user}', [UserController::class, 'update']);
         Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus']);
         Route::post('/users/{user}/send-reset-link', [UserController::class, 'sendResetLink']);
+        Route::get('/users/{user}/access', [AccessAdminController::class, 'show']);
+        Route::put('/users/{user}/access', [AccessAdminController::class, 'update']);
 
         // Contractor / Proveedores configuration
         Route::get('/contractors/config', [ContractorController::class, 'index']);

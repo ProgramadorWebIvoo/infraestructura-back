@@ -530,4 +530,94 @@ class ProjectDocumentTest extends TestCase
 
         $response->assertStatus(201);
     }
+
+    // ── Comprobantes de pago (Finanzas) ────────────────────────────────
+
+    public function test_upload_allows_finanzas_to_attach_comprobante_anticipo(): void
+    {
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $finanzas->createToken('test')->plainTextToken,
+            'Accept' => 'application/json',
+        ])->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'COMPROBANTE_ANTICIPO',
+            'files' => [UploadedFile::fake()->create('voucher.pdf', 100, 'application/pdf')],
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('data.0.documentType', 'COMPROBANTE_ANTICIPO');
+        $this->assertDatabaseHas('project_documents', [
+            'project_id' => $project->id,
+            'document_type' => 'COMPROBANTE_ANTICIPO',
+        ]);
+    }
+
+    public function test_upload_rejects_more_than_one_file_for_comprobante(): void
+    {
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $finanzas->createToken('test')->plainTextToken,
+            'Accept' => 'application/json',
+        ])->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'COMPROBANTE_FINIQUITO',
+            'files' => [
+                UploadedFile::fake()->create('voucher1.pdf', 10, 'application/pdf'),
+                UploadedFile::fake()->create('voucher2.pdf', 10, 'application/pdf'),
+            ],
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_upload_rejects_non_image_pdf_extension_for_comprobante(): void
+    {
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $finanzas->createToken('test')->plainTextToken,
+            'Accept' => 'application/json',
+        ])->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'COMPROBANTE_ANTICIPO',
+            'files' => [UploadedFile::fake()->create('voucher.xlsx', 10, 'application/vnd.ms-excel')],
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_upload_denies_finanzas_uploading_non_comprobante_types(): void
+    {
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $finanzas->createToken('test')->plainTextToken,
+            'Accept' => 'application/json',
+        ])->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'FOTO',
+            'files' => [UploadedFile::fake()->create('foto.jpg', 10, 'image/jpeg')],
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_upload_denies_infraestructura_uploading_comprobante_types(): void
+    {
+        $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $infra->createToken('test')->plainTextToken,
+            'Accept' => 'application/json',
+        ])->post("/api/projects/{$project->id}/documents", [
+            'document_type' => 'COMPROBANTE_ANTICIPO',
+            'files' => [UploadedFile::fake()->create('voucher.pdf', 10, 'application/pdf')],
+        ]);
+
+        $response->assertStatus(403);
+    }
 }

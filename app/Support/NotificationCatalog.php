@@ -75,6 +75,8 @@ class NotificationCatalog
         'Carga de correcciones de peticion rechazada' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Carga de nueva version de documento' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
         'Eliminacion de documento adjunto' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
+        'Carga de comprobante de pago de anticipo' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
+        'Carga de comprobante de liquidacion final' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
 
         // Accesos públicos (proveedor, sin autenticar)
         'contractor.register' => ['label' => 'Registro público de proveedor', 'group' => 'proveedores', 'scope' => 'global', 'critical' => false],

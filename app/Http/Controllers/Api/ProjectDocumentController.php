@@ -62,9 +62,21 @@ class ProjectDocumentController extends Controller
     {
         $type = $request->input('document_type');
         $newVersionOfId = $request->input('new_version_of');
+        $role = auth()->user()->role;
+
+        // Los comprobantes de pago son evidencia bancaria exclusiva de
+        // Finanzas — el resto de los tipos son documentación técnica del
+        // ciclo de vida de la obra, ajena a Finanzas.
+        $isComprobante = in_array($type, ['COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO'], true);
+        if ($isComprobante) {
+            abort_unless(in_array($role, ['FINANZAS', 'ADMIN', 'SUPERADMIN'], true), 403, 'Solo Finanzas puede adjuntar comprobantes de pago.');
+        } else {
+            abort_if($role === 'FINANZAS', 403, 'Finanzas solo puede adjuntar comprobantes de pago.');
+        }
+
         $saved = [];
 
-        DB::transaction(function () use ($request, $project, $storage, $type, $newVersionOfId, &$saved) {
+        DB::transaction(function () use ($request, $project, $storage, $type, $newVersionOfId, $role, &$saved) {
             $groupId = null;
             $nextVersion = 1;
 
@@ -122,6 +134,8 @@ class ProjectDocumentController extends Controller
                 'PLANO' => 'planos de ingenieria',
                 'FOTO' => 'fotografias del sitio de obra',
                 'CORRECCION' => 'correcciones de peticion rechazada',
+                'COMPROBANTE_ANTICIPO' => 'comprobante de pago de anticipo',
+                'COMPROBANTE_FINIQUITO' => 'comprobante de liquidacion final',
                 default => 'documentos',
             };
 
@@ -135,7 +149,7 @@ class ProjectDocumentController extends Controller
 
             $this->syncProjectCounts($project);
 
-            AuditLog::record($project, 'CIERRE_DE_OBRA', $action, $details);
+            AuditLog::record($project, $role, $action, $details);
         });
 
         return response()->json(['data' => $saved], 201);

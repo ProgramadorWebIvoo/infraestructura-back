@@ -54,6 +54,14 @@ class StoreProjectDocumentRequest extends FormRequest
     ];
     private const ALLOWED_CORRECCION_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'svg', 'tiff', 'tif', 'dwg', 'dxf', 'xlsx', 'xls', 'csv', 'ods'];
 
+    /**
+     * COMPROBANTE_ANTICIPO/COMPROBANTE_FINIQUITO: comprobante bancario de un
+     * desembolso — siempre una foto/escaneo del voucher o un PDF, nunca hojas
+     * de cálculo o planos.
+     */
+    private const ALLOWED_COMPROBANTE_MIMES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+    private const ALLOWED_COMPROBANTE_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'webp'];
+
     /** Memoizados por instancia — rules()/messages() los leen dos veces cada
      *  uno; sin esto son 4 lecturas de SettingsService::get() por request. */
     private ?int $maxFileMb = null;
@@ -68,13 +76,15 @@ class StoreProjectDocumentRequest extends FormRequest
     {
         // Una "nueva versión" es siempre reemplazo puntual de un documento
         // específico — no tiene sentido subir un lote de N archivos como
-        // versión de un solo documento lógico.
+        // versión de un solo documento lógico. Igual para comprobantes de
+        // pago: un solo voucher por anticipo/finiquito, nunca un lote.
         $isNewVersion = $this->filled('new_version_of');
+        $isComprobante = in_array($this->input('document_type'), ['COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO'], true);
 
         return [
-            'document_type'  => ['required', Rule::in(['CALC', 'PLANO', 'FOTO', 'CORRECCION'])],
+            'document_type'  => ['required', Rule::in(['CALC', 'PLANO', 'FOTO', 'CORRECCION', 'COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO'])],
             'new_version_of' => ['nullable', 'integer', 'exists:project_documents,id'],
-            'files'          => ['required', 'array', $isNewVersion ? 'size:1' : 'min:1', 'max:' . $this->maxFileCount()],
+            'files'          => ['required', 'array', ($isNewVersion || $isComprobante) ? 'size:1' : 'min:1', 'max:' . $this->maxFileCount()],
             'files.*'        => [
                 'required',
                 'file',
@@ -122,6 +132,7 @@ class StoreProjectDocumentRequest extends FormRequest
                 'PLANO' => self::ALLOWED_PLANO_MIMES,
                 'FOTO' => self::ALLOWED_FOTO_MIMES,
                 'CORRECCION' => self::ALLOWED_CORRECCION_MIMES,
+                'COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO' => self::ALLOWED_COMPROBANTE_MIMES,
                 default => [],
             };
             $allowedExts = match ($type) {
@@ -129,6 +140,7 @@ class StoreProjectDocumentRequest extends FormRequest
                 'PLANO' => self::ALLOWED_PLANO_EXTENSIONS,
                 'FOTO' => self::ALLOWED_FOTO_EXTENSIONS,
                 'CORRECCION' => self::ALLOWED_CORRECCION_EXTENSIONS,
+                'COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO' => self::ALLOWED_COMPROBANTE_EXTENSIONS,
                 default => [],
             };
 

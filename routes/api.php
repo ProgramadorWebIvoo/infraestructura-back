@@ -257,9 +257,9 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::post('/ai/evaluate-proposals', [AIEvaluationController::class, 'evaluate'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
 
-    // Project documents (planos, hojas de cálculo, fotos)
+    // Project documents (planos, hojas de cálculo, fotos, comprobantes de pago)
     Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-    Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,FINANZAS,ADMIN,SUPERADMIN');
     Route::delete('/projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
     Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/projects/{project}/documents/{document}/preview', [ProjectDocumentController::class, 'preview'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

@@ -16,3 +16,8 @@ use Illuminate\Support\Facades\Broadcast;
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
+
+// Canal privado para actualizaciones de tasas de cambio — cualquier usuario autenticado
+Broadcast::channel('exchange-rates', function ($user) {
+    return $user !== null;
+});

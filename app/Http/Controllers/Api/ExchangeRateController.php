@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\ExchangeRatesUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\ConfigAuditLog;
 use App\Models\Currency;
@@ -70,6 +71,8 @@ class ExchangeRateController extends Controller
             (string) $rate->rate_to_usd,
             "Tasa {$rate->currency_code} → USD: {$rate->rate_to_usd} (fuente: {$rate->source})."
         );
+
+        ExchangeRatesUpdated::dispatch([$rate->toArray()], $rate->source);
 
         return response()->json(['data' => [...$rate->toArray(), 'currencyName' => $currency?->name, 'auditLog' => $auditLog->toApiPayload()]], 201);
     }

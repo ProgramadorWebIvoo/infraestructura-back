@@ -2,6 +2,7 @@
 
 namespace App\Services\ExchangeRate;
 
+use App\Events\ExchangeRatesUpdated;
 use App\Models\AppNotification;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
@@ -49,15 +50,19 @@ class ExchangeRateSyncService
     private function saveRates(array $data): void
     {
         DB::transaction(function () use ($data) {
+            $savedRates = [];
+
             foreach ($data['currencies'] as $code => $rate) {
                 $currency = Currency::where('code', $code)->firstOrFail();
 
-                ExchangeRate::create([
+                $exchangeRate = ExchangeRate::create([
                     'currency_code' => $code,
                     'rate_to_usd' => $rate,
                     'source' => $data['source'],
                     'effective_at' => $data['date'],
                 ]);
+
+                $savedRates[] = $exchangeRate->toArray();
 
                 ConfigAuditLog::recordAdminAction(
                     'exchange_rate',
@@ -67,6 +72,8 @@ class ExchangeRateSyncService
                     "{$code}: {$rate} ({$data['source']})"
                 );
             }
+
+            ExchangeRatesUpdated::dispatch($savedRates, $data['source']);
         });
     }
 

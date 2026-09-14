@@ -9,9 +9,12 @@ use App\Http\Requests\UpdateContractorRequest;
 use App\Http\Resources\ContractorResource;
 use App\Models\Contractor;
 use App\Models\ConfigAuditLog;
+use App\Services\AI\AIEvaluationService;
+use App\Services\AiFeatureGate;
 use App\Services\ContractorHistoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ContractorController extends Controller
 {
@@ -189,5 +192,39 @@ class ContractorController extends Controller
         $monthsBack = max(1, min($monthsBack, 24));
 
         return response()->json($historyService->getSupplierHistory($contractor->code, $monthsBack));
+    }
+
+    /**
+     * GET /api/contractors/{contractor}/rating-suggestion — sugerencia IA de
+     * ajuste de rating basada en el historial ya calculado por
+     * ContractorHistoryService (ver ContractorRatingSuggestionStrategy).
+     * Informativa: no modifica `rating`, el admin decide si la aplica vía
+     * updateRating().
+     */
+    public function ratingSuggestion(Contractor $contractor, ContractorHistoryService $historyService, AIEvaluationService $aiService)
+    {
+        abort_unless(
+            AiFeatureGate::isEnabled('CATALOGOS', 'ia.proveedores.sugerencia_rating'),
+            403,
+            'La sugerencia de rating por IA está deshabilitada para Proveedores. Contacte a un SUPERADMIN.'
+        );
+
+        $history = $historyService->getSupplierHistory($contractor->code);
+
+        try {
+            $result = $aiService->evaluateContractorRating([
+                'stats' => $history['stats'],
+                'topProducts' => $history['topProducts'],
+            ]);
+
+            return response()->json(['success' => true, 'data' => $result]);
+        } catch (\Throwable $e) {
+            Log::warning("Contractor rating suggestion failed for {$contractor->code}: {$e->getMessage()}");
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 503);
+        }
     }
 }

@@ -10,7 +10,9 @@ use App\Services\AI\AIEvaluationService;
 use App\Services\AI\EvaluationPayload;
 use App\Services\AI\EvaluationProject;
 use App\Services\AI\EvaluationProposal;
+use App\Services\AiFeatureGate;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
@@ -31,6 +33,19 @@ class AIEvaluationController extends Controller
      */
     public function evaluate(Request $request)
     {
+        // El mismo endpoint sirve a Procura (evaluación oficial) y Analistas
+        // (vista previa) — el departamento del gate se resuelve por el rol
+        // de quien llama, no por un parámetro del cliente (evitaría que
+        // Analistas se salte su propio toggle pasando "PROCURA").
+        $department = Auth::user()?->role === 'ANALISTA' ? 'ANALISTA' : 'PROCURA';
+        $action = $department === 'ANALISTA' ? 'ia.analistas.evaluacion_propuestas' : 'ia.procura.evaluacion_propuestas';
+
+        abort_unless(
+            AiFeatureGate::isEnabled($department, $action),
+            403,
+            'La evaluación IA está deshabilitada para este departamento. Contacte a un SUPERADMIN.'
+        );
+
         $data = $request->validate([
             'projectId'                => ['required', 'string', 'exists:projects,id'],
             'projectTitle'             => ['required', 'string', 'max:500'],

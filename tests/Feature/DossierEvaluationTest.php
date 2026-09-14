@@ -6,6 +6,7 @@ use App\Models\AiConfiguration;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\AiFeatureGate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -135,5 +136,31 @@ class DossierEvaluationTest extends TestCase
             ->postJson("/api/projects/{$project->id}/evaluate-dossier");
 
         $response->assertStatus(200);
+    }
+
+    public function test_evaluate_dossier_is_blocked_when_cierre_de_obra_department_gate_is_disabled(): void
+    {
+        AiFeatureGate::setDepartmentEnabled('CIERRE_DE_OBRA', false);
+
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders($this->headers($this->cierreDeObra))
+            ->postJson("/api/projects/{$project->id}/evaluate-dossier");
+
+        $response->assertStatus(403);
+        $project->refresh();
+        $this->assertNull($project->dossier_ai_evaluated_at);
+    }
+
+    public function test_evaluate_dossier_is_blocked_when_the_specific_action_gate_is_disabled(): void
+    {
+        AiFeatureGate::setActionEnabled('CIERRE_DE_OBRA', 'ia.cierre_obra.evaluacion_expediente', false);
+
+        $project = Project::factory()->create();
+
+        $response = $this->withHeaders($this->headers($this->cierreDeObra))
+            ->postJson("/api/projects/{$project->id}/evaluate-dossier");
+
+        $response->assertStatus(403);
     }
 }

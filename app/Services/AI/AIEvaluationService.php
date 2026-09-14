@@ -200,6 +200,12 @@ class AIEvaluationService
         return $this->evaluateWithProvider($payload, $forcedProvider, new DossierEvaluationStrategy());
     }
 
+    /** Sugiere un ajuste de rating de proveedor (Proveedores/Catálogos) — no autoritativo. */
+    public function evaluateContractorRating(array $payload, ?string $forcedProvider = null): array
+    {
+        return $this->evaluateWithProvider($payload, $forcedProvider, new ContractorRatingSuggestionStrategy());
+    }
+
     /**
      * Devuelve la bitácora de intentos (para diagnóstico).
      */

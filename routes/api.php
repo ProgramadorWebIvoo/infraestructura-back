@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\AppNotificationController;
 use App\Http\Controllers\Api\AppSettingController;
 use App\Http\Controllers\Api\ConfigAuditLogController;
 use App\Http\Controllers\Api\NotificationRuleController;
+use App\Http\Controllers\Api\AiFeatureToggleController;
 use App\Http\Controllers\Api\CurrencyController;
 use App\Http\Controllers\Api\ExchangeRateController;
 use App\Http\Controllers\Api\CatalogCategoryController;
@@ -104,6 +105,16 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware(['role:SUPERADMIN'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::put('/notification-rules', [NotificationRuleController::class, 'update'])
+        ->middleware('role:SUPERADMIN');
+
+    // Control de IA por departamento/acción (Config IA) — lectura abierta a
+    // cualquier autenticado, a diferencia de /notification-rules: cada rol
+    // necesita saber si su propia IA está apagada para ocultar el botón
+    // correspondiente, no solo SUPERADMIN viendo el panel de administración.
+    // La escritura sigue siendo exclusiva SUPERADMIN.
+    Route::get('/ai/feature-toggles', [AiFeatureToggleController::class, 'index'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::put('/ai/feature-toggles', [AiFeatureToggleController::class, 'update'])
         ->middleware('role:SUPERADMIN');
 
     // Moneda base vigente — abierto a cualquier autenticado (el Catálogo
@@ -253,9 +264,20 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::post('/projects/{project}/verify-completion', [ProjectController::class, 'verifyCompletion'])
         ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
 
-    // AI Evaluation
+    // AI Evaluation — mismo endpoint sirve a Procura (evaluación oficial del
+    // cuadro comparativo) y a Analistas (vista previa antes de enviar a
+    // Procura); el departamento para el gate de AiFeatureGate se resuelve
+    // dentro del controller según el rol del usuario autenticado.
     Route::post('/ai/evaluate-proposals', [AIEvaluationController::class, 'evaluate'])
-        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+        ->middleware('role:PROCURA,ANALISTA,ADMIN,SUPERADMIN');
+
+    // Sugerencia IA de rating de proveedor — informativa, no autoritativa.
+    // Mismos roles que ya administran el catálogo de proveedores
+    // (/contractors/config más abajo, SUPERADMIN/ADMIN) — CATALOGOS es la
+    // etiqueta de "departamento" en Roles::VALID/AiFeatureCatalog, no un rol
+    // con sesión propia hoy.
+    Route::get('/contractors/{contractor}/rating-suggestion', [ContractorController::class, 'ratingSuggestion'])
+        ->middleware('role:ADMIN,SUPERADMIN');
 
     // Project documents (planos, hojas de cálculo, fotos, comprobantes de pago)
     Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

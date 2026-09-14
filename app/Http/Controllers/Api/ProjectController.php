@@ -22,6 +22,7 @@ use App\Models\ProjectMaterial;
 use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
 use App\Models\ProjectRateFreeze;
+use App\Services\AiFeatureGate;
 use App\Services\DossierEvaluationService;
 use App\Services\ProjectStateMachine;
 use App\Services\RateFreezeService;
@@ -116,6 +117,12 @@ class ProjectController extends Controller
             $project,
             [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_CIERRE']],
             'Solo se puede evaluar el expediente mientras está pendiente de revisión por Cierre de Obra.'
+        );
+
+        abort_unless(
+            AiFeatureGate::isEnabled('CIERRE_DE_OBRA', 'ia.cierre_obra.evaluacion_expediente'),
+            403,
+            'La evaluación IA está deshabilitada para Cierre de Obra. Contacte a un SUPERADMIN.'
         );
 
         // DossierEvaluationService::evaluate() es best-effort y nunca lanza

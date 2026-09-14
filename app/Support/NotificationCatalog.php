@@ -120,6 +120,9 @@ class NotificationCatalog
         // Administración: matriz de notificaciones
         'Modificacion de reglas de notificacion' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
 
+        // Administración: control de IA por departamento
+        'Modificacion de disponibilidad de IA por departamento' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
+
         // Marketing (creacion y aprobacion de piezas publicitarias)
         'Creacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
         'Modificacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],

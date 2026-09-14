@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\AiFeatureGate;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -197,5 +198,87 @@ class AiEvaluationTest extends TestCase
             ->postJson('/api/ai/evaluate-proposals', $this->evaluationPayload($project, $contractor));
 
         $response->assertStatus(403);
+    }
+
+    public function test_evaluate_is_blocked_when_procura_department_gate_is_disabled(): void
+    {
+        AiFeatureGate::setDepartmentEnabled('PROCURA', false);
+
+        $project = Project::factory()->create();
+        $contractor = Contractor::factory()->create();
+
+        $response = $this->withHeaders($this->headers($this->procura))
+            ->postJson('/api/ai/evaluate-proposals', $this->evaluationPayload($project, $contractor));
+
+        $response->assertStatus(403);
+    }
+
+    public function test_evaluate_is_blocked_when_procura_specific_action_gate_is_disabled(): void
+    {
+        AiFeatureGate::setActionEnabled('PROCURA', 'ia.procura.evaluacion_propuestas', false);
+
+        $project = Project::factory()->create();
+        $contractor = Contractor::factory()->create();
+
+        $response = $this->withHeaders($this->headers($this->procura))
+            ->postJson('/api/ai/evaluate-proposals', $this->evaluationPayload($project, $contractor));
+
+        $response->assertStatus(403);
+    }
+
+    public function test_analista_can_use_the_same_endpoint_as_a_preview(): void
+    {
+        AiConfiguration::create([
+            'provider' => 'openai',
+            'model' => 'gpt-4o-mini',
+            'api_key' => 'sk-test-key-1234',
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'choices' => [
+                    ['message' => ['content' => json_encode([
+                        'winnerContractorCode' => 'CON-1',
+                        'winnerContractorName' => 'Constructora Test',
+                        'confidenceScore' => 88,
+                        'summary' => 'Resumen de prueba',
+                        'strengths' => [],
+                        'weaknesses' => [],
+                        'riskFactors' => [],
+                        'recommendation' => 'Adjudicar',
+                    ])]],
+                ],
+                'usage' => ['prompt_tokens' => 100, 'completion_tokens' => 50, 'total_tokens' => 150],
+            ], 200),
+        ]);
+
+        $analista = User::factory()->create(['role' => 'ANALISTA']);
+        $project = Project::factory()->create();
+        $contractor = Contractor::factory()->create(['code' => 'CON-1']);
+
+        $response = $this->withHeaders($this->headers($analista))
+            ->postJson('/api/ai/evaluate-proposals', $this->evaluationPayload($project, $contractor));
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+    }
+
+    public function test_evaluate_for_analista_is_blocked_by_the_analista_gate_independently_of_procura(): void
+    {
+        // El gate se resuelve por el rol de quien llama — apagar ANALISTA no
+        // debe afectar a Procura, y viceversa (departamentos independientes).
+        AiFeatureGate::setDepartmentEnabled('ANALISTA', false);
+
+        $analista = User::factory()->create(['role' => 'ANALISTA']);
+        $project = Project::factory()->create();
+        $contractor = Contractor::factory()->create();
+
+        $response = $this->withHeaders($this->headers($analista))
+            ->postJson('/api/ai/evaluate-proposals', $this->evaluationPayload($project, $contractor));
+
+        $response->assertStatus(403);
+        $this->assertTrue(AiFeatureGate::isEnabled('PROCURA', 'ia.procura.evaluacion_propuestas'));
     }
 }

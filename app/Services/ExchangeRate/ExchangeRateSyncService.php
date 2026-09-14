@@ -17,6 +17,7 @@ class ExchangeRateSyncService
     public function __construct(
         private DolarVzlaApiFetcher $dolarVzlaFetcher,
         private BcvScraperFetcher $bcvScraperFetcher,
+        private ExchangeRateSyncLogService $logService,
     ) {}
 
     public function sync(): bool
@@ -73,12 +74,15 @@ class ExchangeRateSyncService
                 );
             }
 
+            $this->logService->logSuccess(count($savedRates), $data['source']);
             ExchangeRatesUpdated::dispatch($savedRates, $data['source']);
         });
     }
 
     private function notifySuperadminFailure(Exception $primary, Exception $fallback): void
     {
+        $errorMsg = "API: {$primary->getMessage()} | Scraping: {$fallback->getMessage()}";
+
         $superadmins = User::where('role', 'SUPERADMIN')->get();
 
         foreach ($superadmins as $user) {
@@ -86,7 +90,7 @@ class ExchangeRateSyncService
                 'user_id' => $user->id,
                 'action' => 'Fallo en sync de tasas de cambio',
                 'type' => NotificationType::ERROR,
-                'details' => "No se pudo obtener tasa BCV (API: {$primary->getMessage()}, Scraping: {$fallback->getMessage()})",
+                'details' => "No se pudo obtener tasa BCV ({$errorMsg})",
             ]);
         }
 
@@ -95,7 +99,9 @@ class ExchangeRateSyncService
             'Sync automático falló',
             null,
             'ERROR',
-            "API: {$primary->getMessage()} | Scraping: {$fallback->getMessage()}"
+            $errorMsg
         );
+
+        $this->logService->logFailure($errorMsg);
     }
 }

@@ -8,6 +8,7 @@ use App\Models\ConfigAuditLog;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
 use App\Services\ExchangeRate\ExchangeRateSyncService;
+use App\Services\ExchangeRate\ExchangeRateSyncLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -97,5 +98,25 @@ class ExchangeRateController extends Controller
                 'message' => 'Error al sincronizar tasas: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function syncLogs(ExchangeRateSyncLogService $logService): JsonResponse
+    {
+        $logs = $logService->getRecentLogs(50);
+        return response()->json(['data' => $logs]);
+    }
+
+    public function lastSync(ExchangeRateSyncLogService $logService): JsonResponse
+    {
+        $lastSync = $logService->getLastSuccessfulSync();
+
+        if (!$lastSync) {
+            return response()->json([
+                'data' => null,
+                'message' => 'No hay sincronizaciones previas',
+            ]);
+        }
+
+        return response()->json(['data' => $lastSync]);
     }
 }

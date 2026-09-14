@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\ExchangeRate\DolarVzlaApiFetcher;
 use App\Services\ExchangeRate\BcvScraperFetcher;
 use App\Services\ExchangeRate\ExchangeRateSyncService;
+use App\Services\ExchangeRate\ExchangeRateSyncLogService;
 use Exception;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -215,7 +216,8 @@ class SyncExchangeRatesTest extends TestCase
 
         $syncService = new ExchangeRateSyncService(
             $dolarVzlaFetcher,
-            $bcvScraperFetcher
+            $bcvScraperFetcher,
+            new ExchangeRateSyncLogService()
         );
 
         $syncService->sync();
@@ -251,7 +253,8 @@ class SyncExchangeRatesTest extends TestCase
 
         $syncService = new ExchangeRateSyncService(
             $dolarVzlaFetcher,
-            $bcvScraperFetcher
+            $bcvScraperFetcher,
+            new ExchangeRateSyncLogService()
         );
 
         $syncService->sync();
@@ -276,7 +279,8 @@ class SyncExchangeRatesTest extends TestCase
 
         $syncService = new ExchangeRateSyncService(
             $dolarVzlaFetcher,
-            $bcvScraperFetcher
+            $bcvScraperFetcher,
+            new ExchangeRateSyncLogService()
         );
 
         $syncService->sync();
@@ -311,7 +315,8 @@ class SyncExchangeRatesTest extends TestCase
 
         $syncService = new ExchangeRateSyncService(
             $dolarVzlaFetcher,
-            $bcvScraperFetcher
+            $bcvScraperFetcher,
+            new ExchangeRateSyncLogService()
         );
 
         $syncService->sync();
@@ -356,5 +361,65 @@ class SyncExchangeRatesTest extends TestCase
 
         $this->artisan('sync:exchange-rates')
             ->assertExitCode(1);
+    }
+
+    // ===== SYNC LOG TESTS =====
+
+    public function test_successful_sync_creates_success_log(): void
+    {
+        Http::fake([
+            'rates.dolarvzla.com/*' => Http::response([
+                'current' => [
+                    'date' => '2026-08-31',
+                    'usd' => 794.9917,
+                    'eur' => 922.69121677,
+                ],
+                'changePercentage' => [
+                    'usd' => 0.42,
+                    'eur' => 0.088,
+                ],
+            ], 200),
+        ]);
+
+        $dolarVzlaFetcher = new DolarVzlaApiFetcher();
+        $bcvScraperFetcher = $this->createMock(BcvScraperFetcher::class);
+
+        $syncService = new ExchangeRateSyncService(
+            $dolarVzlaFetcher,
+            $bcvScraperFetcher,
+            new ExchangeRateSyncLogService()
+        );
+
+        $syncService->sync();
+
+        $this->assertDatabaseHas('exchange_rate_sync_logs', [
+            'status' => 'SUCCESS',
+            'source' => 'DOLARVZLA_API',
+            'rates_synced' => 2,
+        ]);
+    }
+
+    public function test_failed_sync_creates_failure_log(): void
+    {
+        Http::fake([
+            'rates.dolarvzla.com/*' => Http::response([], 500),
+        ]);
+
+        $dolarVzlaFetcher = new DolarVzlaApiFetcher();
+
+        $bcvScraperFetcher = $this->createMock(BcvScraperFetcher::class);
+        $bcvScraperFetcher->method('fetch')->willThrowException(new Exception('Scraper failed'));
+
+        $syncService = new ExchangeRateSyncService(
+            $dolarVzlaFetcher,
+            $bcvScraperFetcher,
+            new ExchangeRateSyncLogService()
+        );
+
+        $syncService->sync();
+
+        $this->assertDatabaseHas('exchange_rate_sync_logs', [
+            'status' => 'FAILURE',
+        ]);
     }
 }

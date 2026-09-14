@@ -71,6 +71,12 @@ class ProjectProposal extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** Proveedor referenciado por código — permite eager-load en vez de whereIn manual (ver ProjectResource). */
+    public function contractor()
+    {
+        return $this->belongsTo(Contractor::class, 'contractor_code', 'code');
+    }
+
     public function project()
     {
         return $this->belongsTo(Project::class, 'project_id');

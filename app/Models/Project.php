@@ -109,7 +109,14 @@ class Project extends Model
      */
     public static function detailRelations(): array
     {
-        return ['materials', 'proposals', 'payments', 'rateFreezes.frozenByUser:id,name', 'documents' => fn ($q) => $q->latestVersionOnly()];
+        return [
+            'materials',
+            'proposals.creator:id,name',
+            'proposals.contractor:code,rating',
+            'payments',
+            'rateFreezes.frozenByUser:id,name',
+            'documents' => fn ($q) => $q->latestVersionOnly(),
+        ];
     }
 
     /**

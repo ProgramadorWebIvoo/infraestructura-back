@@ -34,6 +34,8 @@ cleanup() {
         done < "$PID_FILE"
         rm -f "$PID_FILE"
     fi
+    php artisan config:clear >/dev/null 2>&1 || true
+    php artisan route:clear >/dev/null 2>&1 || true
     echo "[OK] Backend detenido."
     exit 0
 }
@@ -45,6 +47,11 @@ echo "┌───────────────────────�
 echo "│  IVOO Infraestructura — Backend                     │"
 echo "└─────────────────────────────────────────────────────┘"
 echo ""
+
+# ── Cache de config/rutas (arranque más rápido) ────────────────
+echo "[INFO] Optimizando (config:cache, route:cache)..."
+php artisan config:cache
+php artisan route:cache
 
 HOST=${INFRA_HOST:-0.0.0.0}
 echo "[OK] Servidor:       http://${HOST}:${PORT}  (accesible en red local vía IP del equipo)"

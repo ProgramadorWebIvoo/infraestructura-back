@@ -11,16 +11,6 @@ class ProjectResource extends JsonResource
         $advance = $this->payments->firstWhere('payment_type', 'ADVANCE');
         $final = $this->payments->firstWhere('payment_type', 'FINAL');
 
-        $contractorRatings = \App\Models\Contractor::whereIn(
-            'code',
-            $this->proposals->pluck('contractor_code')
-        )->pluck('rating', 'code');
-
-        $proposalCreatorNames = \App\Models\User::whereIn(
-            'id',
-            $this->proposals->pluck('created_by')->filter()
-        )->pluck('name', 'id');
-
         return [
             'id' => $this->id,
             'title' => $this->title,
@@ -79,7 +69,7 @@ class ProjectResource extends JsonResource
                 'id' => $proposal->id,
                 'contractorCode' => $proposal->contractor_code,
                 'contractorName' => $proposal->contractor_name_snapshot,
-                'contractorRating' => $contractorRatings[$proposal->contractor_code] ?? null,
+                'contractorRating' => $proposal->contractor?->rating,
                 'materialCost' => $proposal->material_cost,
                 'materialItems' => $proposal->material_items_enriched,
                 'quoteCurrency' => $proposal->quote_currency,
@@ -102,7 +92,7 @@ class ProjectResource extends JsonResource
                 'description' => $proposal->description,
                 'origen' => $proposal->origen,
                 'fechaOferta' => optional($proposal->fecha_oferta)->toDateString(),
-                'creadoPor' => $proposalCreatorNames[$proposal->created_by] ?? null,
+                'creadoPor' => $proposal->creator?->name,
                 'precioAnterior' => $proposal->precio_anterior,
                 'precioNuevo' => $proposal->precio_nuevo,
                 'diferencia' => $proposal->diferencia,

@@ -93,6 +93,8 @@ class AppSettingController extends Controller
             abort_unless(json_last_error() === JSON_ERROR_NONE, 422, 'JSON inválido.');
         }
 
+        $this->assertSemaphoreOrder($setting, $data['value']);
+
         $oldValue = $setting->value;
         $setting->update(['value' => $data['value']]);
         SettingsService::forget();
@@ -109,5 +111,35 @@ class AppSettingController extends Controller
         $settingPayload['auditLog'] = $auditLog->toApiPayload();
 
         return response()->json(['data' => $settingPayload]);
+    }
+
+    /**
+     * Los tres umbrales del semáforo presupuestario (verde/amarillo/naranja)
+     * se guardan como settings independientes, cada uno con su propio
+     * min/max 0-100 — nada impide guardar amarillo < verde, lo que rompe la
+     * clasificación en useBudgetSemaphore (levelOf evalúa verde primero, así
+     * que un amarillo mal ubicado queda enmascarado). Se valida el trío
+     * completo contra los valores ya persistidos de los otros dos.
+     */
+    private function assertSemaphoreOrder(AppSetting $setting, ?string $newValue): void
+    {
+        $semaphoreKeys = ['semaforo_umbral_verde', 'semaforo_umbral_amarillo', 'semaforo_umbral_naranja'];
+
+        if (!in_array($setting->key, $semaphoreKeys, true) || $newValue === null) {
+            return;
+        }
+
+        $current = AppSetting::whereIn('key', $semaphoreKeys)->pluck('value', 'key');
+        $current[$setting->key] = $newValue;
+
+        $verde = (float) $current['semaforo_umbral_verde'];
+        $amarillo = (float) $current['semaforo_umbral_amarillo'];
+        $naranja = (float) $current['semaforo_umbral_naranja'];
+
+        abort_unless(
+            $verde < $amarillo && $amarillo < $naranja,
+            422,
+            'Los umbrales del semáforo deben ser crecientes: verde < amarillo < naranja.'
+        );
     }
 }

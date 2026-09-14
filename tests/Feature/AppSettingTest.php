@@ -345,6 +345,33 @@ class AppSettingTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_update_rejects_semaphore_threshold_that_breaks_verde_amarillo_naranja_order(): void
+    {
+        // Cada umbral tiene su propio min/max 0-100 independiente — sin este
+        // guard, guardar amarillo=50 con verde=80 (default) rompe la
+        // clasificación en useBudgetSemaphore sin que la API lo detecte.
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $amarillo = AppSetting::where('key', 'semaforo_umbral_amarillo')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$amarillo->id}", ['value' => '50'])
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('app_settings', ['key' => 'semaforo_umbral_amarillo', 'value' => '95']);
+    }
+
+    public function test_update_accepts_semaphore_thresholds_that_preserve_increasing_order(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $verde = AppSetting::where('key', 'semaforo_umbral_verde')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$verde->id}", ['value' => '70'])
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('app_settings', ['key' => 'semaforo_umbral_verde', 'value' => '70']);
+    }
+
     public function test_cambios_bloqueados_setting_no_longer_exists(): void
     {
         $this->assertDatabaseMissing('app_settings', ['key' => 'cambios_bloqueados']);

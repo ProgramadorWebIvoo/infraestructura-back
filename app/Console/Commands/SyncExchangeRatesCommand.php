@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\ExchangeRate\ExchangeRateSyncService;
+use App\Services\SettingsService;
 use Illuminate\Console\Command;
 
 class SyncExchangeRatesCommand extends Command
@@ -21,7 +22,7 @@ class SyncExchangeRatesCommand extends Command
         $this->info('🔄 Iniciando sync de tasas BCV...');
 
         try {
-            if (!$this->syncService->sync()) {
+            if (!$this->syncService->sync((bool) SettingsService::get('tasa_cambio_debug', false))) {
                 $this->error('❌ Sync falló: no se pudo obtener la tasa de ninguna fuente');
                 return self::FAILURE;
             }

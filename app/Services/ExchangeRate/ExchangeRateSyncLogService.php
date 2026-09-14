@@ -6,22 +6,24 @@ use App\Models\ExchangeRateSyncLog;
 
 class ExchangeRateSyncLogService
 {
-    public function logSuccess(int $ratesSynced, string $source): void
+    public function logSuccess(int $ratesSynced, string $source, ?array $debugTrace = null): void
     {
         ExchangeRateSyncLog::create([
             'status' => 'SUCCESS',
             'source' => $source,
             'rates_synced' => $ratesSynced,
             'executed_at' => now(),
+            'debug_details' => $debugTrace,
         ]);
     }
 
-    public function logFailure(string $errorMessage): void
+    public function logFailure(string $errorMessage, ?array $debugTrace = null): void
     {
         ExchangeRateSyncLog::create([
             'status' => 'FAILURE',
             'error_message' => $errorMessage,
             'executed_at' => now(),
+            'debug_details' => $debugTrace,
         ]);
     }
 

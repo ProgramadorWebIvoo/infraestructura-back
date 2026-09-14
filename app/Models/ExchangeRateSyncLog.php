@@ -14,11 +14,13 @@ class ExchangeRateSyncLog extends Model
         'rates_synced',
         'error_message',
         'executed_at',
+        'debug_details',
     ];
 
     protected $casts = [
         'executed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'debug_details' => 'array',
     ];
 }

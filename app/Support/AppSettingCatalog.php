@@ -117,6 +117,18 @@ class AppSettingCatalog
             'label' => 'Congelar tasa en pago de finiquito',
             'description' => 'Al liberar el pago final, fija la tasa BCV vigente en ese momento para el monto del finiquito.',
         ],
+        'tasa_cambio_cron_hora' => [
+            'label' => 'Hora de ejecución del cronjob',
+            'description' => 'Hora (zona horaria VE) a la que corre la sincronización automática de lunes a viernes.',
+        ],
+        'tasa_cambio_cron_habilitado' => [
+            'label' => 'Sincronización automática activa',
+            'description' => 'Si está desactivado, el cronjob no corre — solo queda disponible la sincronización manual.',
+        ],
+        'tasa_cambio_debug' => [
+            'label' => 'Modo debug de sincronización',
+            'description' => 'Registra y expone el detalle de cada fuente intentada (DolarVZLA/BCV) en cada sync, para diagnosticar fallos sin revisar logs del servidor.',
+        ],
     ];
 
     public static function label(string $key): string

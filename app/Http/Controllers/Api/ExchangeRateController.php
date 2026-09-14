@@ -9,6 +9,7 @@ use App\Models\Currency;
 use App\Models\ExchangeRate;
 use App\Services\ExchangeRate\ExchangeRateSyncService;
 use App\Services\ExchangeRate\ExchangeRateSyncLogService;
+use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -80,22 +81,30 @@ class ExchangeRateController extends Controller
 
     public function sync(ExchangeRateSyncService $syncService): JsonResponse
     {
+        $debug = (bool) SettingsService::get('tasa_cambio_debug', false);
+
         try {
-            if (!$syncService->sync()) {
+            $ok = $syncService->sync($debug);
+            $trace = $debug ? $syncService->getTrace() : null;
+
+            if (!$ok) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No se pudo obtener la tasa de ninguna fuente (API ni scraping).',
+                    'debug' => $trace,
                 ], 500);
             }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Tasas sincronizadas exitosamente',
+                'debug' => $trace,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error al sincronizar tasas: ' . $e->getMessage(),
+                'debug' => $debug ? $syncService->getTrace() : null,
             ], 500);
         }
     }

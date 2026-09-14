@@ -94,6 +94,7 @@ class AppSettingController extends Controller
         }
 
         $this->assertSemaphoreOrder($setting, $data['value']);
+        $this->assertCronHourFormat($setting, $data['value']);
 
         $oldValue = $setting->value;
         $setting->update(['value' => $data['value']]);
@@ -140,6 +141,25 @@ class AppSettingController extends Controller
             $verde < $amarillo && $amarillo < $naranja,
             422,
             'Los umbrales del semáforo deben ser crecientes: verde < amarillo < naranja.'
+        );
+    }
+
+    /**
+     * `tasa_cambio_cron_hora` alimenta directamente `Schedule::dailyAt()`
+     * (ver routes/console.php) — un formato inválido ahí rompe el scheduler
+     * en silencio, no falla con un error visible. Se valida acá para que el
+     * error aparezca en el panel, antes de llegar a BD.
+     */
+    private function assertCronHourFormat(AppSetting $setting, ?string $newValue): void
+    {
+        if ($setting->key !== 'tasa_cambio_cron_hora' || $newValue === null) {
+            return;
+        }
+
+        abort_unless(
+            preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $newValue) === 1,
+            422,
+            'La hora debe tener el formato HH:MM (24 horas), por ejemplo 10:00.'
         );
     }
 }

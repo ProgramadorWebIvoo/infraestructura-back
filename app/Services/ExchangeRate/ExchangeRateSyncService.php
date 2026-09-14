@@ -14,14 +14,22 @@ use Exception;
 
 class ExchangeRateSyncService
 {
+    /** @var array<int, array{source: string, success: bool, duration_ms: int, message: string}> */
+    private array $trace = [];
+
+    private bool $debug = false;
+
     public function __construct(
         private DolarVzlaApiFetcher $dolarVzlaFetcher,
         private BcvScraperFetcher $bcvScraperFetcher,
         private ExchangeRateSyncLogService $logService,
     ) {}
 
-    public function sync(): bool
+    public function sync(bool $debug = false): bool
     {
+        $this->debug = $debug;
+        $this->trace = [];
+
         try {
             $data = $this->tryDolarVzlaApi();
         } catch (Exception $e) {
@@ -38,14 +46,59 @@ class ExchangeRateSyncService
         return true;
     }
 
+    /** Detalle de cada fuente intentada en el último `sync()` — solo poblado si se llamó con `$debug = true`. */
+    public function getTrace(): array
+    {
+        return $this->trace;
+    }
+
     private function tryDolarVzlaApi(): array
     {
-        return $this->dolarVzlaFetcher->fetch();
+        return $this->attempt('DOLARVZLA_API', fn () => $this->dolarVzlaFetcher->fetch());
     }
 
     private function tryBcvScraping(): array
     {
-        return $this->bcvScraperFetcher->fetch();
+        return $this->attempt('BCV_SCRAPING', fn () => $this->bcvScraperFetcher->fetch());
+    }
+
+    /**
+     * Envuelve un fetcher con medición de tiempo y registro en `$trace` —
+     * solo cuando `$debug` está activo, para no pagar el costo de
+     * `microtime()`/array-building en el camino feliz normal.
+     */
+    private function attempt(string $source, callable $fetch): array
+    {
+        if (!$this->debug) {
+            return $fetch();
+        }
+
+        $start = microtime(true);
+
+        try {
+            $data = $fetch();
+            $rates = collect($data['currencies'] ?? [])
+                ->map(fn ($rate, $code) => "{$code}={$rate}")
+                ->implode(', ');
+
+            $this->trace[] = [
+                'source' => $source,
+                'success' => true,
+                'duration_ms' => (int) round((microtime(true) - $start) * 1000),
+                'message' => "Tasas obtenidas: {$rates}",
+            ];
+
+            return $data;
+        } catch (Exception $e) {
+            $this->trace[] = [
+                'source' => $source,
+                'success' => false,
+                'duration_ms' => (int) round((microtime(true) - $start) * 1000),
+                'message' => $e->getMessage(),
+            ];
+
+            throw $e;
+        }
     }
 
     private function saveRates(array $data): void
@@ -74,7 +127,7 @@ class ExchangeRateSyncService
                 );
             }
 
-            $this->logService->logSuccess(count($savedRates), $data['source']);
+            $this->logService->logSuccess(count($savedRates), $data['source'], $this->debug ? $this->trace : null);
             ExchangeRatesUpdated::dispatch($savedRates, $data['source']);
         });
     }
@@ -102,6 +155,6 @@ class ExchangeRateSyncService
             $errorMsg
         );
 
-        $this->logService->logFailure($errorMsg);
+        $this->logService->logFailure($errorMsg, $this->debug ? $this->trace : null);
     }
 }

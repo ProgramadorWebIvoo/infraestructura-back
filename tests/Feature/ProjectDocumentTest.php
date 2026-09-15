@@ -487,11 +487,11 @@ class ProjectDocumentTest extends TestCase
 
     public function test_upload_denied_for_role_without_access(): void
     {
-        $procura = User::factory()->create(['role' => 'PROCURA']);
+        $analista = User::factory()->create(['role' => 'ANALISTA']);
         $project = Project::factory()->create();
 
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $procura->createToken('test')->plainTextToken,
+            'Authorization' => 'Bearer ' . $analista->createToken('test')->plainTextToken,
             'Accept' => 'application/json',
         ])->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',

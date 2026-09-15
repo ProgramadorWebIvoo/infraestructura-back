@@ -19,6 +19,7 @@ class ProjectStateMachine
         'CREADO'                   => 'CREADO',
         'REVISADO_CIERRE'          => 'REVISADO_CIERRE',
         'RECHAZADO_CIERRE'         => 'RECHAZADO_CIERRE',
+        'EN_REEVALUACION_CIERRE'   => 'EN_REEVALUACION_CIERRE',
         'CONFIRMADO_PROCURA'       => 'CONFIRMADO_PROCURA',
         'COMPARATIVA_ENVIADA'      => 'COMPARATIVA_ENVIADA',
         'CONTRATADO'               => 'CONTRATADO',
@@ -32,6 +33,9 @@ class ProjectStateMachine
     public const STATUS_ORDER = [
         'CREADO'                   => 0,
         'REVISADO_CIERRE'          => 1,
+        // 'EN_REEVALUACION_CIERRE' se omite a propósito del orden canónico del
+        // funnel: es un desvío temporal (Procura -> Cierre de Obra -> de vuelta
+        // a REVISADO_CIERRE), no una etapa nueva del avance del proyecto.
         'CONFIRMADO_PROCURA'       => 2,
         'COMPARATIVA_ENVIADA'      => 3,
         'CONTRATADO'               => 4,

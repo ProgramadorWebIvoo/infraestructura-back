@@ -409,6 +409,80 @@ class ProjectLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_send_to_reevaluation_from_revisado_cierre(): void
+    {
+        $project = Project::factory()->reviewed()->create();
+
+        $response = $this->actingAs($this->procura)
+            ->postJson("/api/projects/{$project->id}/send-to-reevaluation", [
+                'reason' => 'La cubicación de materiales no coincide con los planos adjuntos.',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.status', 'EN_REEVALUACION_CIERRE');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'project_id' => $project->id,
+            'role'       => 'PROCURA',
+            'action'     => 'Solicitud de reevaluación a Cierre de Obra',
+        ]);
+        $log = \App\Models\AuditLog::where('project_id', $project->id)
+            ->where('action', 'Solicitud de reevaluación a Cierre de Obra')->first();
+        $this->assertStringContainsString('La cubicación de materiales no coincide con los planos adjuntos.', $log->details);
+    }
+
+    public function test_send_to_reevaluation_fails_from_non_revisado_status(): void
+    {
+        $project = Project::factory()->create(['status' => 'CREADO']);
+
+        $response = $this->actingAs($this->procura)
+            ->postJson("/api/projects/{$project->id}/send-to-reevaluation", [
+                'reason' => 'Motivo cualquiera',
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_send_to_reevaluation_requires_reason(): void
+    {
+        $project = Project::factory()->reviewed()->create();
+
+        $response = $this->actingAs($this->procura)
+            ->postJson("/api/projects/{$project->id}/send-to-reevaluation", []);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('reason');
+    }
+
+    public function test_resolve_reevaluation_returns_to_revisado_cierre(): void
+    {
+        $project = Project::factory()->reviewed()->create(['status' => 'EN_REEVALUACION_CIERRE']);
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/resolve-reevaluation", [
+                'notes' => 'Se corrigió la cubicación según lo indicado.',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.status', 'REVISADO_CIERRE');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'project_id' => $project->id,
+            'role'       => 'CIERRE_DE_OBRA',
+            'action'     => 'Reevaluación resuelta, reenviado a Procura',
+        ]);
+    }
+
+    public function test_resolve_reevaluation_fails_from_non_reevaluation_status(): void
+    {
+        $project = Project::factory()->reviewed()->create();
+
+        $response = $this->actingAs($this->cierre)
+            ->postJson("/api/projects/{$project->id}/resolve-reevaluation", []);
+
+        $response->assertStatus(422);
+    }
+
     public function test_add_and_remove_proposals(): void
     {
         $project = Project::factory()->confirmed()->create();

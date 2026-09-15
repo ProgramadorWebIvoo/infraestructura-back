@@ -134,6 +134,7 @@ class ProjectDocumentController extends Controller
                 'PLANO' => 'planos de ingenieria',
                 'FOTO' => 'fotografias del sitio de obra',
                 'CORRECCION' => 'correcciones de peticion rechazada',
+                'REEVALUACION' => 'evidencia de solicitud de reevaluacion',
                 'COMPROBANTE_ANTICIPO' => 'comprobante de pago de anticipo',
                 'COMPROBANTE_FINIQUITO' => 'comprobante de liquidacion final',
                 default => 'documentos',

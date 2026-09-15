@@ -9,8 +9,10 @@ use App\Http\Requests\PayProjectRequest;
 use App\Http\Requests\RejectProjectRequest;
 use App\Http\Requests\RejectProposalsRequest;
 use App\Http\Requests\RenegotiateProposalRequest;
+use App\Http\Requests\ResolveReevaluationRequest;
 use App\Http\Requests\ResubmitProjectRequest;
 use App\Http\Requests\ReviewProjectRequest;
+use App\Http\Requests\SendToReevaluationRequest;
 use App\Http\Requests\SelectContractorRequest;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\VerifyCompletionRequest;
@@ -111,12 +113,15 @@ class ProjectController extends Controller
      * apoyar su revisión. Se llama desde el frontend tanto en la primera
      * apertura automática del wizard de revisión como en un reintento
      * manual explícito ("Reevaluar") — es la misma ruta en ambos casos.
+     * EN_REEVALUACION_CIERRE incluido porque ReviewWizardModal corre este
+     * mismo panel (mode="reevaluation") cuando Procura devuelve un
+     * expediente — ver ReevaluationSection.tsx.
      */
     public function evaluateDossier(Project $project, DossierEvaluationService $service)
     {
         ProjectStateMachine::assertStatusIn(
             $project,
-            [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_CIERRE']],
+            [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_CIERRE'], self::STATUSES['EN_REEVALUACION_CIERRE']],
             'Solo se puede evaluar el expediente mientras está pendiente de revisión por Cierre de Obra.'
         );
 
@@ -200,6 +205,47 @@ class ProjectController extends Controller
 
             return $project;
         });
+
+        return new ProjectResource($project->load(Project::detailRelations()));
+    }
+
+    /**
+     * Procura devuelve a Cierre de Obra, con motivo obligatorio, un
+     * expediente que acaba de recibir (REVISADO_CIERRE) para que lo
+     * reevalúe antes de autorizar inversión — distinto de rejectProject()
+     * (Cierre de Obra rechaza hacia Infraestructura) y de rejectProposals()
+     * (Procura rechaza el cuadro comparativo ya en licitación).
+     */
+    public function sendToReevaluation(SendToReevaluationRequest $request, Project $project)
+    {
+        $project = RejectionService::reject(
+            $project,
+            self::STATUSES['REVISADO_CIERRE'],
+            self::STATUSES['EN_REEVALUACION_CIERRE'],
+            'PROCURA',
+            'Solicitud de reevaluación a Cierre de Obra',
+            $request->validated(),
+            function (Project $project, array $payload) {}
+        );
+
+        return new ProjectResource($project);
+    }
+
+    /**
+     * Cierre de Obra resuelve la reevaluación solicitada por Procura y
+     * reenvía el expediente (mismo Project.id) de vuelta a REVISADO_CIERRE
+     * para que Procura lo revise nuevamente — no pasa por CREADO porque la
+     * cubicación y planos ya fueron aprobados, solo se corrige lo señalado.
+     */
+    public function resolveReevaluation(ResolveReevaluationRequest $request, Project $project)
+    {
+        ProjectStateMachine::assertStatus($project, self::STATUSES['EN_REEVALUACION_CIERRE'], 'Solo se puede resolver un expediente en reevaluación.');
+
+        $data = $request->validated();
+
+        $project->update(['status' => self::STATUSES['REVISADO_CIERRE']]);
+
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Reevaluación resuelta, reenviado a Procura', $data['notes'] ?? null);
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }

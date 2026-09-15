@@ -55,6 +55,15 @@ class StoreProjectDocumentRequest extends FormRequest
     private const ALLOWED_CORRECCION_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'svg', 'tiff', 'tif', 'dwg', 'dxf', 'xlsx', 'xls', 'csv', 'ods'];
 
     /**
+     * REEVALUACION: evidencia que Procura adjunta al enviar un expediente de
+     * vuelta a Cierre de Obra (ver ProjectController::sendToReevaluation) —
+     * misma unión de tipos que CORRECCION, ya que puede ser cualquier
+     * documento técnico que sustente el motivo.
+     */
+    private const ALLOWED_REEVALUACION_MIMES = self::ALLOWED_CORRECCION_MIMES;
+    private const ALLOWED_REEVALUACION_EXTENSIONS = self::ALLOWED_CORRECCION_EXTENSIONS;
+
+    /**
      * COMPROBANTE_ANTICIPO/COMPROBANTE_FINIQUITO: comprobante bancario de un
      * desembolso — siempre una foto/escaneo del voucher o un PDF, nunca hojas
      * de cálculo o planos.
@@ -82,7 +91,7 @@ class StoreProjectDocumentRequest extends FormRequest
         $isComprobante = in_array($this->input('document_type'), ['COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO'], true);
 
         return [
-            'document_type'  => ['required', Rule::in(['CALC', 'PLANO', 'FOTO', 'CORRECCION', 'COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO'])],
+            'document_type'  => ['required', Rule::in(['CALC', 'PLANO', 'FOTO', 'CORRECCION', 'REEVALUACION', 'COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO'])],
             'new_version_of' => ['nullable', 'integer', 'exists:project_documents,id'],
             'files'          => ['required', 'array', ($isNewVersion || $isComprobante) ? 'size:1' : 'min:1', 'max:' . $this->maxFileCount()],
             'files.*'        => [
@@ -132,6 +141,7 @@ class StoreProjectDocumentRequest extends FormRequest
                 'PLANO' => self::ALLOWED_PLANO_MIMES,
                 'FOTO' => self::ALLOWED_FOTO_MIMES,
                 'CORRECCION' => self::ALLOWED_CORRECCION_MIMES,
+                'REEVALUACION' => self::ALLOWED_REEVALUACION_MIMES,
                 'COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO' => self::ALLOWED_COMPROBANTE_MIMES,
                 default => [],
             };
@@ -140,6 +150,7 @@ class StoreProjectDocumentRequest extends FormRequest
                 'PLANO' => self::ALLOWED_PLANO_EXTENSIONS,
                 'FOTO' => self::ALLOWED_FOTO_EXTENSIONS,
                 'CORRECCION' => self::ALLOWED_CORRECCION_EXTENSIONS,
+                'REEVALUACION' => self::ALLOWED_REEVALUACION_EXTENSIONS,
                 'COMPROBANTE_ANTICIPO', 'COMPROBANTE_FINIQUITO' => self::ALLOWED_COMPROBANTE_EXTENSIONS,
                 default => [],
             };

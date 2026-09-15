@@ -67,14 +67,15 @@ class ProjectStateMachineTest extends TestCase
     }
 
     /**
-     * RECHAZADO_CIERRE es el único estado sin lugar en el funnel (es un
-     * estado transitorio de vuelta a CREADO, no una etapa del flujo hacia
-     * adelante) — todos los demás deben tener una posición en STATUS_ORDER.
+     * RECHAZADO_CIERRE y EN_REEVALUACION_CIERRE son los únicos estados sin
+     * lugar en el funnel (son desvíos transitorios de vuelta a un estado
+     * anterior, no una etapa del flujo hacia adelante) — todos los demás
+     * deben tener una posición en STATUS_ORDER.
      */
     public function test_status_order_covers_every_status_except_rechazado_cierre(): void
     {
         $missing = array_diff(array_keys(ProjectStateMachine::STATUSES), array_keys(ProjectStateMachine::STATUS_ORDER));
 
-        $this->assertSame(['RECHAZADO_CIERRE'], array_values($missing));
+        $this->assertSame(['RECHAZADO_CIERRE', 'EN_REEVALUACION_CIERRE'], array_values($missing));
     }
 }

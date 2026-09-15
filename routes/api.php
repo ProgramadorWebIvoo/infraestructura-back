@@ -253,6 +253,10 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/approve-investment', [ProjectController::class, 'approveInvestment'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/send-to-reevaluation', [ProjectController::class, 'sendToReevaluation'])
+        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/resolve-reevaluation', [ProjectController::class, 'resolveReevaluation'])
+        ->middleware('role:CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/proposals', [ProjectController::class, 'addProposal'])
         ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
     Route::delete('/projects/{project}/proposals/{proposal}', [ProjectController::class, 'removeProposal'])
@@ -296,7 +300,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
 
     // Project documents (planos, hojas de cálculo, fotos, comprobantes de pago)
     Route::get('/projects/{project}/documents', [ProjectDocumentController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-    Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,FINANZAS,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/documents', [ProjectDocumentController::class, 'upload'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,PROCURA,FINANZAS,ADMIN,SUPERADMIN');
     Route::delete('/projects/{project}/documents/{document}', [ProjectDocumentController::class, 'destroy'])->middleware('role:INFRAESTRUCTURA,CIERRE_DE_OBRA,ADMIN,SUPERADMIN');
     Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/projects/{project}/documents/{document}/preview', [ProjectDocumentController::class, 'preview'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

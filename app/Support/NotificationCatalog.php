@@ -32,6 +32,7 @@ class NotificationCatalog
     private const TYPE_OVERRIDES = [
         'Rechazo de cuadro comparativo' => NotificationType::ACCION_REQUERIDA,
         'Rechazo de petición de obra' => NotificationType::ACCION_REQUERIDA,
+        'Solicitud de reevaluación a Cierre de Obra' => NotificationType::ACCION_REQUERIDA,
         'Rechazo de propuesta de marketing' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de restablecimiento de contrasena' => NotificationType::INFORMACION,
         'Alta de proveedor' => NotificationType::EXITO,
@@ -66,6 +67,8 @@ class NotificationCatalog
         'Envio de invitacion a proveedor' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Rechazo de petición de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
         'Reenvío de petición corregida' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
+        'Solicitud de reevaluación a Cierre de Obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
+        'Reevaluación resuelta, reenviado a Procura' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Obra sin actividad reciente' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
         'Invitacion a proveedor proxima a vencer' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
         'Racha de rechazos detectada' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],

@@ -391,6 +391,35 @@ class NotificationDispatcherTest extends TestCase
         Notification::assertNotSentTo($infra, ProjectActionNotification::class);
     }
 
+    public function test_send_to_reevaluation_notifies_cierre_de_obra_via_app_and_mail(): void
+    {
+        Notification::fake();
+
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $procura = User::factory()->create(['role' => 'PROCURA']);
+        $project = Project::factory()->reviewed()->create();
+
+        AuditLog::record($project, 'PROCURA', 'Solicitud de reevaluación a Cierre de Obra', 'La cubicación no coincide con los planos.');
+
+        Notification::assertSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertSentTo($cierre, ProjectActionMail::class);
+        Notification::assertNotSentTo($procura, ProjectActionNotification::class);
+    }
+
+    public function test_resolve_reevaluation_notifies_procura_via_app(): void
+    {
+        Notification::fake();
+
+        $procura = User::factory()->create(['role' => 'PROCURA']);
+        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $project = Project::factory()->reviewed()->create(['status' => 'EN_REEVALUACION_CIERRE']);
+
+        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Reevaluación resuelta, reenviado a Procura', 'Se corrigió la cubicación.');
+
+        Notification::assertSentTo($procura, ProjectActionNotification::class);
+        Notification::assertNotSentTo($cierre, ProjectActionNotification::class);
+    }
+
     public function test_admin_action_without_project_notifies_via_rule_matrix(): void
     {
         Notification::fake();

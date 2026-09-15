@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\PushTokenController;
 use App\Http\Controllers\Api\DashboardSummaryController;
 use App\Http\Controllers\Api\AppNotificationController;
 use App\Http\Controllers\Api\AppSettingController;
+use App\Http\Controllers\Api\SystemKeyConfigController;
 use App\Http\Controllers\Api\ConfigAuditLogController;
 use App\Http\Controllers\Api\NotificationRuleController;
 use App\Http\Controllers\Api\AiFeatureToggleController;
@@ -341,5 +342,14 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
             Route::delete('/{aiConfig}', [AiConfigController::class, 'destroy']);
             Route::post('/{aiConfig}/test', [AiConfigController::class, 'test']);
         });
+    });
+
+    // Configuración de Keys (SMTP, Pusher) — más sensible que el resto de
+    // CONFIG APP (credenciales de infraestructura), por eso SUPERADMIN
+    // exclusivo en vez de compartir el bucket SUPERADMIN,ADMIN de arriba.
+    Route::middleware('role:SUPERADMIN')->prefix('system-keys')->group(function () {
+        Route::get('/', [SystemKeyConfigController::class, 'index']);
+        Route::patch('/{group}', [SystemKeyConfigController::class, 'update']);
+        Route::post('/{group}/test', [SystemKeyConfigController::class, 'test']);
     });
 });

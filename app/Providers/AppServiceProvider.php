@@ -9,12 +9,14 @@ use App\Observers\PriceEstimationObserver;
 use App\Observers\ProjectProposalObserver;
 use App\Services\NotificationRuleResolver;
 use App\Services\SettingsService;
+use App\Services\SystemKeyConfigService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -45,6 +47,26 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureRateLimiting();
         $this->invalidateCachesAfterMigrate();
+        $this->applySystemKeyConfig();
+    }
+
+    /**
+     * SMTP/Pusher guardados desde Configuración de Keys sobreescriben
+     * config('mail.*')/config('broadcasting.*') en cada arranque de worker.
+     * Guardado tras `Schema::hasTable`: en un install fresco (antes de
+     * correr migraciones) la tabla todavía no existe y esto no debe romper
+     * ningún comando artisan (migrate incluido).
+     */
+    protected function applySystemKeyConfig(): void
+    {
+        try {
+            if (!Schema::hasTable('system_key_configs')) {
+                return;
+            }
+            $this->app->make(SystemKeyConfigService::class)->applyRuntimeConfig();
+        } catch (\Throwable $e) {
+            // Sin DB disponible (ej. build step) — se ignora, .env sigue como fallback.
+        }
     }
 
     /**

@@ -26,6 +26,17 @@ class RenegotiateProposalRequest extends FormRequest
 
     public function rules(): array
     {
+        return self::baseRules($this->route('proposal')?->fecha_oferta?->toDateString());
+    }
+
+    /**
+     * Reglas compartidas con el flujo público de renegociación
+     * (RenegotiationInvitationController::submit), que no tiene FormRequest
+     * propio porque no hay route-model-binding de {proposal} en una ruta
+     * pública por token — evita duplicar el set completo de reglas.
+     */
+    public static function baseRules(?string $minFechaOferta): array
+    {
         return [
             'materialCost' => ['required', 'numeric', 'min:0'],
             'materialItems' => ['nullable', 'array'],
@@ -45,24 +56,30 @@ class RenegotiateProposalRequest extends FormRequest
             // La renegociación se registra el mismo día o después de la
             // oferta original que reemplaza — nunca antes (no puede
             // "renegociarse" algo hacia el pasado) ni en el futuro.
-            'fechaOferta' => ['required', 'date', 'after_or_equal:' . $this->route('proposal')?->fecha_oferta?->toDateString(), 'before_or_equal:today'],
+            'fechaOferta' => ['required', 'date', 'after_or_equal:' . $minFechaOferta, 'before_or_equal:today'],
             'motivo' => ['required', 'string'],
             'motivoAnticipoExcedido' => ['nullable', 'string'],
         ];
     }
 
+    /** Validación "after" compartida — ver baseRules(). */
+    public static function applyAfterValidation(Validator $validator, ?\App\Models\Project $project, array $input): void
+    {
+        $advanceMax = SettingsService::get('anticipo_maximo_porcentaje', 100);
+        $exceedsAdvance = (float) ($input['negotiatedAdvancePercent'] ?? 0) > (float) $advanceMax;
+        $motivoAnticipoExcedido = trim((string) ($input['motivoAnticipoExcedido'] ?? ''));
+
+        if ($exceedsAdvance && $motivoAnticipoExcedido === '') {
+            $validator->errors()->add('motivoAnticipoExcedido', 'El motivo es obligatorio cuando se excede el anticipo máximo configurado.');
+        }
+
+        ValidatesImmutableMaterialQuantities::validate($validator, $project, $input['materialItems'] ?? []);
+    }
+
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            $advanceMax = SettingsService::get('anticipo_maximo_porcentaje', 100);
-            $exceedsAdvance = (float) $this->input('negotiatedAdvancePercent', 0) > (float) $advanceMax;
-            $motivoAnticipoExcedido = trim((string) $this->input('motivoAnticipoExcedido', ''));
-
-            if ($exceedsAdvance && $motivoAnticipoExcedido === '') {
-                $validator->errors()->add('motivoAnticipoExcedido', 'El motivo es obligatorio cuando se excede el anticipo máximo configurado.');
-            }
-
-            ValidatesImmutableMaterialQuantities::validate($validator, $this->route('project'), $this->input('materialItems', []));
+            self::applyAfterValidation($validator, $this->route('project'), $this->all());
         });
     }
 }

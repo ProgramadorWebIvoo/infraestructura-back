@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ModuleController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ProjectDocumentController;
 use App\Http\Controllers\Api\ProjectRateFreezeController;
+use App\Http\Controllers\Api\RenegotiationInvitationController;
 use App\Http\Controllers\Api\SupplierInvitationController;
 use App\Http\Controllers\Api\SupplierProposalController;
 use App\Http\Controllers\Api\UserController;
@@ -51,6 +52,9 @@ Route::post('/public/invitations/{token}/proposal-image', [SupplierProposalContr
 Route::get('/public/invitations/{token}/proposal-image/{path}', [SupplierProposalController::class, 'image'])
     ->where('path', '.*')
     ->middleware('throttle:public-api');
+
+Route::get('/public/renegotiations/{token}', [RenegotiationInvitationController::class, 'publicInfo'])->middleware('throttle:public-api');
+Route::post('/public/renegotiations/{token}/proposal', [RenegotiationInvitationController::class, 'submit'])->middleware('throttle:public-api');
 
 // Catálogos de referencia para el formulario público de propuesta de
 // materiales (sin auth, consumidos por el enlace de invitación).
@@ -249,6 +253,8 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::delete('/projects/{project}/proposals/{proposal}', [ProjectController::class, 'removeProposal'])
         ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/proposals/{proposal}/renegotiate', [ProjectController::class, 'renegotiateProposal'])
+        ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/proposals/{proposal}/renegotiation-invite', [RenegotiationInvitationController::class, 'store'])
         ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/submit-comparative', [ProjectController::class, 'submitComparative'])
         ->middleware('role:ANALISTA,ADMIN,SUPERADMIN');

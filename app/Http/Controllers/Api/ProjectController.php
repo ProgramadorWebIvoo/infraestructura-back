@@ -25,6 +25,7 @@ use App\Models\ProjectRateFreeze;
 use App\Services\AiFeatureGate;
 use App\Services\DossierEvaluationService;
 use App\Services\ProjectStateMachine;
+use App\Services\ProposalRenegotiationService;
 use App\Services\RateFreezeService;
 use App\Services\RejectionService;
 use App\Services\SupplierProposalImportService;
@@ -287,7 +288,7 @@ class ProjectController extends Controller
      * cuadro comparativo activo (ver scope en ProjectResource) pero sigue
      * existiendo en la base de datos.
      */
-    public function renegotiateProposal(RenegotiateProposalRequest $request, Project $project, ProjectProposal $proposal)
+    public function renegotiateProposal(RenegotiateProposalRequest $request, Project $project, ProjectProposal $proposal, ProposalRenegotiationService $renegotiationService)
     {
         abort_unless($proposal->project_id === $project->id, 422, 'La propuesta no pertenece al proyecto.');
         abort_if($proposal->replaced_by_id !== null, 422, 'Esta propuesta ya fue renegociada anteriormente.');
@@ -297,34 +298,7 @@ class ProjectController extends Controller
         $precioAnterior = (float) $proposal->total_cost;
         $precioNuevo = (float) $data['totalCost'];
 
-        $renegotiated = DB::transaction(function () use ($project, $proposal, $data, $precioAnterior, $precioNuevo) {
-            $new = $project->proposals()->create([
-                'id' => ProjectProposal::nextId(),
-                'contractor_code' => $proposal->contractor_code,
-                'contractor_name_snapshot' => $proposal->contractor_name_snapshot,
-                'material_cost' => $data['materialCost'],
-                'material_items' => $data['materialItems'] ?? null,
-                'labor_cost' => $data['laborCost'],
-                'total_cost' => $data['totalCost'],
-                'delivery_weeks' => $data['deliveryWeeks'],
-                'duration_value' => $data['durationValue'] ?? null,
-                'duration_unit' => $data['durationUnit'] ?? null,
-                'negotiated_advance_percent' => $data['negotiatedAdvancePercent'],
-                'description' => $data['description'],
-                'origen' => 'RENEGOCIACION',
-                'fecha_oferta' => $data['fechaOferta'],
-                'created_by' => auth()->id(),
-                'precio_anterior' => $precioAnterior,
-                'precio_nuevo' => $precioNuevo,
-                'diferencia' => $precioNuevo - $precioAnterior,
-                'motivo' => $data['motivo'],
-                'motivo_anticipo_excedido' => $data['motivoAnticipoExcedido'] ?? null,
-            ]);
-
-            $proposal->update(['replaced_by_id' => $new->id]);
-
-            return $new;
-        });
+        $renegotiated = $renegotiationService->apply($project, $proposal, $data + ['createdBy' => auth()->id()]);
 
         $auditDetails = "Propuesta {$proposal->id} ({$proposal->contractor_name_snapshot}) renegociada como {$renegotiated->id}. " .
             "Precio anterior: {$precioAnterior}. Precio nuevo: {$precioNuevo}. Diferencia: " . ($precioNuevo - $precioAnterior) . ". " .
@@ -334,7 +308,6 @@ class ProjectController extends Controller
         }
         AuditLog::record($project, 'ANALISTA', 'Renegociación de propuesta', $auditDetails);
         $this->invalidateBidEvaluationAiCache($project);
-        \App\Support\CacheVersion::bump('contractor_history:' . $proposal->contractor_code);
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }

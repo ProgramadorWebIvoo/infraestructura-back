@@ -40,6 +40,7 @@ class NotificationCatalog
         'Confirmacion de contratacion' => NotificationType::EXITO,
         'Obra sin actividad reciente' => NotificationType::ADVERTENCIA,
         'Invitacion a proveedor proxima a vencer' => NotificationType::ADVERTENCIA,
+        'Racha de rechazos detectada' => NotificationType::ADVERTENCIA,
     ];
 
     /**
@@ -67,6 +68,7 @@ class NotificationCatalog
         'Reenvío de petición corregida' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
         'Obra sin actividad reciente' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
         'Invitacion a proveedor proxima a vencer' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
+        'Racha de rechazos detectada' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
 
         // Documentos de proyecto
         'Carga de hojas de calculo/cubicaciones' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],

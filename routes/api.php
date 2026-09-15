@@ -101,6 +101,9 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/config-audit-logs', [ConfigAuditLogController::class, 'index'])
         ->middleware(['role:SUPERADMIN'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/config-audit-logs/export', [ConfigAuditLogController::class, 'export'])
+        ->middleware(['role:SUPERADMIN'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
 
     // Matriz configurable rol × acción × canal — exclusivo SUPERADMIN. `action`
     // va en el body (no como path param) porque varias acciones del catálogo
@@ -195,6 +198,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/materials', [MaterialController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/audit-logs/export', [AuditLogController::class, 'export'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/supplier-invitations', [SupplierInvitationController::class, 'store']);
     Route::get('/supplier-invitations/latest', [SupplierInvitationController::class, 'latest'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

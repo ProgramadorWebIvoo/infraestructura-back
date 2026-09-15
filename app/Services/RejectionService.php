@@ -21,6 +21,13 @@ use Illuminate\Support\Facades\DB;
 class RejectionService
 {
     /**
+     * Umbral de rechazos consecutivos (sin ninguna acción distinta de por
+     * medio) sobre el mismo proyecto a partir del cual se avisa — señal de
+     * que algo está trabado más allá de un rechazo puntual normal del flujo.
+     */
+    private const CONSECUTIVE_REJECTION_ALERT_THRESHOLD = 3;
+
+    /**
      * @param array $payload 'reason' (obligatorio) + opcionales:
      *   'observations', 'correctionsRequired', 'responsible', 'dueDate', 'evidence'.
      * @param callable $applyRejection fn(Project $project, array $payload): void —
@@ -48,9 +55,37 @@ class RejectionService
             $project->status = $toStatus;
             $project->save();
             AuditLog::record($project, $role, $action, self::buildDetails($payload), $payload['observations'] ?? null);
+            self::alertIfConsecutiveRejections($project);
         });
 
         return $project->fresh(['materials', 'proposals', 'payments', 'documents']);
+    }
+
+    /**
+     * Detección de patrones (Fase 4 del plan de refuerzo de auditorías):
+     * cuenta cuántas de las entradas más recientes de este proyecto son
+     * rechazos consecutivos (`action` empieza con "Rechazo") sin que se haya
+     * intercalado ninguna acción distinta — si supera el umbral, notifica
+     * una sola vez por racha (no en cada rechazo adicional dentro de la
+     * misma racha) para no generar ruido.
+     */
+    private static function alertIfConsecutiveRejections(Project $project): void
+    {
+        $recentActions = AuditLog::where('project_id', $project->id)
+            ->latest('logged_at')
+            ->limit(self::CONSECUTIVE_REJECTION_ALERT_THRESHOLD + 1)
+            ->pluck('action');
+
+        $streak = $recentActions->takeWhile(fn (string $a) => str_starts_with($a, 'Rechazo'))->count();
+
+        if ($streak === self::CONSECUTIVE_REJECTION_ALERT_THRESHOLD) {
+            NotificationDispatcher::notify(
+                $project,
+                'SISTEMA',
+                'Racha de rechazos detectada',
+                "El proyecto \"{$project->title}\" acumula {$streak} rechazos consecutivos sin avanzar de estado."
+            );
+        }
     }
 
     /**

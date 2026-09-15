@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAuditActorSnapshot;
+use App\Models\Concerns\IsImmutableAuditRecord;
 use App\Services\NotificationDispatcher;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -9,7 +11,7 @@ use Illuminate\Support\Str;
 
 class AuditLog extends Model
 {
-    use HasFactory;
+    use HasFactory, HasAuditActorSnapshot, IsImmutableAuditRecord;
 
     protected $primaryKey = 'id';
     public $incrementing = false;
@@ -50,15 +52,12 @@ class AuditLog extends Model
      */
     public static function record(?Project $project, string $role, string $action, ?string $details = null, ?string $observations = null): self
     {
-        $user = auth()->user();
-
         $log = static::create([
             'id' => 'LOG-' . now()->format('YmdHisv') . '-' . Str::random(4),
             'project_id' => $project?->id,
             'project_title_snapshot' => $project?->title,
             'role' => $role,
-            'user_id' => $user?->id,
-            'user_name_snapshot' => $user?->name,
+            ...static::auditActorSnapshot(),
             'action' => $action,
             'logged_at' => now(),
             'details' => $details,

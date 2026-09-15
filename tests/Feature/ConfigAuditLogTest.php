@@ -222,7 +222,10 @@ class ConfigAuditLogTest extends TestCase
         $this->actingAs($superadmin);
 
         $old = ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Viejo');
-        $old->forceFill(['changed_at' => now()->subDays(10)])->save();
+        // withoutEvents: retrasar la fecha es una necesidad del fixture de
+        // test, no una mutación real — ConfigAuditLog es inmutable en
+        // producción (ver Model::booted()).
+        ConfigAuditLog::withoutEvents(fn () => $old->forceFill(['changed_at' => now()->subDays(10)])->save());
 
         ConfigAuditLog::recordAdminAction('material', 'Alta de material', null, null, 'Material: Nuevo');
 

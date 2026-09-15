@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAuditActorSnapshot;
+use App\Models\Concerns\IsImmutableAuditRecord;
 use App\Services\NotificationDispatcher;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,6 +28,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ConfigAuditLog extends Model
 {
+    use HasAuditActorSnapshot, IsImmutableAuditRecord;
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -54,7 +58,8 @@ class ConfigAuditLog extends Model
             'setting_key' => $setting->key,
             'old_value' => $oldValue,
             'new_value' => $newValue,
-            ...static::actorSnapshot(),
+            ...static::auditActorSnapshot(),
+            'changed_at' => now(),
         ]);
 
         NotificationDispatcher::notify(null, 'SISTEMA', 'Modificacion de configuracion', "Configuración \"{$setting->key}\" modificada.");
@@ -86,23 +91,13 @@ class ConfigAuditLog extends Model
             'setting_key' => null,
             'old_value' => $oldValue,
             'new_value' => $newValue ?? $details,
-            ...static::actorSnapshot(),
+            ...static::auditActorSnapshot(),
+            'changed_at' => now(),
         ]);
 
         NotificationDispatcher::notify(null, 'SISTEMA', $notifyAction ?? $action, $details);
 
         return $log;
-    }
-
-    private static function actorSnapshot(): array
-    {
-        $user = auth()->user();
-
-        return [
-            'user_id' => $user?->id,
-            'user_name_snapshot' => $user?->name,
-            'changed_at' => now(),
-        ];
     }
 
     /**

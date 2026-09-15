@@ -24,6 +24,11 @@ Artisan::command('inspire', function () {
 Schedule::command('sanctum:clear-expired-tokens')->daily();
 Schedule::command('notifications:prune')->daily();
 
+// Retención en meses (no días, a diferencia de notifications:prune) — no
+// hace falta correrlo a diario, mensual es suficiente para un horizonte de
+// 6-60 meses (ver retencion_auditoria_meses en AppSettingCatalog).
+Schedule::command('audit:prune')->monthly();
+
 // Cada 6h (no diario): las invitaciones a proveedor vencen en horas, no días
 // — un chequeo diario podría avisar demasiado tarde dentro de la ventana de
 // 48h. La detección de "sin re-notificar el mismo día" (ver el comando) hace

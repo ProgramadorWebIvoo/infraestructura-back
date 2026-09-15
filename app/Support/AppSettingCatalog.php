@@ -97,6 +97,10 @@ class AppSettingCatalog
             'label' => 'Retención de notificaciones (días)',
             'description' => 'Días que se conservan las notificaciones en la bandeja interna antes de purgarse automáticamente. Purgado destructivo, sin posibilidad de recuperación — rango acotado a 1-7 días.',
         ],
+        'retencion_auditoria_meses' => [
+            'label' => 'Retención de auditoría (meses)',
+            'description' => 'Meses que se conservan los registros de auditoría (AuditLog y ConfigAuditLog) antes de purgarse automáticamente (comando audit:prune, mensual). Purgado destructivo, sin posibilidad de recuperación — rango acotado a 6-60 meses.',
+        ],
         'polling_dashboard_segundos' => [
             'label' => 'Frecuencia de actualización del dashboard (segundos)',
             'description' => 'Cada cuánto se refresca el resumen ejecutivo del dashboard de Presidencia.',

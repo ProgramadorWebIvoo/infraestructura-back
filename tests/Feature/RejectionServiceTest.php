@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\User;
+use App\Notifications\ProjectActionNotification;
 use App\Services\RejectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -170,5 +172,73 @@ class RejectionServiceTest extends TestCase
 
         $this->assertEquals('CONFIRMADO_PROCURA', $result->status);
         $this->assertEquals('CONFIRMADO_PROCURA', $project->fresh()->status);
+    }
+
+    /**
+     * Fase 4 del plan de refuerzo de auditorías: detección de rachas de
+     * rechazos consecutivos sobre el mismo proyecto (RejectionService::
+     * alertIfConsecutiveRejections). Cada llamada revierte el estado a
+     * COMPARATIVA_ENVIADA entre rechazos para simular que el flujo vuelve a
+     * quedar en condición de ser rechazado de nuevo, sin generar ninguna
+     * acción de auditoría distinta de por medio.
+     */
+    public function test_notifies_once_when_consecutive_rejection_threshold_is_reached(): void
+    {
+        Notification::fake();
+
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $user = User::factory()->create(['role' => 'PROCURA']);
+        $this->actingAs($user);
+
+        $project = Project::factory()->confirmed()->create(['status' => 'COMPARATIVA_ENVIADA']);
+
+        for ($i = 0; $i < 3; $i++) {
+            RejectionService::reject(
+                $project,
+                'COMPARATIVA_ENVIADA',
+                'CONFIRMADO_PROCURA',
+                'PROCURA',
+                'Rechazo de cuadro comparativo',
+                ['reason' => "Motivo {$i}"],
+                function () {}
+            );
+            $project->status = 'COMPARATIVA_ENVIADA';
+            $project->save();
+        }
+
+        Notification::assertSentTo($superadmin, ProjectActionNotification::class, function ($notification) {
+            return $notification->action === 'Racha de rechazos detectada';
+        });
+
+        Notification::assertSentTimes(ProjectActionNotification::class, 4);
+    }
+
+    public function test_does_not_notify_before_threshold_is_reached(): void
+    {
+        Notification::fake();
+
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $user = User::factory()->create(['role' => 'PROCURA']);
+        $this->actingAs($user);
+
+        $project = Project::factory()->confirmed()->create(['status' => 'COMPARATIVA_ENVIADA']);
+
+        for ($i = 0; $i < 2; $i++) {
+            RejectionService::reject(
+                $project,
+                'COMPARATIVA_ENVIADA',
+                'CONFIRMADO_PROCURA',
+                'PROCURA',
+                'Rechazo de cuadro comparativo',
+                ['reason' => "Motivo {$i}"],
+                function () {}
+            );
+            $project->status = 'COMPARATIVA_ENVIADA';
+            $project->save();
+        }
+
+        Notification::assertNotSentTo($superadmin, ProjectActionNotification::class, function ($notification) {
+            return $notification->action === 'Racha de rechazos detectada';
+        });
     }
 }

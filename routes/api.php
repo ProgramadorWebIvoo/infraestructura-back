@@ -354,7 +354,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         });
     });
 
-    // Configuración de Keys (SMTP, Pusher) — más sensible que el resto de
+    // Configuración de Keys (SMTP, Pusher, Storage S3/local) — más sensible que el resto de
     // CONFIG APP (credenciales de infraestructura), por eso SUPERADMIN
     // exclusivo en vez de compartir el bucket SUPERADMIN,ADMIN de arriba.
     Route::middleware('role:SUPERADMIN')->prefix('system-keys')->group(function () {

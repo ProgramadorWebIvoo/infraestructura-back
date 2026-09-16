@@ -8,14 +8,14 @@ use App\Services\SystemKeyConfigService;
 use Illuminate\Http\Request;
 
 /**
- * Configuración de Keys — SMTP y Pusher editables desde el panel de
- * administración sin tocar .env. Solo SUPERADMIN (ver routes/api.php y
- * config-keys en view_definitions): expone credenciales de infraestructura,
- * más sensible que el resto de CONFIG APP.
+ * Configuración de Keys — SMTP, Pusher y Storage (S3/local) editables desde
+ * el panel de administración sin tocar .env. Solo SUPERADMIN (ver
+ * routes/api.php y config-keys en view_definitions): expone credenciales de
+ * infraestructura, más sensible que el resto de CONFIG APP.
  */
 class SystemKeyConfigController extends Controller
 {
-    private const GROUPS = ['smtp', 'pusher'];
+    private const GROUPS = ['smtp', 'pusher', 'storage'];
 
     public function __construct(private SystemKeyConfigService $service)
     {
@@ -41,10 +41,13 @@ class SystemKeyConfigController extends Controller
 
         $schema = SystemKeyConfigService::SCHEMAS[$group];
         $secretFields = SystemKeyConfigService::SECRET_FIELDS[$group];
+        $booleanFields = SystemKeyConfigService::BOOLEAN_FIELDS[$group] ?? [];
 
         $rules = ['isActive' => 'sometimes|boolean'];
         foreach ($schema as $field) {
-            $rules[$field] = 'sometimes|nullable|string|max:255';
+            $rules[$field] = in_array($field, $booleanFields, true)
+                ? 'sometimes|boolean'
+                : 'sometimes|nullable|string|max:255';
         }
         $validated = $request->validate($rules);
 
@@ -86,6 +89,14 @@ class SystemKeyConfigController extends Controller
         if ($group === 'smtp') {
             $validated = $request->validate(['toEmail' => 'required|email']);
             $result = $this->service->testSmtp($validated['toEmail']);
+        } elseif ($group === 'storage') {
+            // Campos no enviados (ej. secret dejado en blanco para "conservar el
+            // actual") se completan con lo ya guardado, igual criterio que update().
+            $data = array_merge(
+                $this->service->getData('storage'),
+                $request->only(SystemKeyConfigService::SCHEMAS['storage']),
+            );
+            $result = $this->service->testStorage($data);
         } else {
             $result = $this->service->testPusher();
         }

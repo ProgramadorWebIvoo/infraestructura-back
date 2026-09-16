@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\SystemKeyConfig;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Pusher\Pusher;
 use Pusher\PusherException;
 
@@ -25,12 +26,22 @@ class SystemKeyConfigService
     public const SCHEMAS = [
         'smtp' => ['host', 'port', 'encryption', 'username', 'password', 'from_address', 'from_name'],
         'pusher' => ['app_id', 'key', 'secret', 'cluster'],
+        // 'isActive' del grupo storage duplica el rol de FILESYSTEM_DISK: true = S3, false = local
+        // (servidor). Mismo criterio que smtp/pusher, donde isActive decide si el grupo
+        // sobreescribe el .env/config o se deja el default del framework en paz.
+        'storage' => ['key', 'secret', 'region', 'bucket', 'url', 'endpoint', 'use_path_style_endpoint'],
     ];
 
     /** Campos que nunca se devuelven completos a la API — solo hasValue + últimos 4 chars. */
     public const SECRET_FIELDS = [
         'smtp' => ['password'],
         'pusher' => ['secret', 'key'],
+        'storage' => ['secret', 'key'],
+    ];
+
+    /** Campos booleanos dentro de un schema — el resto de campos son string. */
+    public const BOOLEAN_FIELDS = [
+        'storage' => ['use_path_style_endpoint'],
     ];
 
     public function getRaw(string $group): ?SystemKeyConfig
@@ -119,6 +130,25 @@ class SystemKeyConfigService
             Config::set('broadcasting.connections.pusher.secret', $data['secret'] ?? config('broadcasting.connections.pusher.secret'));
             Config::set('broadcasting.connections.pusher.options.cluster', $data['cluster'] ?? config('broadcasting.connections.pusher.options.cluster'));
         }
+
+        // Solo se toca filesystems.* si alguna vez se guardó configuración de storage —
+        // si la fila no existe, se deja el FILESYSTEM_DISK del .env intacto.
+        $storage = $this->getRaw('storage');
+        if ($storage) {
+            $data = $storage->data ?? [];
+            if ($storage->is_active) {
+                Config::set('filesystems.default', 's3');
+                Config::set('filesystems.disks.s3.key', $data['key'] ?? config('filesystems.disks.s3.key'));
+                Config::set('filesystems.disks.s3.secret', $data['secret'] ?? config('filesystems.disks.s3.secret'));
+                Config::set('filesystems.disks.s3.region', $data['region'] ?? config('filesystems.disks.s3.region'));
+                Config::set('filesystems.disks.s3.bucket', $data['bucket'] ?? config('filesystems.disks.s3.bucket'));
+                Config::set('filesystems.disks.s3.url', $data['url'] ?? config('filesystems.disks.s3.url'));
+                Config::set('filesystems.disks.s3.endpoint', $data['endpoint'] ?? config('filesystems.disks.s3.endpoint'));
+                Config::set('filesystems.disks.s3.use_path_style_endpoint', filter_var($data['use_path_style_endpoint'] ?? false, FILTER_VALIDATE_BOOLEAN));
+            } else {
+                Config::set('filesystems.default', 'local');
+            }
+        }
     }
 
     /** Envía un correo de prueba al email indicado usando la config recién guardada. */
@@ -155,6 +185,43 @@ class SystemKeyConfigService
             return ['success' => true, 'message' => 'Conexión con Pusher verificada correctamente.'];
         } catch (PusherException|\Throwable $e) {
             return ['success' => false, 'message' => 'No se pudo conectar con Pusher: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Prueba de conexión S3 con las credenciales dadas (aún no guardadas):
+     * escribe y borra un archivo de prueba en el bucket. Usa Storage::build()
+     * en vez de config('filesystems.disks.s3') para no depender de si ya se
+     * guardó o no la configuración.
+     */
+    public function testStorage(array $data): array
+    {
+        foreach (['key', 'secret', 'region', 'bucket'] as $field) {
+            if (empty($data[$field])) {
+                return ['success' => false, 'message' => 'Faltan campos requeridos (Key, Secret, Region, Bucket).'];
+            }
+        }
+
+        try {
+            $disk = Storage::build([
+                'driver' => 's3',
+                'key' => $data['key'],
+                'secret' => $data['secret'],
+                'region' => $data['region'],
+                'bucket' => $data['bucket'],
+                'url' => $data['url'] ?? null,
+                'endpoint' => $data['endpoint'] ?? null,
+                'use_path_style_endpoint' => filter_var($data['use_path_style_endpoint'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'throw' => true,
+            ]);
+
+            $testPath = 'ivoo-connection-test-' . uniqid() . '.txt';
+            $disk->put($testPath, 'IVOO Gestión — prueba de conexión de almacenamiento.');
+            $disk->delete($testPath);
+
+            return ['success' => true, 'message' => 'Conexión con el almacenamiento en la nube verificada correctamente.'];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => 'No se pudo conectar con el almacenamiento: ' . $e->getMessage()];
         }
     }
 }

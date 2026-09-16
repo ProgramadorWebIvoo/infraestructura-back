@@ -43,7 +43,11 @@ class AIEvaluationController extends Controller
         );
 
         $data = $request->validate([
-            'projectId'                => ['required', 'string', 'exists:projects,id'],
+            // Sin 'exists:projects,id': esa regla hace un SELECT COUNT extra
+            // que Project::findOrFail() de abajo vuelve redundante — ya
+            // produce su propio 404 si el proyecto no existe (auditoría de
+            // rendimiento 2026-09-16, round 3).
+            'projectId'                => ['required', 'string'],
             'projectTitle'             => ['required', 'string', 'max:500'],
             'projectDescription'       => ['required', 'string', 'max:2000'],
             'projectLocation'          => ['required', 'string', 'max:500'],

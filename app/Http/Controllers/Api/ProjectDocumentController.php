@@ -8,7 +8,7 @@ use App\Http\Resources\ProjectDocumentResource;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\ProjectDocument;
-use App\Services\DocumentStorageService;
+use App\Services\FileIngestionPipeline;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -58,7 +58,7 @@ class ProjectDocumentController extends Controller
         ]);
     }
 
-    public function upload(StoreProjectDocumentRequest $request, Project $project, DocumentStorageService $storage)
+    public function upload(StoreProjectDocumentRequest $request, Project $project, FileIngestionPipeline $pipeline)
     {
         $type = $request->input('document_type');
         $newVersionOfId = $request->input('new_version_of');
@@ -76,7 +76,7 @@ class ProjectDocumentController extends Controller
 
         $saved = [];
 
-        DB::transaction(function () use ($request, $project, $storage, $type, $newVersionOfId, $role, &$saved) {
+        DB::transaction(function () use ($request, $project, $pipeline, $type, $newVersionOfId, $role, &$saved) {
             $groupId = null;
             $nextVersion = 1;
 
@@ -94,15 +94,11 @@ class ProjectDocumentController extends Controller
             }
 
             foreach ($request->file('files') as $file) {
-                $mime = $file->getMimeType() ?? $file->getClientMimeType();
-
                 $directory = $groupId !== null
                     ? "project-documents/{$project->id}/{$type}/{$groupId}"
                     : "project-documents/{$project->id}/{$type}";
 
-                $safeName = $storage->sanitizeFilename($file->getClientOriginalName());
-                $uniqueName = $storage->uniqueFilename($directory, $safeName);
-                $storedPath = $file->storeAs($directory, $uniqueName, 'local');
+                $ingested = $pipeline->ingest($file, $directory, 'project_document', $project->id);
 
                 $isNewGroup = $groupId === null;
 
@@ -110,10 +106,10 @@ class ProjectDocumentController extends Controller
                     'document_group_id' => $groupId,
                     'version_number' => $nextVersion,
                     'document_type' => $type,
-                    'original_name' => $uniqueName,
-                    'stored_path' => $storedPath,
-                    'mime_type' => $mime,
-                    'size_bytes' => $file->getSize(),
+                    'original_name' => $ingested->originalName,
+                    'stored_path' => $ingested->storedPath,
+                    'mime_type' => $ingested->mimeType,
+                    'size_bytes' => $ingested->sizeBytes,
                     'uploaded_by' => auth()->id(),
                 ]);
 
@@ -121,12 +117,15 @@ class ProjectDocumentController extends Controller
                     $doc->update(['document_group_id' => $doc->id]);
                     // Reflejar en la carpeta física el group id recién asignado.
                     $finalDirectory = "project-documents/{$project->id}/{$type}/{$doc->id}";
-                    $finalPath = $finalDirectory . '/' . basename($storedPath);
-                    Storage::disk('local')->move($storedPath, $finalPath);
+                    $finalPath = $finalDirectory . '/' . basename($ingested->storedPath);
+                    Storage::disk('local')->move($ingested->storedPath, $finalPath);
                     $doc->update(['stored_path' => $finalPath]);
                 }
 
-                $saved[] = (new ProjectDocumentResource($doc->fresh()))->resolve();
+                $saved[] = [
+                    ...(new ProjectDocumentResource($doc->fresh()))->resolve(),
+                    'optimized' => $ingested->optimized,
+                ];
             }
 
             $label = match ($type) {

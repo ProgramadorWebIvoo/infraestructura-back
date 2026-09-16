@@ -9,7 +9,7 @@ use App\Http\Resources\SupplierProposalResource;
 use App\Models\SupplierInvitation;
 use App\Models\SupplierMaterialProposal;
 use App\Services\CatalogSyncService;
-use App\Services\DocumentStorageService;
+use App\Services\FileIngestionPipeline;
 use App\Services\ProposalLineNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -42,20 +42,17 @@ class SupplierProposalController extends Controller
      * submit, queda huérfano (aceptable: mismo criterio que un adjunto
      * subido y luego abandonado, no hay limpieza automática todavía).
      */
-    public function uploadImage(StoreSupplierProposalImageRequest $request, string $token, DocumentStorageService $storage)
+    public function uploadImage(StoreSupplierProposalImageRequest $request, string $token, FileIngestionPipeline $pipeline)
     {
         $invitation = SupplierInvitation::find($token);
         if (!$invitation || !$invitation->isValid()) {
             return response()->json(['message' => 'Enlace no valido o expirado.'], 404);
         }
 
-        $file = $request->file('image');
         $directory = "supplier-proposal-images/{$token}";
-        $safeName = $storage->sanitizeFilename($file->getClientOriginalName());
-        $uniqueName = $storage->uniqueFilename($directory, $safeName);
-        $storedPath = $file->storeAs($directory, $uniqueName, 'local');
+        $ingested = $pipeline->ingest($request->file('image'), $directory, 'supplier_proposal_image', $token);
 
-        return response()->json(['path' => $storedPath], 201);
+        return response()->json(['path' => $ingested->storedPath, 'optimized' => $ingested->optimized], 201);
     }
 
     /**

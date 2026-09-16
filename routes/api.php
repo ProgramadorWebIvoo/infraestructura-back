@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\NotificationRuleController;
 use App\Http\Controllers\Api\AiFeatureToggleController;
 use App\Http\Controllers\Api\CurrencyController;
 use App\Http\Controllers\Api\ExchangeRateController;
+use App\Http\Controllers\Api\RatingIaController;
 use App\Http\Controllers\Api\CatalogCategoryController;
 use App\Http\Controllers\Api\CustomProductResolutionController;
 use App\Http\Controllers\Api\CatalogProductController;
@@ -298,6 +299,15 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     // etiqueta de "departamento" en Roles::VALID/AiFeatureCatalog, no un rol
     // con sesión propia hoy.
     Route::get('/contractors/{contractor}/rating-suggestion', [ContractorController::class, 'ratingSuggestion'])
+        ->middleware('role:ADMIN,SUPERADMIN');
+
+    // Cronjob de RatingIA (batch, configurable por días) — mismos roles que
+    // la sugerencia puntual de arriba.
+    Route::post('/rating-ia/run', [RatingIaController::class, 'run'])
+        ->middleware('role:ADMIN,SUPERADMIN');
+    Route::get('/rating-ia/run-logs', [RatingIaController::class, 'runLogs'])
+        ->middleware('role:ADMIN,SUPERADMIN');
+    Route::get('/rating-ia/suggestions', [RatingIaController::class, 'suggestions'])
         ->middleware('role:ADMIN,SUPERADMIN');
 
     // Project documents (planos, hojas de cálculo, fotos, comprobantes de pago)

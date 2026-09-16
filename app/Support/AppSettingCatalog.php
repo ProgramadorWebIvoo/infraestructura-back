@@ -133,6 +133,22 @@ class AppSettingCatalog
             'label' => 'Modo debug de sincronización',
             'description' => 'Registra y expone el detalle de cada fuente intentada (DolarVZLA/BCV) en cada sync, para diagnosticar fallos sin revisar logs del servidor.',
         ],
+        'rating_ia_cron_habilitado' => [
+            'label' => 'Evaluación automática de rating IA activa',
+            'description' => 'Si está desactivado, el cronjob de RatingIA no corre — solo queda disponible la sugerencia puntual por proveedor y el disparo manual del lote.',
+        ],
+        'rating_ia_cron_frecuencia_dias' => [
+            'label' => 'Frecuencia del cronjob de RatingIA (días)',
+            'description' => 'Cada cuántos días corre la evaluación automática de rating IA para todos los proveedores activos (no es una hora fija diaria, sino un intervalo en días).',
+        ],
+        'rating_ia_cron_hora' => [
+            'label' => 'Hora de ejecución del cronjob de RatingIA',
+            'description' => 'Hora (zona horaria VE) del día en que corre el cronjob, cuando corresponda según la frecuencia en días configurada.',
+        ],
+        'rating_ia_debug' => [
+            'label' => 'Modo debug de RatingIA',
+            'description' => 'Registra el detalle de cada proveedor evaluado (u omitido) en la corrida del batch, para diagnosticar sin revisar logs del servidor.',
+        ],
     ];
 
     public static function label(string $key): string

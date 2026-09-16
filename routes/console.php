@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\RatingIaRunLog;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -72,4 +73,41 @@ Schedule::command('sync:exchange-rates')
     })
     ->onFailure(function () {
         \Log::error('❌ Exchange rates sync failed');
+    });
+
+// Batch de RatingIA (sugerencia de rating por proveedor): activación, hora y
+// FRECUENCIA EN DÍAS configurables desde CONFIG APP → Proveedores
+// (rating_ia_cron_habilitado / rating_ia_cron_hora / rating_ia_cron_frecuencia_dias,
+// ver AppSettingCatalog). A diferencia del sync de tasas (diario, gateado
+// solo por ->when()), acá "cada N días" no tiene un helper fluido nativo en
+// el Scheduler de Laravel — en vez de forzarlo con una expresión cron de
+// "día del mes múltiplo de N" (que rompe la semántica de intervalo al cruzar
+// de mes), el job corre ->daily() a la hora configurada y el propio ->when()
+// decide si ya pasaron los N días exigidos desde la última corrida,
+// consultando rating_ia_run_logs (fuente de verdad del último run, no un
+// setting aparte que se pueda desincronizar).
+$ratingIaHour = Schema::hasTable('app_settings') ? SettingsService::get('rating_ia_cron_hora', '02:00') : '02:00';
+
+Schedule::command('rating-ia:run')
+    ->timezone('America/Caracas')
+    ->dailyAt($ratingIaHour)
+    ->when(function () {
+        if (!Schema::hasTable('app_settings') || !Schema::hasTable('rating_ia_run_logs')) {
+            return false;
+        }
+        if (!(bool) SettingsService::get('rating_ia_cron_habilitado', false)) {
+            return false;
+        }
+
+        $frecuenciaDias = max(1, (int) SettingsService::get('rating_ia_cron_frecuencia_dias', 30));
+        $lastRun = RatingIaRunLog::whereIn('status', ['success', 'partial'])->latest('started_at')->first();
+
+        return !$lastRun || $lastRun->started_at->diffInDays(now()) >= $frecuenciaDias;
+    })
+    ->name('rating_ia_run')
+    ->onSuccess(function () {
+        \Log::info('✅ RatingIA batch completed');
+    })
+    ->onFailure(function () {
+        \Log::error('❌ RatingIA batch failed');
     });

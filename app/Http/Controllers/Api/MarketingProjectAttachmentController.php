@@ -8,7 +8,7 @@ use App\Http\Resources\MarketingProjectAttachmentResource;
 use App\Models\ConfigAuditLog;
 use App\Models\MarketingProject;
 use App\Models\MarketingProjectAttachment;
-use App\Services\DocumentStorageService;
+use App\Services\FileIngestionPipeline;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -26,7 +26,7 @@ class MarketingProjectAttachmentController extends Controller
         );
     }
 
-    public function upload(StoreMarketingProjectAttachmentRequest $request, MarketingProject $marketingProject, DocumentStorageService $storage)
+    public function upload(StoreMarketingProjectAttachmentRequest $request, MarketingProject $marketingProject, FileIngestionPipeline $pipeline)
     {
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['ADMIN', 'SUPERADMIN'], true);
@@ -41,19 +41,20 @@ class MarketingProjectAttachmentController extends Controller
         $saved = [];
 
         foreach ($request->file('files') as $file) {
-            $safeName = $storage->sanitizeFilename($file->getClientOriginalName());
-            $uniqueName = $storage->uniqueFilename($directory, $safeName);
-            $storedPath = $file->storeAs($directory, $uniqueName, 'local');
+            $ingested = $pipeline->ingest($file, $directory, 'marketing_attachment', $marketingProject->id);
 
             $attachment = $marketingProject->attachments()->create([
-                'original_name' => $uniqueName,
-                'stored_path' => $storedPath,
-                'mime_type' => $file->getMimeType() ?? $file->getClientMimeType(),
-                'size_bytes' => $file->getSize(),
+                'original_name' => $ingested->originalName,
+                'stored_path' => $ingested->storedPath,
+                'mime_type' => $ingested->mimeType,
+                'size_bytes' => $ingested->sizeBytes,
                 'uploaded_by' => $user->id,
             ]);
 
-            $saved[] = (new MarketingProjectAttachmentResource($attachment))->resolve();
+            $saved[] = [
+                ...(new MarketingProjectAttachmentResource($attachment))->resolve(),
+                'optimized' => $ingested->optimized,
+            ];
         }
 
         $names = implode(', ', array_column($saved, 'originalName'));

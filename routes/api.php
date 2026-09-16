@@ -94,8 +94,10 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/settings/notification-actions', [AppSettingController::class, 'notificationActions'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    // Escritura de settings — exclusivo SUPERADMIN: incluye cron de IA/tasas,
+    // datos fiscales y umbrales de presupuesto, impacto global del sistema.
     Route::patch('/settings/{setting}', [AppSettingController::class, 'update'])
-        ->middleware('role:SUPERADMIN,ADMIN');
+        ->middleware('role:SUPERADMIN');
 
     // Historial de cambios de CONFIG APP — exclusivo de SUPERADMIN, separado
     // de /audit-logs (visible para cualquier autenticado, incl. Presidencia).
@@ -198,8 +200,12 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/materials', [MaterialController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-    Route::get('/audit-logs', [AuditLogController::class, 'index'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-    Route::get('/audit-logs/export', [AuditLogController::class, 'export'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/audit-logs', [AuditLogController::class, 'index'])
+        ->middleware('role:SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/audit-logs/export', [AuditLogController::class, 'export'])
+        ->middleware('role:SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/supplier-invitations', [SupplierInvitationController::class, 'store']);
     Route::get('/supplier-invitations/latest', [SupplierInvitationController::class, 'latest'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
@@ -318,7 +324,10 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/projects/{project}/documents/{document}/preview', [ProjectDocumentController::class, 'preview'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/projects/{project}/documents/{document}/history', [ProjectDocumentController::class, 'history'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
 
-    Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {
+    // Gestión de usuarios, roles y permisos de acceso — exclusivo SUPERADMIN:
+    // un ADMIN no debe poder asignarse (ni asignarle a otro) el rol SUPERADMIN
+    // ni controlar qué vistas puede ver cada usuario (role_view_access).
+    Route::middleware('role:SUPERADMIN')->group(function () {
         Route::get('/roles', [UserController::class, 'roles']);
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
@@ -327,7 +336,9 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         Route::post('/users/{user}/send-reset-link', [UserController::class, 'sendResetLink']);
         Route::get('/users/{user}/access', [AccessAdminController::class, 'show']);
         Route::put('/users/{user}/access', [AccessAdminController::class, 'update']);
+    });
 
+    Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {
         // Contractor / Proveedores configuration
         Route::get('/contractors/config', [ContractorController::class, 'index']);
         Route::post('/contractors/config', [ContractorController::class, 'store']);
@@ -344,24 +355,28 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
 
         // AI Configuration (static routes BEFORE wildcard {id}) — GETs de
         // solo lectura al bucket `catalog` (mismo criterio que /settings,
-        // /currencies, /notification-rules más arriba); escrituras y el
-        // endpoint `test` (que sí dispara una llamada saliente real al
-        // proveedor de IA) se quedan en el bucket general.
+        // /currencies, /notification-rules más arriba).
         Route::prefix('ai/config')->group(function () {
             Route::get('/usage', [AiConfigController::class, 'usage'])
                 ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
             Route::get('/models', [AiConfigController::class, 'availableModels'])
                 ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-            Route::post('/sync', [AiConfigController::class, 'sync']);
             Route::get('/', [AiConfigController::class, 'index'])
                 ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-            Route::post('/', [AiConfigController::class, 'store']);
             Route::get('/{aiConfig}', [AiConfigController::class, 'show'])
                 ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-            Route::patch('/{aiConfig}', [AiConfigController::class, 'update']);
-            Route::delete('/{aiConfig}', [AiConfigController::class, 'destroy']);
-            Route::post('/{aiConfig}/test', [AiConfigController::class, 'test']);
         });
+    });
+
+    // Credenciales de proveedores de IA (API keys) — mismo nivel de sensibilidad
+    // que /system-keys (ya SUPERADMIN exclusivo): un ADMIN no debe poder
+    // crear/editar/borrar ni disparar el test de conexión saliente.
+    Route::middleware('role:SUPERADMIN')->prefix('ai/config')->group(function () {
+        Route::post('/sync', [AiConfigController::class, 'sync']);
+        Route::post('/', [AiConfigController::class, 'store']);
+        Route::patch('/{aiConfig}', [AiConfigController::class, 'update']);
+        Route::delete('/{aiConfig}', [AiConfigController::class, 'destroy']);
+        Route::post('/{aiConfig}/test', [AiConfigController::class, 'test']);
     });
 
     // Configuración de Keys (SMTP, Pusher, Storage S3/local) — más sensible que el resto de

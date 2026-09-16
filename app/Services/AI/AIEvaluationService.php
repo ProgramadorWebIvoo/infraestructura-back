@@ -10,8 +10,13 @@ use RuntimeException;
 
 class AIEvaluationService
 {
-    /** Timeout por llamada a proveedor IA (segundos). Config global, no por BD. */
-    private const DEFAULT_TIMEOUT = 60;
+    /** Timeout por llamada a proveedor IA (segundos). Config global, no por BD.
+     * Bajado de 60 a 25 (auditoría rendimiento 2026-09-16): con failover de
+     * hasta 3 providers, 60s daba un peor caso de 180s bloqueando el worker
+     * que ejecuta la evaluación (ahora un Job en cola, ver
+     * EvaluateProposalsWithAIJob, pero el límite bajo sigue evitando que un
+     * job cuelgue el worker por mucho tiempo). */
+    private const DEFAULT_TIMEOUT = 25;
 
     /** Config resuelta por provider (sin instanciar) — la instanciación se
      * defiere hasta conocer la EvaluationStrategyInterface a usar, ya que un
@@ -89,10 +94,14 @@ class AIEvaluationService
      * Si uno falla por rate-limit o timeout, pasa al siguiente.
      *
      * @param array $payload Datos normalizados del proyecto y propuestas
+     * @param int|null $requestedByUserId Usuario a registrar en AiUsageLog.
+     *   Explícito porque cuando se llama desde un Job en cola no hay sesión
+     *   HTTP y Auth::id() devuelve null; en llamadas síncronas se resuelve
+     *   con Auth::id() si se omite.
      * @return array Resultado con winner, score, análisis, etc.
      * @throws RuntimeException Si todos los proveedores fallan
      */
-    public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy = null): array
+    public function evaluate(array $payload, ?EvaluationStrategyInterface $strategy = null, ?int $requestedByUserId = null): array
     {
         $strategy = $strategy ?? new ProposalEvaluationStrategy();
         $providers = $this->buildProviders($strategy);
@@ -111,7 +120,7 @@ class AIEvaluationService
                 $result['attemptLog'] = $this->attemptLog;
 
                 // Log usage to database
-                $this->logUsage($payload, $key, $result, $startTime, true, null, $strategy->endpointKey());
+                $this->logUsage($payload, $key, $result, $startTime, true, null, $strategy->endpointKey(), $requestedByUserId);
 
                 return $result;
 
@@ -137,7 +146,7 @@ class AIEvaluationService
             : "No hay proveedores AI configurados en la base de datos. Configure al menos un proveedor en /config-ia";
 
         // Log failed attempt
-        $this->logUsage($payload, null, [], $startTime, false, $errorMsg, $strategy->endpointKey());
+        $this->logUsage($payload, null, [], $startTime, false, $errorMsg, $strategy->endpointKey(), $requestedByUserId);
 
         throw new RuntimeException($errorMsg);
     }
@@ -147,7 +156,7 @@ class AIEvaluationService
      * Permite forzar la evaluación con un proveedor de IA específico en vez
      * de usar el failover automático por orden de prioridad.
      */
-    public function evaluateWithProvider(array $payload, ?string $forcedProvider = null, ?EvaluationStrategyInterface $strategy = null): array
+    public function evaluateWithProvider(array $payload, ?string $forcedProvider = null, ?EvaluationStrategyInterface $strategy = null, ?int $requestedByUserId = null): array
     {
         $strategy = $strategy ?? new ProposalEvaluationStrategy();
         $startTime = microtime(true);
@@ -168,7 +177,7 @@ class AIEvaluationService
                 $result['attemptLog'] = $this->attemptLog;
 
                 // Log usage to database
-                $this->logUsage($payload, $forcedProvider, $result, $startTime, true, null, $strategy->endpointKey());
+                $this->logUsage($payload, $forcedProvider, $result, $startTime, true, null, $strategy->endpointKey(), $requestedByUserId);
 
                 return $result;
             } catch (\Throwable $e) {
@@ -180,7 +189,7 @@ class AIEvaluationService
                 ]);
 
                 // Log failed usage
-                $this->logUsage($payload, $forcedProvider, [], $startTime, false, $e->getMessage(), $strategy->endpointKey());
+                $this->logUsage($payload, $forcedProvider, [], $startTime, false, $e->getMessage(), $strategy->endpointKey(), $requestedByUserId);
 
                 throw new RuntimeException(
                     "El proveedor forzado {$provider->name()} falló: {$e->getMessage()}",
@@ -191,7 +200,7 @@ class AIEvaluationService
         }
 
         //FAILOVER (Vuelve a usar metodo regular principal)
-        return $this->evaluate($payload, $strategy);
+        return $this->evaluate($payload, $strategy, $requestedByUserId);
     }
 
     /** Evalúa el expediente completo (Cierre de Obra) con la estrategia de dossier. */
@@ -222,7 +231,7 @@ class AIEvaluationService
     /**
      * Registra el uso de IA en la base de datos.
      */
-    private function logUsage(array $payload, ?string $provider, array $result, float $startTime, bool $success, ?string $errorMessage = null, string $endpoint = 'evaluate-proposals'): void
+    private function logUsage(array $payload, ?string $provider, array $result, float $startTime, bool $success, ?string $errorMessage = null, string $endpoint = 'evaluate-proposals', ?int $requestedByUserId = null): void
     {
         try {
             $usage = $result['usage'] ?? [];
@@ -243,7 +252,7 @@ class AIEvaluationService
                 'response_time_ms'   => $responseTimeMs,
                 'success'            => $success,
                 'error_message'      => $errorMessage,
-                'requested_by'       => Auth::id(),
+                'requested_by'       => $requestedByUserId ?? Auth::id(),
             ]);
         } catch (\Throwable $e) {
             // No romper el flujo principal si falla el logging

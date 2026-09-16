@@ -3,33 +3,29 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AuditLog;
+use App\Jobs\EvaluateProposalsWithAIJob;
 use App\Models\Contractor;
 use App\Models\Project;
-use App\Services\AI\AIEvaluationService;
 use App\Services\AI\EvaluationPayload;
 use App\Services\AI\EvaluationProject;
 use App\Services\AI\EvaluationProposal;
 use App\Services\AiFeatureGate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class AIEvaluationController extends Controller
 {
-    private AIEvaluationService $aiService;
-
-    public function __construct(AIEvaluationService $aiService)
-    {
-        $this->aiService = $aiService;
-    }
-
     /**
      * POST /api/ai/evaluate-proposals
      *
-     * Recibe un proyecto con sus propuestas y las evalúa usando IA
-     * con failover automático entre proveedores.
+     * Recibe un proyecto con sus propuestas y encola su evaluación con IA
+     * (failover automático entre proveedores) en EvaluateProposalsWithAIJob.
+     * Antes evaluaba de forma síncrona: con hasta 3 providers x 60s de
+     * timeout, un worker PHP-FPM podía bloquearse hasta 180s por request
+     * (auditoría de rendimiento 2026-09-16). Ahora responde 202 de inmediato
+     * y el resultado llega por GET .../status/{project} (poll) o el evento
+     * Pusher `ai-evaluation.finished` en el canal privado del proyecto.
      */
     public function evaluate(Request $request)
     {
@@ -149,83 +145,52 @@ class AIEvaluationController extends Controller
             proposals: $proposalDtos,
         );
 
-        try {
-            $result = $this->aiService->evaluateWithProvider($payload->toArray(), $data['provider'] ?? null);
-
-            $this->cacheEvaluation($project, $result);
-
-            // Log de auditoría
-            $this->logEvaluation($project, $result);
-
-            return response()->json([
-                'success' => true,
-                'data'    => $result,
-            ]);
-
-        } catch (\Throwable $e) {
-            Log::error("AI Evaluation failed for project {$data['projectId']}: {$e->getMessage()}");
-
-            return response()->json([
-                'success' => false,
-                'error'   => $e->getMessage(),
-                'attemptLog' => $this->aiService->getAttemptLog(),
-            ], 503);
-        }
-    }
-
-    /**
-     * Persiste el resultado en el expediente para que el botón "Evaluación IA"
-     * no dispare una nueva llamada a IA cada vez que se abre el modal — solo
-     * "Re-evaluar" lo hace. Se invalida (columnas puestas a null) en
-     * addProposal/renegotiateProposal/removeProposal, cualquier cambio al
-     * conjunto de propuestas vuelve obsoleto un análisis ya hecho.
-     */
-    private function cacheEvaluation(Project $project, array $result): void
-    {
+        // "processing" antes de encolar: si el usuario abre el modal mientras
+        // el Job corre, GET status ya refleja que hay una evaluación en curso
+        // en vez de mostrar el resultado obsoleto anterior.
         $project->update([
-            'bid_evaluation_ai_winner_code' => $result['winnerContractorCode'] ?? null,
-            'bid_evaluation_ai_winner_name' => $result['winnerContractorName'] ?? null,
-            'bid_evaluation_ai_confidence_score' => $result['confidenceScore'] ?? null,
-            'bid_evaluation_ai_summary' => $result['summary'] ?? null,
-            'bid_evaluation_ai_strengths' => $result['strengths'] ?? [],
-            'bid_evaluation_ai_weaknesses' => $result['weaknesses'] ?? [],
-            'bid_evaluation_ai_risk_factors' => $result['riskFactors'] ?? [],
-            'bid_evaluation_ai_recommendation' => $result['recommendation'] ?? null,
-            'bid_evaluation_ai_provider' => $result['providerUsed'] ?? null,
-            'bid_evaluation_ai_evaluated_at' => now(),
+            'bid_evaluation_ai_status' => 'processing',
+            'bid_evaluation_ai_error' => null,
         ]);
+
+        EvaluateProposalsWithAIJob::dispatch(
+            $data['projectId'],
+            $payload->toArray(),
+            $data['provider'] ?? null,
+            Auth::id(),
+        );
+
+        return response()->json([
+            'success' => true,
+            'status'  => 'processing',
+            'projectId' => $data['projectId'],
+        ], 202);
     }
 
     /**
-     * Registra en la bitácora de auditoría el resultado de la evaluación.
+     * GET /api/ai/evaluate-proposals/status/{project}
      *
-     * `$action` es la constante fija 'Evaluacion inteligente de propuestas'
-     * (antes interpolaba el nombre del ganador — 'Evaluación Inteligente -
-     * ' . $winnerContractorName — un dato variable usado como identificador
-     * de tipo de evento, que por diseño nunca podía coincidir con ningún
-     * catálogo/filtro de acciones ni aparecer seleccionable en CONFIG APP).
-     * El nombre del ganador sigue disponible, ahora solo en `$details`.
+     * Respaldo por polling del evento Pusher `ai-evaluation.finished` (por
+     * si el cliente perdió la conexión WebSocket mientras el Job corría).
+     * Mismo shape de `data` que devolvía el endpoint síncrono anterior.
      */
-    private function logEvaluation(Project $project, array $result): void
+    public function status(Project $project)
     {
-        try {
-            AuditLog::record(
-                $project,
-                'PROCURA',
-                'Evaluacion inteligente de propuestas',
-                sprintf(
-                    'Evaluación via %s | Score: %d%% | Ganador: %s (%s) | Fortalezas: %d | Debilidades: %d',
-                    $result['providerUsed'] ?? 'N/A',
-                    $result['confidenceScore'] ?? 0,
-                    $result['winnerContractorName'] ?? 'N/A',
-                    $result['winnerContractorCode'] ?? 'N/A',
-                    count($result['strengths'] ?? []),
-                    count($result['weaknesses'] ?? [])
-                ),
-            );
-        } catch (\Throwable $e) {
-            // No debe romper la respuesta si falla el log
-            Log::warning("No se pudo registrar auditoría AI: {$e->getMessage()}");
-        }
+        return response()->json([
+            'success' => true,
+            'status'  => $project->bid_evaluation_ai_status,
+            'error'   => $project->bid_evaluation_ai_error,
+            'data'    => $project->bid_evaluation_ai_status === 'completed' ? [
+                'winnerContractorCode' => $project->bid_evaluation_ai_winner_code,
+                'winnerContractorName' => $project->bid_evaluation_ai_winner_name,
+                'confidenceScore'      => $project->bid_evaluation_ai_confidence_score,
+                'summary'              => $project->bid_evaluation_ai_summary,
+                'strengths'            => $project->bid_evaluation_ai_strengths,
+                'weaknesses'           => $project->bid_evaluation_ai_weaknesses,
+                'riskFactors'          => $project->bid_evaluation_ai_risk_factors,
+                'recommendation'       => $project->bid_evaluation_ai_recommendation,
+                'providerUsed'         => $project->bid_evaluation_ai_provider,
+            ] : null,
+        ]);
     }
 }

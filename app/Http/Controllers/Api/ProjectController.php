@@ -43,7 +43,7 @@ class ProjectController extends Controller
     {
         $perPage = min((int) ($request->get('per_page', 20)), 100);
 
-        $query = Project::with(Project::detailRelations())->latest('created_date');
+        $query = Project::with(Project::listRelations())->latest('created_date');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);

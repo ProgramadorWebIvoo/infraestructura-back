@@ -89,13 +89,28 @@ class AiEvaluationTest extends TestCase
         $project = Project::factory()->create();
         $contractor = Contractor::factory()->create(['code' => 'CON-1']);
 
+        // POST solo encola (202) — QUEUE_CONNECTION=sync en tests
+        // (phpunit.xml) hace que el Job corra en el mismo proceso antes de
+        // que el response vuelva, así que para cuando llega acá el
+        // resultado ya está persistido en el proyecto.
         $response = $this->withHeaders($this->headers($this->procura))
             ->postJson('/api/ai/evaluate-proposals', $this->evaluationPayload($project, $contractor));
 
-        $response->assertStatus(200);
+        $response->assertStatus(202);
         $response->assertJsonPath('success', true);
-        $response->assertJsonPath('data.winnerContractorCode', 'CON-1');
-        $response->assertJsonPath('data.providerUsed', 'openai');
+        $response->assertJsonPath('status', 'processing');
+
+        $project->refresh();
+        $this->assertSame('completed', $project->bid_evaluation_ai_status);
+        $this->assertSame('CON-1', $project->bid_evaluation_ai_winner_code);
+        $this->assertSame('openai', $project->bid_evaluation_ai_provider);
+
+        $statusResponse = $this->withHeaders($this->headers($this->procura))
+            ->getJson("/api/ai/evaluate-proposals/status/{$project->id}");
+        $statusResponse->assertStatus(200);
+        $statusResponse->assertJsonPath('status', 'completed');
+        $statusResponse->assertJsonPath('data.winnerContractorCode', 'CON-1');
+        $statusResponse->assertJsonPath('data.providerUsed', 'openai');
 
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
@@ -108,16 +123,27 @@ class AiEvaluationTest extends TestCase
         $this->assertStringContainsString('Constructora Test', AuditLog::first()->details);
     }
 
-    public function test_evaluate_returns_503_when_no_provider_configured(): void
+    public function test_evaluate_ends_up_failed_when_no_provider_configured(): void
     {
+        // La falla de "sin proveedor configurado" ahora ocurre dentro del
+        // Job (async) en vez de como respuesta 503 directa del POST — el
+        // endpoint siempre encola y responde 202; el estado final se
+        // consulta después (status endpoint / evento WS).
         $project = Project::factory()->create();
         $contractor = Contractor::factory()->create();
 
         $response = $this->withHeaders($this->headers($this->procura))
             ->postJson('/api/ai/evaluate-proposals', $this->evaluationPayload($project, $contractor));
 
-        $response->assertStatus(503);
-        $response->assertJsonPath('success', false);
+        $response->assertStatus(202);
+        $response->assertJsonPath('success', true);
+
+        $statusResponse = $this->withHeaders($this->headers($this->procura))
+            ->getJson("/api/ai/evaluate-proposals/status/{$project->id}");
+        $statusResponse->assertStatus(200);
+        $statusResponse->assertJsonPath('status', 'failed');
+        $statusResponse->assertJsonPath('data', null);
+        $this->assertNotNull($statusResponse->json('error'));
     }
 
     public function test_evaluate_accepts_all_three_valid_providers_in_validation(): void
@@ -261,8 +287,11 @@ class AiEvaluationTest extends TestCase
         $response = $this->withHeaders($this->headers($analista))
             ->postJson('/api/ai/evaluate-proposals', $this->evaluationPayload($project, $contractor));
 
-        $response->assertStatus(200);
+        $response->assertStatus(202);
         $response->assertJsonPath('success', true);
+
+        $project->refresh();
+        $this->assertSame('completed', $project->bid_evaluation_ai_status);
     }
 
     public function test_evaluate_for_analista_is_blocked_by_the_analista_gate_independently_of_procura(): void

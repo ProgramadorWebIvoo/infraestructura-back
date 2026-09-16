@@ -289,6 +289,8 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     // dentro del controller según el rol del usuario autenticado.
     Route::post('/ai/evaluate-proposals', [AIEvaluationController::class, 'evaluate'])
         ->middleware('role:PROCURA,ANALISTA,ADMIN,SUPERADMIN');
+    Route::get('/ai/evaluate-proposals/status/{project}', [AIEvaluationController::class, 'status'])
+        ->middleware('role:PROCURA,ANALISTA,ADMIN,SUPERADMIN');
 
     // Sugerencia IA de rating de proveedor — informativa, no autoritativa.
     // Mismos roles que ya administran el catálogo de proveedores

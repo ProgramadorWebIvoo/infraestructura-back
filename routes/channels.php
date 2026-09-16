@@ -21,3 +21,10 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 Broadcast::channel('exchange-rates', function ($user) {
     return $user !== null;
 });
+
+// Resultado de la evaluación IA de propuestas (EvaluateProposalsWithAIJob /
+// AIEvaluationFinished) — mismos roles que pueden disparar el endpoint
+// POST /api/ai/evaluate-proposals (routes/api.php).
+Broadcast::channel('project.{projectId}.ai-evaluation', function ($user) {
+    return $user !== null && in_array($user->role, ['PROCURA', 'ANALISTA', 'ADMIN', 'SUPERADMIN'], true);
+});

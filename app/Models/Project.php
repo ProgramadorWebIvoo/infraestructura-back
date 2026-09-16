@@ -43,6 +43,8 @@ class Project extends Model
         'bid_evaluation_ai_recommendation',
         'bid_evaluation_ai_provider',
         'bid_evaluation_ai_evaluated_at',
+        'bid_evaluation_ai_status',
+        'bid_evaluation_ai_error',
         'procura_review_notes',
         'approved_investment_amount',
         'selected_contractor_code',
@@ -116,6 +118,28 @@ class Project extends Model
             'payments',
             'rateFreezes.frozenByUser:id,name',
             'documents' => fn ($q) => $q->latestVersionOnly(),
+        ];
+    }
+
+    /**
+     * Subconjunto de detailRelations() para el listado paginado (index()) —
+     * auditoría de rendimiento 2026-09-16: el listado cargaba las mismas 6
+     * relaciones que el detalle (incluidas documents y rateFreezes) en cada
+     * fila de cada página, over-fetching que ProjectResource ni siquiera
+     * necesita ahí. Solo se excluyen 'documents' y 'rateFreezes' porque
+     * ProjectResource los lee con whenLoaded() (se omiten del JSON sin
+     * romper nada si no están cargados); 'materials', 'proposals' y
+     * 'payments' SÍ deben quedarse: ProjectResource los accede sin
+     * whenLoaded(), así que omitirlos no los quita del JSON, dispara lazy
+     * loading fila por fila (N+1) en vez de ahorrar la query.
+     */
+    public static function listRelations(): array
+    {
+        return [
+            'materials',
+            'proposals.creator:id,name',
+            'proposals.contractor:code,rating',
+            'payments',
         ];
     }
 

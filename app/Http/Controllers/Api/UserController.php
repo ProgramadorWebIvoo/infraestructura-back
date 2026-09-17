@@ -19,7 +19,7 @@ class UserController extends Controller
 
     public function roles(Request $request)
     {
-        return response()->json(Roles::VALID);
+        return response()->json(Roles::valid());
     }
 
     public function index(Request $request)
@@ -39,7 +39,7 @@ class UserController extends Controller
             'name'                  => ['required', 'string', 'max:255'],
             'email'                 => ['required', 'email', 'unique:users,email'],
             'password'              => ['required', 'string', 'confirmed', StrongPassword::rule()],
-            'role'                  => ['required', Rule::in(Roles::VALID)],
+            'role'                  => ['required', Rule::in(Roles::valid())],
             'status'                => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);
 
@@ -64,7 +64,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name'   => ['sometimes', 'string', 'max:255'],
             'email'  => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'role'   => ['sometimes', Rule::in(Roles::VALID)],
+            'role'   => ['sometimes', Rule::in(Roles::valid())],
             'status' => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);
 

@@ -28,7 +28,7 @@ class NotificationRuleController extends Controller
     {
         return response()->json(['data' => [
             'actions' => NotificationCatalog::toDetailedOptions(),
-            'roles' => Roles::VALID,
+            'roles' => Roles::valid(),
             'rules' => NotificationRuleResolver::matrix(),
             'unconfigured' => NotificationRuleResolver::unconfiguredActions(),
         ]]);
@@ -39,9 +39,9 @@ class NotificationRuleController extends Controller
         $data = $request->validate([
             'action' => ['required', 'string'],
             'app' => ['array'],
-            'app.*' => [Rule::in(Roles::VALID)],
+            'app.*' => [Rule::in(Roles::valid())],
             'mail' => ['array'],
-            'mail.*' => [Rule::in(Roles::VALID)],
+            'mail.*' => [Rule::in(Roles::valid())],
         ]);
 
         $action = $data['action'];

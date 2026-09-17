@@ -11,7 +11,7 @@ namespace App\Support;
  * "qué acciones existen" (dato, en código) separado de "cómo se resuelve el
  * estado" (comportamiento, en AiFeatureGate).
  *
- * Departamento = App\Support\Roles::VALID (no se inventa una taxonomía
+ * Departamento = App\Support\Roles::valid() (no se inventa una taxonomía
  * nueva). Marketing e Infraestructura no tienen entradas — quedan fuera del
  * alcance de IA por decisión de negocio; agregarlos después es solo sumar
  * entradas acá, sin tocar el motor de toggles.

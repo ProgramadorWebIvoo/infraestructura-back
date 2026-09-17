@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\AIEvaluationController;
 use App\Http\Controllers\Api\AiConfigController;
 use App\Http\Controllers\Api\MaterialController;
 use App\Http\Controllers\Api\ProjectTypeController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\PushTokenController;
 use App\Http\Controllers\Api\DashboardSummaryController;
 use App\Http\Controllers\Api\AppNotificationController;
@@ -338,6 +339,13 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         Route::post('/users/{user}/send-reset-link', [UserController::class, 'sendResetLink']);
         Route::get('/users/{user}/access', [AccessAdminController::class, 'show']);
         Route::put('/users/{user}/access', [AccessAdminController::class, 'update']);
+
+        // Catálogo de roles (administración) — SUPERADMIN igual que Usuarios,
+        // ya que agregar/quitar un rol afecta el alcance de todos los demás.
+        Route::get('/roles/config', [RoleController::class, 'index']);
+        Route::post('/roles/config', [RoleController::class, 'store']);
+        Route::patch('/roles/config/{role}', [RoleController::class, 'update']);
+        Route::post('/roles/config/{role}/toggle-status', [RoleController::class, 'toggleStatus']);
     });
 
     Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {

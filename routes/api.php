@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AIEvaluationController;
 use App\Http\Controllers\Api\AiConfigController;
 use App\Http\Controllers\Api\MaterialController;
+use App\Http\Controllers\Api\ProjectTypeController;
 use App\Http\Controllers\Api\PushTokenController;
 use App\Http\Controllers\Api\DashboardSummaryController;
 use App\Http\Controllers\Api\AppNotificationController;
@@ -200,6 +201,7 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/materials', [MaterialController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/project-types', [ProjectTypeController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/audit-logs', [AuditLogController::class, 'index'])
         ->middleware('role:SUPERADMIN')
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
@@ -352,6 +354,12 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         Route::get('/materials/config/{material}', [MaterialController::class, 'show']);
         Route::patch('/materials/config/{material}', [MaterialController::class, 'update']);
         Route::post('/materials/config/{material}/toggle-status', [MaterialController::class, 'toggleStatus']);
+
+        // Project types configuration
+        Route::get('/project-types/config', [ProjectTypeController::class, 'index']);
+        Route::post('/project-types/config', [ProjectTypeController::class, 'store']);
+        Route::patch('/project-types/config/{projectType}', [ProjectTypeController::class, 'update']);
+        Route::post('/project-types/config/{projectType}/toggle-status', [ProjectTypeController::class, 'toggleStatus']);
 
         // AI Configuration (static routes BEFORE wildcard {id}) — GETs de
         // solo lectura al bucket `catalog` (mismo criterio que /settings,

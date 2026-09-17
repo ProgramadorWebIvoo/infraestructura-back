@@ -16,7 +16,7 @@ class StoreProjectRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:220'],
-            'type' => ['required', Rule::in(['INFRAESTRUCTURA', 'MANTENIMIENTO'])],
+            'type' => ['required', Rule::exists('project_types', 'key')->where('is_active', true)],
             'description' => ['required', 'string'],
             'location' => ['required', 'string', 'max:180'],
             'materials' => ['required', 'array', 'min:1'],

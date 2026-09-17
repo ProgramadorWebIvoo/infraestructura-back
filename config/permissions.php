@@ -9,8 +9,8 @@
  * nueva se agregan acá una sola vez.
  */
 return [
-    'SUPERADMIN' => ['/presidencia', '/marketing', '/infraestructura', '/cierre-obra', '/procura', '/analistas', '/finanzas', '/catalogos', '/usuarios', '/config-proveedores', '/config-materiales', '/config-ia', '/config-keys', '/config-app'],
-    'ADMIN' => ['/infraestructura', '/marketing', '/cierre-obra', '/procura', '/analistas', '/finanzas', '/catalogos', '/usuarios', '/config-proveedores', '/config-materiales', '/config-ia', '/config-app'],
+    'SUPERADMIN' => ['/presidencia', '/marketing', '/infraestructura', '/cierre-obra', '/procura', '/analistas', '/finanzas', '/catalogos', '/usuarios', '/config-proveedores', '/config-materiales', '/config-project-types', '/config-ia', '/config-keys', '/config-app'],
+    'ADMIN' => ['/infraestructura', '/marketing', '/cierre-obra', '/procura', '/analistas', '/finanzas', '/catalogos', '/usuarios', '/config-proveedores', '/config-materiales', '/config-project-types', '/config-ia', '/config-app'],
     'PRESIDENCIA' => ['/presidencia', '/catalogos'],
     'INFRAESTRUCTURA' => ['/infraestructura'],
     'CIERRE_DE_OBRA' => ['/cierre-obra'],

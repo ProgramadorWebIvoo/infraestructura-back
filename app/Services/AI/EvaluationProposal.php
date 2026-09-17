@@ -27,6 +27,10 @@ class EvaluationProposal
         public readonly ?string $motivo = null,
         public readonly ?string $motivoAnticipoExcedido = null,
         public readonly ?string $fechaOferta = null,
+        public readonly ?string $specialty = null,
+        public readonly ?int $totalProjectsBidOn = null,
+        public readonly ?int $awardedProjectCount = null,
+        public readonly ?float $priceTrendPercent = null,
     ) {
     }
 
@@ -77,6 +81,18 @@ class EvaluationProposal
         }
         if ($this->fechaOferta !== null) {
             $arr['fechaOferta'] = $this->fechaOferta;
+        }
+        if ($this->specialty !== null) {
+            $arr['specialty'] = $this->specialty;
+        }
+        if ($this->totalProjectsBidOn !== null) {
+            $arr['totalProjectsBidOn'] = $this->totalProjectsBidOn;
+        }
+        if ($this->awardedProjectCount !== null) {
+            $arr['awardedProjectCount'] = $this->awardedProjectCount;
+        }
+        if ($this->priceTrendPercent !== null) {
+            $arr['priceTrendPercent'] = $this->priceTrendPercent;
         }
 
         return $arr;

@@ -37,7 +37,11 @@ Evalúa CRÍTICAMENTE:
     o meses — conviértelo mentalmente a una unidad común para comparar entre propuestas)
  4. % ANTICIPO y riesgo financiero que representa
  5. RATING del contratista (puntuación 1.0–5.0 basada en desempeño histórico, calidad y cumplimiento)
- 6. CAPACIDAD del contratista (experiencia, especialidad)
+ 6. CAPACIDAD del contratista (especialidad declarada, y su HISTORIAL VERIFICABLE en el sistema:
+    cantidad de proyectos en los que ha ofertado, cuántos le fueron adjudicados —una tasa de
+    adjudicación baja con muchas ofertas puede ser señal de precios poco competitivos o baja
+    confianza del comprador—, y la tendencia general de sus precios cotizados en los últimos meses
+    —un alza sostenida puede anticipar sobrecostos futuros en la ejecución de la obra)
  7. OBSERVACIONES (tasa de cambio, garantías, disponibilidad de material, divisa)
  8. HISTORIAL DE RENEGOCIACIÓN: si una propuesta es resultado de una renegociación,
     analiza la variación entre el precio anterior y el nuevo (¿aumentó por inflación de
@@ -92,6 +96,18 @@ PROMPT;
             $text .= "--- Propuesta " . ($i + 1) . " ---\n";
             $text .= "Contratista: " . $sanitizer($prop['contractorName']) . " ({$prop['contractorCode']})\n";
             $text .= "Rating del Contratista: {$prop['contractorRating']}/5.0\n";
+            if (!empty($prop['specialty'])) {
+                $text .= "Especialidad declarada: " . $sanitizer($prop['specialty']) . "\n";
+            }
+            if (isset($prop['totalProjectsBidOn'])) {
+                $awarded = $prop['awardedProjectCount'] ?? 0;
+                $rate = $prop['totalProjectsBidOn'] > 0 ? round(($awarded / $prop['totalProjectsBidOn']) * 100, 1) : 0;
+                $text .= "Historial en el sistema: ofertó en {$prop['totalProjectsBidOn']} proyecto(s), adjudicado en {$awarded} ({$rate}% de tasa de adjudicación)\n";
+            }
+            if (isset($prop['priceTrendPercent'])) {
+                $signo = $prop['priceTrendPercent'] > 0 ? "alza" : ($prop['priceTrendPercent'] < 0 ? "baja" : "estable");
+                $text .= "Tendencia de precios cotizados (últimos meses): {$prop['priceTrendPercent']}% ({$signo})\n";
+            }
             $text .= "Costo Materiales: \${$prop['materialCost']}\n";
             $text .= "Costo Mano de Obra: \${$prop['laborCost']}\n";
             $text .= "Costo Total: \${$prop['totalCost']}\n";

@@ -20,6 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // parámetro, BroadcastServiceProvider es la única fuente de verdad.
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // API-only SPA: no existe ninguna ruta web 'login'. El default de
+        // Laravel 12 (redirectGuestsTo(fn () => route('login'))) revienta con
+        // RouteNotFoundException -> 500 en vez de 401 cuando un guest sin
+        // Accept: application/json pega a una ruta auth:sanctum (confirmado
+        // en prueba de estrés 2026-09-16). Sin redirect: siempre JSON 401.
+        $middleware->redirectGuestsTo(fn () => null);
+
         // Replica exactamente el stack global de app/Http/Kernel.php (L9) —
         // TrustHosts queda deshabilitado (estaba comentado en el Kernel
         // original) y TrustProxies mantiene su clase custom (resuelve
@@ -67,6 +74,14 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // API-only backend: toda request a /api/* debe recibir JSON en sus
+        // errores, sin importar el header Accept del cliente (bots, health
+        // checks, curl sin -H). Sin esto, un guest sin Accept: application/
+        // json cae al branch de redirect y explota con RouteNotFoundException
+        // porque no existe ninguna ruta web 'login' (confirmado en prueba de
+        // estrés 2026-09-16).
+        $exceptions->shouldRenderJsonWhen(fn ($request, $e) => $request->is('api/*') || $request->expectsJson());
+
         $exceptions->dontFlash([
             'current_password',
             'password',

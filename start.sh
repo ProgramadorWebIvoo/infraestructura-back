@@ -55,7 +55,13 @@ php artisan route:cache
 
 HOST=${INFRA_HOST:-0.0.0.0}
 echo "[OK] Servidor:       http://${HOST}:${PORT}  (accesible en red local vía IP del equipo)"
-php artisan serve --host="$HOST" --port="$PORT" > /dev/null 2>&1 &
+# PHP_CLI_SERVER_WORKERS: el servidor built-in de PHP es single-threaded por
+# defecto y serializa requests concurrentes (una pantalla que dispara 10+
+# fetches en paralelo termina con la última esperando a las 9 anteriores).
+# Con esta env var (PHP >= 7.4, POSIX) spawnea varios workers y atiende
+# requests en paralelo real. No aplica en Windows nativo sin WSL/Git Bash con
+# soporte pcntl — si no tiene efecto, usar Laravel Herd o WSL.
+PHP_CLI_SERVER_WORKERS=${INFRA_SERVER_WORKERS:-4} php artisan serve --host="$HOST" --port="$PORT" > /dev/null 2>&1 &
 echo "$!" >> "$PID_FILE"
 
 echo "[OK] Scheduler:      corriendo cada minuto (Ctrl+C para salir)"

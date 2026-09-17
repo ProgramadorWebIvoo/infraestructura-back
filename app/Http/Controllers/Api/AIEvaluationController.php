@@ -10,12 +10,18 @@ use App\Services\AI\EvaluationPayload;
 use App\Services\AI\EvaluationProject;
 use App\Services\AI\EvaluationProposal;
 use App\Services\AiFeatureGate;
+use App\Services\ContractorHistoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
 class AIEvaluationController extends Controller
 {
+    public function __construct(
+        private ContractorHistoryService $contractorHistory,
+    ) {
+    }
+
     /**
      * POST /api/ai/evaluate-proposals
      *
@@ -96,7 +102,13 @@ class AIEvaluationController extends Controller
 
         $proposalDtos = [];
         foreach ($data['proposals'] as $prop) {
-            $rating = (float) ($contractorsByCode->get($prop['contractorCode'])?->rating ?? 4.0);
+            $contractor = $contractorsByCode->get($prop['contractorCode']);
+            $rating = (float) ($contractor?->rating ?? 4.0);
+            // Histórico real del proveedor (cacheado 24h en ContractorHistoryService,
+            // mismo servicio que alimenta el panel de detalle de proveedor) — le da
+            // a la IA una señal de desempeño verificable en vez de solo el rating
+            // manual del contratista.
+            $history = $this->contractorHistory->getSupplierHistory($prop['contractorCode'])['stats'];
             $proposalDtos[] = new EvaluationProposal(
                 id:                      $prop['id'],
                 contractorCode:          $prop['contractorCode'],
@@ -119,6 +131,10 @@ class AIEvaluationController extends Controller
                 motivo:                  $prop['motivo'] ?? null,
                 motivoAnticipoExcedido:  $prop['motivoAnticipoExcedido'] ?? null,
                 fechaOferta:             $prop['fechaOferta'] ?? null,
+                specialty:               $contractor?->specialty,
+                totalProjectsBidOn:      $history['totalProjectsBidOn'] ?? null,
+                awardedProjectCount:     $history['awardedProjectCount'] ?? null,
+                priceTrendPercent:       $history['trendPercent'] ?? null,
             );
         }
 

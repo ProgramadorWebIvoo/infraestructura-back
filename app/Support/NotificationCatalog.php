@@ -2,25 +2,34 @@
 
 namespace App\Support;
 
+use App\Models\NotificationAction;
+use Illuminate\Support\Facades\Cache;
+
 /**
  * Catálogo único de acciones auditables/notificables — fuente de verdad
  * tanto para el selector de tags de CONFIG APP (`acciones_con_correo` /
  * `acciones_con_notificacion_app`, vía GET /settings/notification-actions)
- * como para la futura matriz configurable rol×acción×canal. Antes vivía
- * como `NotificationDispatcher::AUDITABLE_ACTIONS`/`ACTION_LABELS` — se
- * extrae aquí para separar "qué acciones existen" (dato) de "cómo se
- * despachan las notificaciones" (comportamiento), y para que un flujo nuevo
- * (Sprint 4/5/6) se integre agregando una entrada acá sin tocar el
- * dispatcher.
+ * como para la matriz configurable rol×acción×canal.
  *
- * Por entrada:
- *   label     texto legible para la UI (si coincide con `key`, se omite de ACTIONS y se muestra tal cual)
- *   group     agrupamiento visual: proyectos|documentos|usuarios|catalogos|proveedores|sistema
- *   scope     'project' (requiere Project asociado) | 'global' (no tiene proyecto)
- *   critical  si es true, la matriz de notificaciones no admite dejarla sin destinatarios en canal app
+ * El metadato (label/group/scope/critical/is_active) vive en la tabla
+ * `notification_actions` — lee con cache (mismo patrón que SettingsService/
+ * Roles), invalidado al escribir desde el panel de administración. El
+ * DISPARO real de cada acción (dónde en el código se llama
+ * AuditLog::record()) sigue siendo código: este catálogo no crea acciones
+ * nuevas por sí solo, solo administra los metadatos de las que ya existen —
+ * por eso no hay alta desde el panel, solo edición y activo/inactivo.
+ *
+ * `keys()`/`toOptions()`/`toDetailedOptions()` solo devuelven acciones
+ * activas (para no ofrecer acciones deprecadas en selectores nuevos);
+ * `exists()`/`label()`/`group()`/`scope()`/`isCritical()`/`type()` resuelven
+ * cualquier acción del catálogo (activa o no), porque el histórico de
+ * auditoría puede tener entradas ya desactivadas que igual hay que mostrar.
  */
 class NotificationCatalog
 {
+    private const CACHE_KEY = 'notification_actions.all';
+    private const CACHE_TTL_SECONDS = 300;
+
     /**
      * Acciones cuyo NotificationType no se deriva del default binario de
      * `critical` (ver type()) — "Rechazo de cuadro comparativo" exige que
@@ -44,125 +53,51 @@ class NotificationCatalog
         'Racha de rechazos detectada' => NotificationType::ADVERTENCIA,
     ];
 
-    /**
-     * @var array<string, array{label: ?string, group: string, scope: string, critical: bool}>
-     */
-    private const ACTIONS = [
-        // Flujo regular de proyectos (AuditLog / visible para Presidencia)
-        'Creacion de peticion de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Revision tecnica de calculos y planos' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Confirmacion de presupuesto y envio a licitacion' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Carga de propuesta' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Carga de cuadro comparativo' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Importación automática de propuestas de proveedores' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Eliminacion de propuesta' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Rechazo de cuadro comparativo' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Confirmacion de contratacion' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Liberacion de anticipo' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Liberacion total de fondos' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Reporte de obra finalizada' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Verificacion de finalizacion y calidad de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Congelación manual de tasa de cambio' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Evaluacion inteligente de propuestas' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Envio de invitacion a proveedor' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Rechazo de petición de obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Reenvío de petición corregida' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Solicitud de reevaluación a Cierre de Obra' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Reevaluación resuelta, reenviado a Procura' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => false],
-        'Obra sin actividad reciente' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Invitacion a proveedor proxima a vencer' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
-        'Racha de rechazos detectada' => ['label' => null, 'group' => 'proyectos', 'scope' => 'project', 'critical' => true],
+    /** @return array<string, array{label: ?string, group: string, scope: string, critical: bool, is_active: bool}> keyed por action */
+    private static function all(): array
+    {
+        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL_SECONDS, function () {
+            return NotificationAction::all()
+                ->mapWithKeys(fn (NotificationAction $a) => [$a->key => [
+                    'label' => $a->label,
+                    'group' => $a->group,
+                    'scope' => $a->scope,
+                    'critical' => $a->critical,
+                    'is_active' => $a->is_active,
+                ]])
+                ->toArray();
+        });
+    }
 
-        // Documentos de proyecto
-        'Carga de hojas de calculo/cubicaciones' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
-        'Carga de planos de ingenieria' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
-        'Carga de fotografias del sitio de obra' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
-        'Carga de correcciones de peticion rechazada' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
-        'Carga de nueva version de documento' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
-        'Eliminacion de documento adjunto' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
-        'Carga de comprobante de pago de anticipo' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
-        'Carga de comprobante de liquidacion final' => ['label' => null, 'group' => 'documentos', 'scope' => 'project', 'critical' => false],
+    public static function forget(): void
+    {
+        Cache::forget(self::CACHE_KEY);
+    }
 
-        // Accesos públicos (proveedor, sin autenticar)
-        'contractor.register' => ['label' => 'Registro público de proveedor', 'group' => 'proveedores', 'scope' => 'global', 'critical' => false],
-        'invitation.view' => ['label' => 'Visualización de invitación (proveedor)', 'group' => 'proveedores', 'scope' => 'global', 'critical' => false],
-        'proposal.submit' => ['label' => 'Envío de propuesta pública (proveedor)', 'group' => 'proveedores', 'scope' => 'global', 'critical' => false],
-
-        // Sistema / cuenta
-        'Solicitud de restablecimiento de contrasena' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => false],
-
-        // Administración: usuarios
-        'Creacion de usuario' => ['label' => null, 'group' => 'usuarios', 'scope' => 'global', 'critical' => false],
-        'Modificacion de usuario' => ['label' => null, 'group' => 'usuarios', 'scope' => 'global', 'critical' => false],
-        'Cambio de rol de usuario' => ['label' => null, 'group' => 'usuarios', 'scope' => 'global', 'critical' => true],
-        'Activacion/desactivacion de usuario' => ['label' => null, 'group' => 'usuarios', 'scope' => 'global', 'critical' => false],
-
-        // Administración: proveedores (panel admin, distinto del registro público)
-        'Alta de proveedor' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-        'Modificacion de proveedor' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-        'Activacion/desactivacion de proveedor' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-        'Calificacion de proveedor' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-
-        // Administración: materiales
-        'Alta de material' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-        'Modificacion de material' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-        'Activacion/desactivacion de material' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-
-        // Administración: configuración de IA (credenciales)
-        'Alta de configuracion de IA' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
-        'Modificacion de configuracion de IA' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
-        'Eliminacion de configuracion de IA' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
-
-        // Administración: CONFIG APP (settings genéricos)
-        'Modificacion de configuracion' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => false],
-
-        // Administración: monedas
-        'Alta de moneda' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-        'Modificación de moneda' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-        'Cambio de moneda base' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => true],
-        'Eliminación de moneda' => ['label' => null, 'group' => 'catalogos', 'scope' => 'global', 'critical' => false],
-
-        // Administración: matriz de notificaciones
-        'Modificacion de reglas de notificacion' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
-
-        // Administración: control de IA por departamento
-        'Modificacion de disponibilidad de IA por departamento' => ['label' => null, 'group' => 'sistema', 'scope' => 'global', 'critical' => true],
-
-        // Marketing (creacion y aprobacion de piezas publicitarias)
-        'Creacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
-        'Modificacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
-        'Eliminacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
-        'Envio a revision de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
-        'Aprobacion de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
-        'Rechazo de propuesta de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => true],
-        'Carga de adjunto de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
-        'Eliminacion de adjunto de marketing' => ['label' => null, 'group' => 'marketing', 'scope' => 'global', 'critical' => false],
-    ];
-
-    /** @return string[] */
+    /** @return string[] keys de las acciones activas */
     public static function keys(): array
     {
-        return array_keys(self::ACTIONS);
+        return array_keys(array_filter(self::all(), fn (array $a) => $a['is_active']));
     }
 
     public static function label(string $action): string
     {
-        return self::ACTIONS[$action]['label'] ?? $action;
+        return self::all()[$action]['label'] ?? $action;
     }
 
     public static function group(string $action): ?string
     {
-        return self::ACTIONS[$action]['group'] ?? null;
+        return self::all()[$action]['group'] ?? null;
     }
 
     public static function scope(string $action): ?string
     {
-        return self::ACTIONS[$action]['scope'] ?? null;
+        return self::all()[$action]['scope'] ?? null;
     }
 
     public static function isCritical(string $action): bool
     {
-        return self::ACTIONS[$action]['critical'] ?? false;
+        return self::all()[$action]['critical'] ?? false;
     }
 
     /**
@@ -180,7 +115,7 @@ class NotificationCatalog
 
     public static function exists(string $action): bool
     {
-        return array_key_exists($action, self::ACTIONS);
+        return array_key_exists($action, self::all());
     }
 
     /** @return array{value: string, label: string}[] */

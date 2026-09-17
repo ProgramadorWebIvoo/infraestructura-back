@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\AiConfigController;
 use App\Http\Controllers\Api\MaterialController;
 use App\Http\Controllers\Api\ProjectTypeController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\NotificationActionController;
 use App\Http\Controllers\Api\PushTokenController;
 use App\Http\Controllers\Api\DashboardSummaryController;
 use App\Http\Controllers\Api\AppNotificationController;
@@ -346,6 +347,13 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         Route::post('/roles/config', [RoleController::class, 'store']);
         Route::patch('/roles/config/{role}', [RoleController::class, 'update']);
         Route::post('/roles/config/{role}/toggle-status', [RoleController::class, 'toggleStatus']);
+
+        // Catálogo de acciones notificables (metadatos) — SUPERADMIN, ya que
+        // afecta la matriz de notificaciones completa. Sin ruta de alta (ver
+        // NotificationActionController).
+        Route::get('/notification-actions/config', [NotificationActionController::class, 'index']);
+        Route::patch('/notification-actions/config/{notificationAction}', [NotificationActionController::class, 'update']);
+        Route::post('/notification-actions/config/{notificationAction}/toggle-status', [NotificationActionController::class, 'toggleStatus']);
     });
 
     Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {

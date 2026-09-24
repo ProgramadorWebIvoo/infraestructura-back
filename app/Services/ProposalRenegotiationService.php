@@ -27,7 +27,7 @@ class ProposalRenegotiationService
                 'contractor_code' => $proposal->contractor_code,
                 'contractor_name_snapshot' => $proposal->contractor_name_snapshot,
                 'material_cost' => $data['materialCost'],
-                'material_items' => $data['materialItems'] ?? null,
+                'material_items' => \App\Support\ProposalMaterialItemsNormalizer::withCatalogIds($project, $data['materialItems'] ?? null),
                 'labor_cost' => $data['laborCost'],
                 'total_cost' => $data['totalCost'],
                 'delivery_weeks' => $data['deliveryWeeks'],

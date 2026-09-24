@@ -14,9 +14,9 @@ use Illuminate\Support\Facades\Log;
  * Las propuestas del portal (PORTAL-PROV) se sincronizan automáticamente vía
  * CatalogSyncService en SupplierMaterialProposalLine. Este observer agrega
  * el mismo mecanismo para propuestas de Analistas, preservando:
- * - price_usd (total_price de cada línea × fx_rate_to_base, convertido acá)
+ * - price_usd (precio UNITARIO de cada línea × fx_rate_to_base, convertido acá)
  * - original_currency (quoteCurrency de la propuesta)
- * - original_price (totalCostOriginal si existe, sino totalCost)
+ * - original_price (precio unitario en moneda original)
  * - fx_rate_to_usd (fxRateToBase o calculada)
  */
 class ProjectProposalObserver
@@ -43,6 +43,14 @@ class ProjectProposalObserver
      * Si no hay materialItems (propuestas antiguas sin este campo),
      * registra una entrada por el monto total.
      */
+    /** Reconstruye desde cero las filas de histórico de una propuesta (usado por price-history:resync-proposals). */
+    public function resync(ProjectProposal $proposal): void
+    {
+        ProductPriceHistory::where('project_proposal_id', $proposal->id)->delete();
+        $this->syncProposalToPriceHistory($proposal);
+        $this->bumpContractorHistoryCache($proposal);
+    }
+
     private function syncProposalToPriceHistory(ProjectProposal $proposal): void
     {
         if (!$proposal->contractor_code) {
@@ -57,14 +65,23 @@ class ProjectProposalObserver
         // Caso 1: Propuesta con material_items detallado (nuevo formato)
         if (is_array($proposal->material_items) && count($proposal->material_items) > 0) {
             foreach ($proposal->material_items as $item) {
-                // item es ProposalMaterialItem: tiene catalogProductId, materialName, quantity, unitPrice, totalPrice
-                $catalogProductId = $item['catalog_product_id'] ?? null;
-                $originalPrice = (float) ($item['total_price'] ?? 0);
+                // La API guarda los ítems en camelCase (catalogProductId, unitPrice, totalPrice);
+                // se aceptan también las claves snake_case por compatibilidad con datos previos.
+                $catalogProductId = $item['catalogProductId'] ?? $item['catalog_product_id'] ?? null;
+                $quantity = isset($item['quantity']) ? (float) $item['quantity'] : null;
+                $unitPrice = $item['unitPrice'] ?? $item['unit_price'] ?? null;
+                if ($unitPrice === null) {
+                    $totalPrice = (float) ($item['totalPrice'] ?? $item['total_price'] ?? 0);
+                    $unitPrice = $quantity > 0 ? $totalPrice / $quantity : $totalPrice;
+                }
+                // product_price_history.price_usd/original_price son siempre PRECIO UNITARIO
+                // (igual que CatalogSyncService); guardar el total contaminaba promedios y variaciones.
+                $originalPrice = (float) $unitPrice;
 
                 $this->createPriceHistoryEntry(
                     catalogProductId: $catalogProductId !== null ? (int) $catalogProductId : null,
                     supplierCode: $proposal->contractor_code,
-                    quantity: isset($item['quantity']) ? (float) $item['quantity'] : null,
+                    quantity: $quantity,
                     priceUsd: $originalPrice * $fxRateToUsd,
                     originalCurrency: $quoteCurrency,
                     originalPrice: $originalPrice, // ← En moneda original

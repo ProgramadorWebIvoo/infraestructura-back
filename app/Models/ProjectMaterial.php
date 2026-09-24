@@ -36,4 +36,14 @@ class ProjectMaterial extends Model
         'estimated_unit_price' => 'float',
         'warranty_value' => 'integer',
     ];
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function catalogProduct()
+    {
+        return $this->belongsTo(MaterialCatalog::class, 'material_catalog_id');
+    }
 }

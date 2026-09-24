@@ -15,10 +15,29 @@ class ProjectPayment extends Model
         'amount',
         'paid_date',
         'notes',
+        'currency',
+        'bank',
+        'reference',
+        'comprobante_document_id',
     ];
 
     protected $casts = [
         'amount' => 'float',
         'paid_date' => 'date:Y-m-d',
     ];
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    public function proposal()
+    {
+        return $this->belongsTo(ProjectProposal::class, 'proposal_id');
+    }
+
+    public function comprobante()
+    {
+        return $this->belongsTo(ProjectDocument::class, 'comprobante_document_id')->withTrashed();
+    }
 }

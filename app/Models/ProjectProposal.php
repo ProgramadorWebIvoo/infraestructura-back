@@ -116,12 +116,13 @@ class ProjectProposal extends Model
         $historicalMonths = config('pricing.price_estimation.historical_months', 6);
 
         return array_map(function ($item) use ($priceService, $historicalMonths) {
-            if (!isset($item['catalog_product_id']) || !$item['catalog_product_id']) {
+            $catalogProductId = $item['catalogProductId'] ?? $item['catalog_product_id'] ?? null;
+            if (!$catalogProductId) {
                 return $item;
             }
 
             $est = $priceService->getEstimatedPrice(
-                $item['catalog_product_id'],
+                $catalogProductId,
                 $this->contractor_code,
                 $historicalMonths
             );

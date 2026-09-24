@@ -19,6 +19,8 @@ class PayProjectRequest extends FormRequest
             'amount' => ['required', 'numeric', 'min:0'],
             'paidDate' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:255'],
+            'bank' => ['nullable', 'string', 'max:100'],
+            'reference' => ['nullable', 'string', 'max:100'],
         ];
     }
 }

@@ -45,12 +45,12 @@ class ProjectProposalObserverTest extends TestCase
             'quote_currency' => 'USD',
             'material_items' => [
                 [
-                    'catalog_product_id' => 1,
-                    'material_name' => 'Producto Test',
+                    'catalogProductId' => 1,
+                    'materialName' => 'Producto Test',
                     'quantity' => 10,
                     'unit' => 'unidad',
-                    'unit_price' => 100,
-                    'total_price' => 1000,
+                    'unitPrice' => 100,
+                    'totalPrice' => 1000,
                 ]
             ],
         ]);
@@ -62,7 +62,7 @@ class ProjectProposalObserverTest extends TestCase
 
         $this->assertNotNull($history);
         $this->assertEquals('PROV-001', $history->supplier_code);
-        $this->assertEquals(1000, $history->price_usd);
+        $this->assertEquals(100, $history->price_usd);
         $this->assertEquals('USD', $history->original_currency);
         $this->assertEquals('PROJECT_PROPOSAL', $history->origin);
     }
@@ -89,12 +89,12 @@ class ProjectProposalObserverTest extends TestCase
             'fx_rate_to_base' => 0.917, // EUR a USD
             'material_items' => [
                 [
-                    'catalog_product_id' => 1,
-                    'material_name' => 'Producto Test',
+                    'catalogProductId' => 1,
+                    'materialName' => 'Producto Test',
                     'quantity' => 10,
                     'unit' => 'unidad',
-                    'unit_price' => 100,
-                    'total_price' => 1000,
+                    'unitPrice' => 100,
+                    'totalPrice' => 1000,
                 ]
             ],
         ]);
@@ -105,8 +105,8 @@ class ProjectProposalObserverTest extends TestCase
 
         $this->assertNotNull($history);
         $this->assertEquals('EUR', $history->original_currency);
-        $this->assertEquals(1000, $history->original_price); // Precio en EUR
-        $this->assertEquals(917, $history->price_usd); // Convertido aproximadamente
+        $this->assertEquals(100, $history->original_price); // Precio unitario en EUR
+        $this->assertEquals(91.7, $history->price_usd); // 100 EUR × 0.917
         $this->assertEquals(0.917, $history->fx_rate_to_usd);
     }
 
@@ -155,12 +155,12 @@ class ProjectProposalObserverTest extends TestCase
             'fecha_oferta' => now(),
             'material_items' => [
                 [
-                    'material_name' => 'Custom Item',
+                    'materialName' => 'Custom Item',
                     'quantity' => 5,
                     'unit' => 'unidad',
-                    'unit_price' => 200,
-                    'total_price' => 1000,
-                    // Sin catalog_product_id
+                    'unitPrice' => 200,
+                    'totalPrice' => 1000,
+                    // Sin catalogProductId
                 ]
             ],
         ]);
@@ -190,12 +190,12 @@ class ProjectProposalObserverTest extends TestCase
             'quote_currency' => 'USD',
             'material_items' => [
                 [
-                    'catalog_product_id' => 1,
-                    'material_name' => 'Producto Test',
+                    'catalogProductId' => 1,
+                    'materialName' => 'Producto Test',
                     'quantity' => 10,
                     'unit' => 'unidad',
-                    'unit_price' => 100,
-                    'total_price' => 1000,
+                    'unitPrice' => 100,
+                    'totalPrice' => 1000,
                 ]
             ],
         ]);

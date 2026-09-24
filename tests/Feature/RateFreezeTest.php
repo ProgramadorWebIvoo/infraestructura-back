@@ -141,6 +141,7 @@ class RateFreezeTest extends TestCase
     public function test_pay_advance_and_final_freeze_their_own_triggers(): void
     {
         $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $doc = \App\Models\ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [
@@ -157,6 +158,7 @@ class RateFreezeTest extends TestCase
         ]);
 
         $project->update(['status' => 'LISTO_PAGO_FINAL']);
+        $doc = \App\Models\ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_FINIQUITO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [

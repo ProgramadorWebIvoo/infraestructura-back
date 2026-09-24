@@ -298,7 +298,7 @@ class ProjectController extends Controller
             'contractor_code' => $contractor->code,
             'contractor_name_snapshot' => $contractor->name,
             'material_cost' => $data['materialCost'],
-            'material_items' => $data['materialItems'] ?? null,
+            'material_items' => \App\Support\ProposalMaterialItemsNormalizer::withCatalogIds($project, $data['materialItems'] ?? null),
             'labor_cost' => $data['laborCost'],
             'total_cost' => $data['totalCost'],
             'delivery_weeks' => $data['deliveryWeeks'],
@@ -500,7 +500,17 @@ class ProjectController extends Controller
             ProjectStateMachine::assertStatus($project, self::STATUSES['LISTO_PAGO_FINAL'], 'El pago final solo se puede liberar tras la verificación de calidad (LISTO_PAGO_FINAL).');
         }
 
-        DB::transaction(function () use ($project, $data, $rateFreezeService) {
+        // Todo movimiento contable requiere comprobante (Plan Maestro, Finanzas):
+        // el cliente ya lo sube antes, pero la regla se garantiza aquí también.
+        $proofType = $data['paymentType'] === 'ADVANCE' ? 'COMPROBANTE_ANTICIPO' : 'COMPROBANTE_FINIQUITO';
+        $proof = $project->documents()->where('document_type', $proofType)->latest('id')->first();
+        if (!$proof) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'proof' => 'Todo pago requiere un comprobante adjunto antes de confirmarse.',
+            ]);
+        }
+
+        DB::transaction(function () use ($project, $data, $rateFreezeService, $proof) {
             ProjectPayment::updateOrCreate(
                 ['project_id' => $project->id, 'payment_type' => $data['paymentType']],
                 [
@@ -508,6 +518,9 @@ class ProjectController extends Controller
                     'amount' => $data['amount'],
                     'paid_date' => $data['paidDate'] ?? now()->toDateString(),
                     'notes' => $data['notes'] ?? null,
+                    'bank' => $data['bank'] ?? null,
+                    'reference' => $data['reference'] ?? null,
+                    'comprobante_document_id' => $proof->id,
                 ]
             );
 

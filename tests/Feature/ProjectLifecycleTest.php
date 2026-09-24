@@ -876,7 +876,8 @@ class ProjectLifecycleTest extends TestCase
             ])
             ->assertJsonPath('data.status', 'CONTRATADO');
 
-        // 7. Pay advance (FINANZAS)
+        // 7. Pay advance (FINANZAS) — requiere comprobante previo
+        $advanceProof = $this->makeDocument(Project::find($projectId), 'COMPROBANTE_ANTICIPO');
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$projectId}/payments", [
                 'paymentType' => 'ADVANCE',
@@ -889,6 +890,7 @@ class ProjectLifecycleTest extends TestCase
             'project_id'   => $projectId,
             'payment_type' => 'ADVANCE',
             'amount'       => 6000.00,
+            'comprobante_document_id' => $advanceProof->id,
         ]);
 
         // 8. Report finished (CIERRE_DE_OBRA)
@@ -905,7 +907,8 @@ class ProjectLifecycleTest extends TestCase
             ])
             ->assertJsonPath('data.status', 'LISTO_PAGO_FINAL');
 
-        // 10. Pay final (FINANZAS)
+        // 10. Pay final (FINANZAS) — requiere comprobante previo
+        $this->makeDocument(Project::find($projectId), 'COMPROBANTE_FINIQUITO');
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$projectId}/payments", [
                 'paymentType' => 'FINAL',
@@ -1062,6 +1065,19 @@ class ProjectLifecycleTest extends TestCase
 
         $response->assertStatus(422);
         $this->assertEquals('CREADO', $project->fresh()->status);
+    }
+
+    public function test_pay_rejects_payment_without_proof_document(): void
+    {
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+
+        $this->actingAs($this->finanzas)
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('proof');
+
+        $this->assertDatabaseMissing('project_payments', ['project_id' => $project->id]);
+        $this->assertSame('CONTRATADO', $project->fresh()->status);
     }
 
     public function test_pay_advance_rejects_project_not_in_contratado(): void

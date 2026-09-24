@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Motor de rechazo transversal: valida el estado previo, aplica la mutación
  * de dominio específica de quien rechaza (vía callback, ya que "rechazar" en
- * Procura no es lo mismo que "rechazar" en un futuro módulo de Cierre de
- * Obra), y audita+notifica en una sola transacción — igual que
+ * Procura no es lo mismo que "rechazar" en un futuro módulo de
+ * Auditoría), y audita+notifica en una sola transacción — igual que
  * `AuditLog::record()` ya hacía para el flujo de proyectos.
  *
  * No introduce un modelo/tabla nueva de "rechazos": es un servicio de

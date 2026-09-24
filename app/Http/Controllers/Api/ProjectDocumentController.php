@@ -158,7 +158,7 @@ class ProjectDocumentController extends Controller
     /**
      * Elimina el grupo completo (todas las versiones), no una versión suelta.
      * Infraestructura solo puede borrar mientras el proyecto está
-     * RECHAZADO_CIERRE (editando/reenviando su propia petición tras un
+     * RECHAZADO_AUDITORIA (editando/reenviando su propia petición tras un
      * rechazo) — fuera de ese estado, borrar adjuntos queda reservado a
      * Auditoría (dueño natural de la documentación técnica, ver
      * RevisedDocumentsSection.tsx). Tampoco puede borrar CORRECCION: son
@@ -171,7 +171,7 @@ class ProjectDocumentController extends Controller
 
         $role = auth()->user()->role;
         if ($role === 'INFRAESTRUCTURA') {
-            abort_unless($project->status === 'RECHAZADO_CIERRE', 403, 'Solo puede eliminar adjuntos mientras corrige una petición rechazada.');
+            abort_unless($project->status === 'RECHAZADO_AUDITORIA', 403, 'Solo puede eliminar adjuntos mientras corrige una petición rechazada.');
             abort_if($document->document_type === 'CORRECCION', 403, 'Las correcciones de Auditoría no pueden eliminarse.');
         }
 

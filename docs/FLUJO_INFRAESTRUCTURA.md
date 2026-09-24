@@ -43,7 +43,7 @@ Relaciones: `materials` (lista inicial de materiales), `proposals` (ofertas de c
 flowchart TD
     Start(["Proyecto creado"]) --> CREADO
 
-    CREADO["CREADO<br/><i>Infraestructura</i>"] -->|Auditoría revisa| REVISADO["REVISADO_CIERRE<br/><i>Auditoría</i>"]
+    CREADO["CREADO<br/><i>Infraestructura</i>"] -->|Auditoría revisa| REVISADO["REVISADO_AUDITORIA<br/><i>Auditoría</i>"]
     REVISADO -->|Procura aprueba presupuesto| CONFIRMADO["CONFIRMADO_PROCURA<br/><i>Procura</i>"]
     CONFIRMADO -->|Analista carga y compara propuestas| COMPARATIVA["COMPARATIVA_ENVIADA<br/><i>Analista</i>"]
 
@@ -69,7 +69,7 @@ flowchart TD
 
 ```
 CREADO
-  → REVISADO_CIERRE
+  → REVISADO_AUDITORIA
     → CONFIRMADO_PROCURA
       → COMPARATIVA_ENVIADA
         → CONTRATADO
@@ -90,8 +90,8 @@ Con dos caminos "hacia atrás" excepcionales:
 | # | Transición | Quién | Endpoint | Qué ocurre |
 |---|---|---|---|---|
 | 1 | `— → CREADO` | **INFRAESTRUCTURA** | `POST /projects` | Se crea la petición de obra con su lista de materiales |
-| 2 | `CREADO → REVISADO_CIERRE` | **AUDITORIA** | `POST /projects/{id}/review` | Revisión técnica: planos, cálculos, notas |
-| 3 | `REVISADO_CIERRE → CONFIRMADO_PROCURA` | **PROCURA** | `POST /projects/{id}/approve-investment` | Aprueba el monto de inversión (`approved_investment_amount`), que rige el resto del proyecto |
+| 2 | `CREADO → REVISADO_AUDITORIA` | **AUDITORIA** | `POST /projects/{id}/review` | Revisión técnica: planos, cálculos, notas |
+| 3 | `REVISADO_AUDITORIA → CONFIRMADO_PROCURA` | **PROCURA** | `POST /projects/{id}/approve-investment` | Aprueba el monto de inversión (`approved_investment_amount`), que rige el resto del proyecto |
 | 4 | *(sin cambio de estado)* | **ANALISTA** | `POST /projects/{id}/proposals`, `POST /projects/{id}/import-supplier-proposals` | Carga propuestas de contratistas, manualmente o importadas del portal público de proveedores |
 | 5 | `CONFIRMADO_PROCURA → COMPARATIVA_ENVIADA` | **ANALISTA** | `POST /projects/{id}/submit-comparative` | Envía el cuadro comparativo de propuestas (requiere al menos una propuesta cargada) |
 | 6a | `COMPARATIVA_ENVIADA → CONTRATADO` | **PROCURA** | `POST /projects/{id}/select-contractor` | Adjudica el contratista ganador |
@@ -112,7 +112,7 @@ Cada transición de estado genera un registro inmutable en `AuditLog` (rol actor
 
 ### Notificaciones
 
-Al cambiar de estado, `ProjectObserver` notifica (push) a los roles responsables de la siguiente etapa: p. ej. al llegar a `CREADO` se notifica a Auditoría; a `REVISADO_CIERRE`, a Procura; a `CONFIRMADO_PROCURA`, a Analistas; y desde `CONTRATADO` en adelante se notifica también a Finanzas, Presidencia e Infraestructura para visibilidad ejecutiva.
+Al cambiar de estado, `ProjectObserver` notifica (push) a los roles responsables de la siguiente etapa: p. ej. al llegar a `CREADO` se notifica a Auditoría; a `REVISADO_AUDITORIA`, a Procura; a `CONFIRMADO_PROCURA`, a Analistas; y desde `CONTRATADO` en adelante se notifica también a Finanzas, Presidencia e Infraestructura para visibilidad ejecutiva.
 
 ---
 

@@ -99,7 +99,7 @@ class ProjectController extends Controller
         $data = $request->validated();
 
         $project->update([
-            'status' => self::STATUSES['REVISADO_CIERRE'],
+            'status' => self::STATUSES['REVISADO_AUDITORIA'],
             'audit_notes' => $data['notes'] ?? null,
         ]);
 
@@ -113,7 +113,7 @@ class ProjectController extends Controller
      * apoyar su revisión. Se llama desde el frontend tanto en la primera
      * apertura automática del wizard de revisión como en un reintento
      * manual explícito ("Reevaluar") — es la misma ruta en ambos casos.
-     * EN_REEVALUACION_CIERRE incluido porque ReviewWizardModal corre este
+     * EN_REEVALUACION_AUDITORIA incluido porque ReviewWizardModal corre este
      * mismo panel (mode="reevaluation") cuando Procura devuelve un
      * expediente — ver ReevaluationSection.tsx.
      */
@@ -121,7 +121,7 @@ class ProjectController extends Controller
     {
         ProjectStateMachine::assertStatusIn(
             $project,
-            [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_CIERRE'], self::STATUSES['EN_REEVALUACION_CIERRE']],
+            [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_AUDITORIA'], self::STATUSES['EN_REEVALUACION_AUDITORIA']],
             'Solo se puede evaluar el expediente mientras está pendiente de revisión por Auditoría.'
         );
 
@@ -155,7 +155,7 @@ class ProjectController extends Controller
         $project = RejectionService::reject(
             $project,
             self::STATUSES['CREADO'],
-            self::STATUSES['RECHAZADO_CIERRE'],
+            self::STATUSES['RECHAZADO_AUDITORIA'],
             'AUDITORIA',
             'Rechazo de petición de obra',
             $request->validated(),
@@ -172,7 +172,7 @@ class ProjectController extends Controller
      */
     public function resubmitProject(ResubmitProjectRequest $request, Project $project)
     {
-        ProjectStateMachine::assertStatus($project, self::STATUSES['RECHAZADO_CIERRE'], 'Solo se puede reenviar una petición rechazada.');
+        ProjectStateMachine::assertStatus($project, self::STATUSES['RECHAZADO_AUDITORIA'], 'Solo se puede reenviar una petición rechazada.');
 
         $data = $request->validated();
 
@@ -211,7 +211,7 @@ class ProjectController extends Controller
 
     /**
      * Procura devuelve a Auditoría, con motivo obligatorio, un
-     * expediente que acaba de recibir (REVISADO_CIERRE) para que lo
+     * expediente que acaba de recibir (REVISADO_AUDITORIA) para que lo
      * reevalúe antes de autorizar inversión — distinto de rejectProject()
      * (Auditoría rechaza hacia Infraestructura) y de rejectProposals()
      * (Procura rechaza el cuadro comparativo ya en licitación).
@@ -220,8 +220,8 @@ class ProjectController extends Controller
     {
         $project = RejectionService::reject(
             $project,
-            self::STATUSES['REVISADO_CIERRE'],
-            self::STATUSES['EN_REEVALUACION_CIERRE'],
+            self::STATUSES['REVISADO_AUDITORIA'],
+            self::STATUSES['EN_REEVALUACION_AUDITORIA'],
             'PROCURA',
             'Solicitud de reevaluación a Auditoría',
             $request->validated(),
@@ -233,17 +233,17 @@ class ProjectController extends Controller
 
     /**
      * Auditoría resuelve la reevaluación solicitada por Procura y
-     * reenvía el expediente (mismo Project.id) de vuelta a REVISADO_CIERRE
+     * reenvía el expediente (mismo Project.id) de vuelta a REVISADO_AUDITORIA
      * para que Procura lo revise nuevamente — no pasa por CREADO porque la
      * cubicación y planos ya fueron aprobados, solo se corrige lo señalado.
      */
     public function resolveReevaluation(ResolveReevaluationRequest $request, Project $project)
     {
-        ProjectStateMachine::assertStatus($project, self::STATUSES['EN_REEVALUACION_CIERRE'], 'Solo se puede resolver un expediente en reevaluación.');
+        ProjectStateMachine::assertStatus($project, self::STATUSES['EN_REEVALUACION_AUDITORIA'], 'Solo se puede resolver un expediente en reevaluación.');
 
         $data = $request->validated();
 
-        $project->update(['status' => self::STATUSES['REVISADO_CIERRE']]);
+        $project->update(['status' => self::STATUSES['REVISADO_AUDITORIA']]);
 
         AuditLog::record($project, 'AUDITORIA', 'Reevaluación resuelta, reenviado a Procura', $data['notes'] ?? null);
 

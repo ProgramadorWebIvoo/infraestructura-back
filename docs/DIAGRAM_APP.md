@@ -3,7 +3,7 @@
 flowchart TD
     Start(["Proyecto creado"]) --> CREADO
 
-    CREADO["CREADO<br/><i>Infraestructura</i>"] -->|Auditoría revisa| REVISADO["REVISADO_CIERRE<br/><i>Auditoría</i>"]
+    CREADO["CREADO<br/><i>Infraestructura</i>"] -->|Auditoría revisa| REVISADO["REVISADO_AUDITORIA<br/><i>Auditoría</i>"]
     REVISADO -->|Procura aprueba presupuesto| CONFIRMADO["CONFIRMADO_PROCURA<br/><i>Procura</i>"]
     CONFIRMADO -->|Analista carga y compara propuestas| COMPARATIVA["COMPARATIVA_ENVIADA<br/><i>Analista</i>"]
 

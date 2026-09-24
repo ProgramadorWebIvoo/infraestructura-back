@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Evaluación IA del expediente completo — herramienta de Auditoría
  * para apoyar su revisión previa a aprobar/rechazar un proyecto CREADO (o
- * RECHAZADO_CIERRE en un reenvío corregido). Nunca lanza excepción: el
+ * RECHAZADO_AUDITORIA en un reenvío corregido). Nunca lanza excepción: el
  * auditor debe poder seguir revisando/aprobando/rechazando aunque la IA
  * no esté disponible.
  */

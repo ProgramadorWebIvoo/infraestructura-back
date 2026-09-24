@@ -17,7 +17,7 @@ class RoleMiddlewareTest extends TestCase
     private User $analista;
     private User $procura;
     private User $finanzas;
-    private User $cierre;
+    private User $auditoria;
     private User $infraestructura;
     private User $noRole;
     private User $marketing;
@@ -30,7 +30,7 @@ class RoleMiddlewareTest extends TestCase
         $this->analista = User::factory()->create(['role' => 'ANALISTA']);
         $this->procura = User::factory()->create(['role' => 'PROCURA']);
         $this->finanzas = User::factory()->create(['role' => 'FINANZAS']);
-        $this->cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $this->auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $this->infraestructura = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
         $this->noRole = User::factory()->create(['role' => 'PRESIDENCIA']);
         $this->marketing = User::factory()->create(['role' => 'MARKETING']);
@@ -67,7 +67,7 @@ class RoleMiddlewareTest extends TestCase
         $project = $this->createProject();
         $uri = str_replace('__PROJECT__', $project->id, $uri);
         $userMap = [
-            'AUDITORIA' => $this->cierre,
+            'AUDITORIA' => $this->auditoria,
             'PROCURA'        => $this->procura,
             'ANALISTA'       => $this->analista,
             'FINANZAS'       => $this->finanzas,

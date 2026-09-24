@@ -18,7 +18,7 @@ class AlertStaleProjectsAndExpiringInvitationsTest extends TestCase
     public function test_notifies_a_project_with_no_activity_past_the_configured_threshold(): void
     {
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);
-        $stale = Project::factory()->create(['status' => 'REVISADO_CIERRE', 'updated_at' => now()->subDays(20)]);
+        $stale = Project::factory()->create(['status' => 'REVISADO_AUDITORIA', 'updated_at' => now()->subDays(20)]);
 
         $this->artisan('alertas:vencimientos')->assertSuccessful();
 
@@ -33,7 +33,7 @@ class AlertStaleProjectsAndExpiringInvitationsTest extends TestCase
     public function test_does_not_notify_a_recently_active_project(): void
     {
         User::factory()->create(['role' => 'SUPERADMIN']);
-        $active = Project::factory()->create(['status' => 'REVISADO_CIERRE', 'updated_at' => now()->subDays(2)]);
+        $active = Project::factory()->create(['status' => 'REVISADO_AUDITORIA', 'updated_at' => now()->subDays(2)]);
 
         $this->artisan('alertas:vencimientos')->assertSuccessful();
 
@@ -59,7 +59,7 @@ class AlertStaleProjectsAndExpiringInvitationsTest extends TestCase
     public function test_does_not_notify_the_same_stale_project_twice_the_same_day(): void
     {
         User::factory()->create(['role' => 'SUPERADMIN']);
-        Project::factory()->create(['status' => 'REVISADO_CIERRE', 'updated_at' => now()->subDays(20)]);
+        Project::factory()->create(['status' => 'REVISADO_AUDITORIA', 'updated_at' => now()->subDays(20)]);
 
         $this->artisan('alertas:vencimientos')->assertSuccessful();
         $this->artisan('alertas:vencimientos')->assertSuccessful();
@@ -70,7 +70,7 @@ class AlertStaleProjectsAndExpiringInvitationsTest extends TestCase
     public function test_respects_configurable_threshold_via_config_app(): void
     {
         User::factory()->create(['role' => 'SUPERADMIN']);
-        $project = Project::factory()->create(['status' => 'REVISADO_CIERRE', 'updated_at' => now()->subDays(5)]);
+        $project = Project::factory()->create(['status' => 'REVISADO_AUDITORIA', 'updated_at' => now()->subDays(5)]);
 
         AppSetting::where('key', 'proyecto_estancado_umbral_dias')->update(['value' => '3']);
         SettingsService::forget();

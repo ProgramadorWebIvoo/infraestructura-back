@@ -323,7 +323,7 @@ El control de roles funciona en **dos capas**:
 | `ADMIN` | Gestión administrativa | Todo excepto config de IA |
 | `PRESIDENCIA` | Dashboard ejecutivo | Dashboard + catálogos |
 | `INFRAESTRUCTURA` | Gestión de proyectos | Proyectos + documentos |
-| `AUDITORIA` | Auditoría de expedientes | Revisión + cierre |
+| `AUDITORIA` | Auditoría de expedientes | Revisión de expedientes |
 | `PROCURA` | Licitación y adjudicación | Procura + catálogos |
 | `ANALISTA` | Evaluación de ofertas | Analistas |
 | `FINANZAS` | Control financiero | Finanzas |
@@ -349,10 +349,10 @@ public function approveInvestment(ApproveInvestmentRequest $request, Project $pr
 Un proyecto en IVOO recorre **10 estados** desde su creación hasta el pago final:
 
 ```
-CREADO ──▶ REVISADO_CIERRE ──▶ CONFIRMADO_PROCURA ──▶ COMPARATIVA_ENVIADA
+CREADO ──▶ REVISADO_AUDITORIA ──▶ CONFIRMADO_PROCURA ──▶ COMPARATIVA_ENVIADA
    │              │                      │                      │
    │              ▼                      │                      │
-   │       RECHAZADO_CIERRE             │                      │
+   │       RECHAZADO_AUDITORIA             │                      │
    │       (regresa a INFRA)            │                      │
    │                                    ▼                      ▼
    │                           CONTRATADO ◀────────────────────┘
@@ -375,8 +375,8 @@ CREADO ──▶ REVISADO_CIERRE ──▶ CONFIRMADO_PROCURA ──▶ COMPARAT
 | Estado | Acciones disponibles | Rol |
 |--------|---------------------|-----|
 | `CREADO` | Revisar, Rechazar | AUDITORIA |
-| `REVISADO_CIERRE` | Aprobar inversión, Rechazar | PROCURA |
-| `RECHAZADO_CIERRE` | Reenviar | INFRAESTRUCTURA |
+| `REVISADO_AUDITORIA` | Aprobar inversión, Rechazar | PROCURA |
+| `RECHAZADO_AUDITORIA` | Reenviar | INFRAESTRUCTURA |
 | `CONFIRMADO_PROCURA` | Agregar propuestas, Renegociar | ANALISTA |
 | `COMPARATIVA_ENVIADA` | Seleccionar contratista, Rechazar propuestas | PROCURA |
 | `CONTRATADO` | Reportar finalización | AUDITORIA |

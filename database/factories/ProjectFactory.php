@@ -29,7 +29,7 @@ class ProjectFactory extends Factory
     public function reviewed(): static
     {
         return $this->state(fn() => [
-            'status' => 'REVISADO_CIERRE',
+            'status' => 'REVISADO_AUDITORIA',
             'audit_notes' => fake()->sentence(),
             'blueprints_count' => fake()->numberBetween(1, 10),
             'calculations_added' => true,

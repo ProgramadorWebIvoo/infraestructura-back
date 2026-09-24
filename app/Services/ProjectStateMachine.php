@@ -17,9 +17,9 @@ class ProjectStateMachine
 {
     public const STATUSES = [
         'CREADO'                   => 'CREADO',
-        'REVISADO_CIERRE'          => 'REVISADO_CIERRE',
-        'RECHAZADO_CIERRE'         => 'RECHAZADO_CIERRE',
-        'EN_REEVALUACION_CIERRE'   => 'EN_REEVALUACION_CIERRE',
+        'REVISADO_AUDITORIA'          => 'REVISADO_AUDITORIA',
+        'RECHAZADO_AUDITORIA'         => 'RECHAZADO_AUDITORIA',
+        'EN_REEVALUACION_AUDITORIA'   => 'EN_REEVALUACION_AUDITORIA',
         'CONFIRMADO_PROCURA'       => 'CONFIRMADO_PROCURA',
         'COMPARATIVA_ENVIADA'      => 'COMPARATIVA_ENVIADA',
         'CONTRATADO'               => 'CONTRATADO',
@@ -32,10 +32,10 @@ class ProjectStateMachine
     /** Orden canónico del flujo — también usado por DashboardSummaryService para ordenar el funnel. */
     public const STATUS_ORDER = [
         'CREADO'                   => 0,
-        'REVISADO_CIERRE'          => 1,
-        // 'EN_REEVALUACION_CIERRE' se omite a propósito del orden canónico del
+        'REVISADO_AUDITORIA'          => 1,
+        // 'EN_REEVALUACION_AUDITORIA' se omite a propósito del orden canónico del
         // funnel: es un desvío temporal (Procura -> Auditoría -> de vuelta
-        // a REVISADO_CIERRE), no una etapa nueva del avance del proyecto.
+        // a REVISADO_AUDITORIA), no una etapa nueva del avance del proyecto.
         'CONFIRMADO_PROCURA'       => 2,
         'COMPARATIVA_ENVIADA'      => 3,
         'CONTRATADO'               => 4,

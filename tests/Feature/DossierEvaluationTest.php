@@ -15,13 +15,13 @@ class DossierEvaluationTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $cierreDeObra;
+    private User $auditoria;
     private User $procura;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->cierreDeObra = User::factory()->create(['role' => 'AUDITORIA']);
+        $this->auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $this->procura = User::factory()->create(['role' => 'PROCURA']);
     }
 
@@ -66,7 +66,7 @@ class DossierEvaluationTest extends TestCase
 
         $project = Project::factory()->create();
 
-        $response = $this->withHeaders($this->headers($this->cierreDeObra))
+        $response = $this->withHeaders($this->headers($this->auditoria))
             ->postJson("/api/projects/{$project->id}/evaluate-dossier");
 
         $response->assertStatus(200);
@@ -99,7 +99,7 @@ class DossierEvaluationTest extends TestCase
     {
         $project = Project::factory()->create();
 
-        $response = $this->withHeaders($this->headers($this->cierreDeObra))
+        $response = $this->withHeaders($this->headers($this->auditoria))
             ->postJson("/api/projects/{$project->id}/evaluate-dossier");
 
         $response->assertStatus(503);
@@ -109,17 +109,17 @@ class DossierEvaluationTest extends TestCase
         $this->assertNull($project->dossier_ai_evaluated_at);
     }
 
-    public function test_rejected_when_project_already_revisado_cierre(): void
+    public function test_rejected_when_project_already_revisado_auditoria(): void
     {
         $project = Project::factory()->reviewed()->create();
 
-        $response = $this->withHeaders($this->headers($this->cierreDeObra))
+        $response = $this->withHeaders($this->headers($this->auditoria))
             ->postJson("/api/projects/{$project->id}/evaluate-dossier");
 
         $response->assertStatus(422);
     }
 
-    public function test_allowed_when_project_is_rechazado_cierre(): void
+    public function test_allowed_when_project_is_rechazado_auditoria(): void
     {
         AiConfiguration::create([
             'provider' => 'openai',
@@ -130,9 +130,9 @@ class DossierEvaluationTest extends TestCase
         ]);
         $this->fakeOpenAiSuccess();
 
-        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+        $project = Project::factory()->create(['status' => 'RECHAZADO_AUDITORIA']);
 
-        $response = $this->withHeaders($this->headers($this->cierreDeObra))
+        $response = $this->withHeaders($this->headers($this->auditoria))
             ->postJson("/api/projects/{$project->id}/evaluate-dossier");
 
         $response->assertStatus(200);
@@ -144,7 +144,7 @@ class DossierEvaluationTest extends TestCase
 
         $project = Project::factory()->create();
 
-        $response = $this->withHeaders($this->headers($this->cierreDeObra))
+        $response = $this->withHeaders($this->headers($this->auditoria))
             ->postJson("/api/projects/{$project->id}/evaluate-dossier");
 
         $response->assertStatus(403);
@@ -158,7 +158,7 @@ class DossierEvaluationTest extends TestCase
 
         $project = Project::factory()->create();
 
-        $response = $this->withHeaders($this->headers($this->cierreDeObra))
+        $response = $this->withHeaders($this->headers($this->auditoria))
             ->postJson("/api/projects/{$project->id}/evaluate-dossier");
 
         $response->assertStatus(403);

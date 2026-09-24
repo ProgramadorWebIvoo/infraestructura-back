@@ -39,11 +39,11 @@ class ProjectStateMachineTest extends TestCase
 
     public function test_assert_status_in_passes_when_status_is_in_list(): void
     {
-        $project = new Project(['status' => ProjectStateMachine::STATUSES['RECHAZADO_CIERRE']]);
+        $project = new Project(['status' => ProjectStateMachine::STATUSES['RECHAZADO_AUDITORIA']]);
 
         ProjectStateMachine::assertStatusIn(
             $project,
-            [ProjectStateMachine::STATUSES['CREADO'], ProjectStateMachine::STATUSES['RECHAZADO_CIERRE']],
+            [ProjectStateMachine::STATUSES['CREADO'], ProjectStateMachine::STATUSES['RECHAZADO_AUDITORIA']],
             'no debería fallar'
         );
 
@@ -57,7 +57,7 @@ class ProjectStateMachineTest extends TestCase
         try {
             ProjectStateMachine::assertStatusIn(
                 $project,
-                [ProjectStateMachine::STATUSES['CREADO'], ProjectStateMachine::STATUSES['RECHAZADO_CIERRE']],
+                [ProjectStateMachine::STATUSES['CREADO'], ProjectStateMachine::STATUSES['RECHAZADO_AUDITORIA']],
                 'mensaje esperado'
             );
             $this->fail('Se esperaba un HttpException 422.');
@@ -67,15 +67,15 @@ class ProjectStateMachineTest extends TestCase
     }
 
     /**
-     * RECHAZADO_CIERRE y EN_REEVALUACION_CIERRE son los únicos estados sin
+     * RECHAZADO_AUDITORIA y EN_REEVALUACION_AUDITORIA son los únicos estados sin
      * lugar en el funnel (son desvíos transitorios de vuelta a un estado
      * anterior, no una etapa del flujo hacia adelante) — todos los demás
      * deben tener una posición en STATUS_ORDER.
      */
-    public function test_status_order_covers_every_status_except_rechazado_cierre(): void
+    public function test_status_order_covers_every_status_except_rechazado_auditoria(): void
     {
         $missing = array_diff(array_keys(ProjectStateMachine::STATUSES), array_keys(ProjectStateMachine::STATUS_ORDER));
 
-        $this->assertSame(['RECHAZADO_CIERRE', 'EN_REEVALUACION_CIERRE'], array_values($missing));
+        $this->assertSame(['RECHAZADO_AUDITORIA', 'EN_REEVALUACION_AUDITORIA'], array_values($missing));
     }
 }

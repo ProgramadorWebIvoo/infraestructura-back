@@ -519,7 +519,7 @@ INSERT INTO `users` (`id`, `name`, `email`, `role`, `status`, `email_verified_at
 (1, 'Alejandro González', 'admin@ivoo.local', 'SUPERADMIN', 'Active', NULL, '$2y$10$fADnE0el/RuWt9Oh6NOPeuwCrhKUvjXUxDuBlfWDWEVtZM97SGh.i', NULL, NULL, '2026-08-11 00:48:05'),
 (2, 'Test Presidencia', 'test.presidencia@ivoo.local', 'PRESIDENCIA', 'Active', NULL, '$2y$10$fADnE0el/RuWt9Oh6NOPeuwCrhKUvjXUxDuBlfWDWEVtZM97SGh.i', NULL, '2026-07-28 16:21:28', '2026-08-11 00:48:05'),
 (3, 'Test Infraestructura', 'test.infra@ivoo.local', 'INFRAESTRUCTURA', 'Active', NULL, '$2y$10$fADnE0el/RuWt9Oh6NOPeuwCrhKUvjXUxDuBlfWDWEVtZM97SGh.i', NULL, '2026-07-28 16:22:28', '2026-08-11 00:48:05'),
-(4, 'Test Cierre Obra', 'test.cierre@ivoo.local', 'AUDITORIA', 'Active', NULL, '$2y$10$fADnE0el/RuWt9Oh6NOPeuwCrhKUvjXUxDuBlfWDWEVtZM97SGh.i', NULL, '2026-07-28 16:22:45', '2026-08-11 00:48:05'),
+(4, 'Test Auditoría', 'test.cierre@ivoo.local', 'AUDITORIA', 'Active', NULL, '$2y$10$fADnE0el/RuWt9Oh6NOPeuwCrhKUvjXUxDuBlfWDWEVtZM97SGh.i', NULL, '2026-07-28 16:22:45', '2026-08-11 00:48:05'),
 (5, 'Test Procura', 'test.procura@ivoo.local', 'PROCURA', 'Active', NULL, '$2y$10$fADnE0el/RuWt9Oh6NOPeuwCrhKUvjXUxDuBlfWDWEVtZM97SGh.i', NULL, '2026-07-28 16:22:55', '2026-08-11 00:48:05'),
 (6, 'Test Analistas', 'test.analistas@ivoo.local', 'ANALISTA', 'Active', NULL, '$2y$10$fADnE0el/RuWt9Oh6NOPeuwCrhKUvjXUxDuBlfWDWEVtZM97SGh.i', NULL, '2026-07-28 16:23:04', '2026-08-11 00:48:05'),
 (7, 'Test Finanzas', 'test.finanzas@ivoo.local', 'FINANZAS', 'Active', NULL, '$2y$10$fADnE0el/RuWt9Oh6NOPeuwCrhKUvjXUxDuBlfWDWEVtZM97SGh.i', NULL, '2026-07-28 16:23:14', '2026-08-11 00:48:05'),

@@ -642,7 +642,7 @@ Schema::table('projects', function (Blueprint $table) {
 #### ❌ Enum sin CHECK constraint suficiente:
 
 ```php
-enum('status', ['CREADO', 'REVISADO_CIERRE', ...]) // OK en MySQL, no en SQLite
+enum('status', ['CREADO', 'REVISADO_AUDITORIA', ...]) // OK en MySQL, no en SQLite
 ```
 
 **Propuesta:** Agregar validación en Model:

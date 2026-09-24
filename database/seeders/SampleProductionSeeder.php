@@ -20,7 +20,7 @@ class SampleProductionSeeder extends Seeder
 {
     private const STATUSES = [
         'CREADO'                => 12,
-        'REVISADO_CIERRE'       => 30,
+        'REVISADO_AUDITORIA'       => 30,
         'CONFIRMADO_PROCURA'    => 30,
         'COMPARATIVA_ENVIADA'   => 25,
         'CONTRATADO'            => 20,
@@ -158,7 +158,7 @@ class SampleProductionSeeder extends Seeder
                 // Antigüedad realista: estados intermedios con updated_at viejo
                 // para que el dashboard detecte cuellos de botella.
                 $staleDays = match ($status) {
-                    'REVISADO_CIERRE', 'CONFIRMADO_PROCURA' => mt_rand(15, 60),
+                    'REVISADO_AUDITORIA', 'CONFIRMADO_PROCURA' => mt_rand(15, 60),
                     'COMPARATIVA_ENVIADA' => mt_rand(10, 45),
                     default => mt_rand(0, 8),
                 };
@@ -176,9 +176,9 @@ class SampleProductionSeeder extends Seeder
                     'created_date' => $createdDate,
                     'status' => $status,
                     'estimated_total' => $estimatedTotal,
-                    'audit_notes' => in_array($status, ['REVISADO_CIERRE', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? 'Revisión técnica aprobada por Auditoría.' : null,
-                    'calculations_added' => in_array($status, ['REVISADO_CIERRE', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']),
-                    'blueprints_count' => in_array($status, ['REVISADO_CIERRE', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? mt_rand(1, 8) : 0,
+                    'audit_notes' => in_array($status, ['REVISADO_AUDITORIA', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? 'Revisión técnica aprobada por Auditoría.' : null,
+                    'calculations_added' => in_array($status, ['REVISADO_AUDITORIA', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']),
+                    'blueprints_count' => in_array($status, ['REVISADO_AUDITORIA', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? mt_rand(1, 8) : 0,
                     'procura_review_notes' => in_array($status, ['CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? 'Inversión aprobada por Procura.' : null,
                     'approved_investment_amount' => in_array($status, ['CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? $approved : null,
                     'selected_contractor_code' => null,
@@ -237,8 +237,8 @@ class SampleProductionSeeder extends Seeder
                 // Pagos (anticipo desde EN_EJECUCION, finiquito desde COMPLETADO_PAGADO)
                 $this->seedPayments($projectId, $status, $updatedAt);
 
-                // Documentos (desde REVISADO_CIERRE)
-                if (in_array($status, ['REVISADO_CIERRE', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO'])) {
+                // Documentos (desde REVISADO_AUDITORIA)
+                if (in_array($status, ['REVISADO_AUDITORIA', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO'])) {
                     $this->seedDocuments($projectId, $status, $updatedAt);
                 }
 

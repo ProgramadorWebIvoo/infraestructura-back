@@ -21,7 +21,7 @@
 
 | Área | Mejoras principales |
 |---|---|
-| **Backend** | Versionado de documentos (V1→V2→V3 vía `document_group_id`), flujo de rechazo de solicitudes iniciales (estado `RECHAZADO_CIERRE`) con reenvío bajo el mismo ID, correcciones/observaciones al rechazar (doc tipo CORRECCION + `audit_logs.observations`), endpoint de eliminación de adjuntos con protección de correcciones, condiciones/garantía estructurada de materiales, rol MARKETING con acceso parcial a Procura, `RejectionService` transversal, soft delete en `ProjectProposal`, separación contact → email/phone |
+| **Backend** | Versionado de documentos (V1→V2→V3 vía `document_group_id`), flujo de rechazo de solicitudes iniciales (estado `RECHAZADO_AUDITORIA`) con reenvío bajo el mismo ID, correcciones/observaciones al rechazar (doc tipo CORRECCION + `audit_logs.observations`), endpoint de eliminación de adjuntos con protección de correcciones, condiciones/garantía estructurada de materiales, rol MARKETING con acceso parcial a Procura, `RejectionService` transversal, soft delete en `ProjectProposal`, separación contact → email/phone |
 | **Frontend** | Sistema de design tokens (`SEMANTIC_COLOR_MAP`) normalizado en toda la app, wizard de 3 pasos para solicitudes, tabs + KpiPills en INFRA/CIERRE, componentes compartidos nuevos (`TextField`, `SegmentedControl`, `Stepper`, `RequiredMark`, `HelpHint`, `TableTopBar`, `TableToolbar`, `ProjectDocumentsList`, previsualizador PDF/imagen/CSV), secciones de peticiones rechazadas con detalle y reenvío, tablas con fillViewport + affordance de fila clickeable, SkeletonLoader unificado |
 | **UX/UI** | Animaciones (stagger, crossfade, spring), indicadores de campo obligatorio, tooltips, fuerza de contraseña, validación en vivo, colores semánticos únicos, accesibilidad corregida (asociación label/campo) |
 | **Calidad** | Tests nuevos para vistas sin cobertura (MaterialConfigPanel, ProveedoresConfigPanel), eliminación de código muerto (virtualización sin uso, targetRole vestigial), fixes de bugs reales (fallback rating inconsistente, toast duplicado, CSP bloqueando blob:, apiDownload sin header Accept) |
@@ -78,7 +78,7 @@
 ### Backend
 - **Versionado de documentos**: cada carga genera una nueva versión (V1, V2, V3…) vinculada por `document_group_id` — los planos/documentos se corrigen sin reemplazar físicamente el archivo anterior, con trazabilidad de quién corrigió qué y cuándo (cumple la regla crítica del plan maestro).
 - **Condiciones de material obligatorias**: estado NUEVO/USADO/AMBAS requerido por material; garantía pasa de texto libre a par valor-unidad estructurado (DÍAS/MESES/AÑOS), validable y consultable.
-- **Flujo de rechazo de solicitud inicial**: nuevo estado `RECHAZADO_CIERRE`; Auditoría puede rechazar con motivo e Infraestructura edita y reenvía el mismo proyecto (mismo ID, materiales reemplazados, vuelve a `CREADO`) en vez de duplicar. Independiente del flujo de revisión de documentos y del rechazo de cuadros comparativos de Procura.
+- **Flujo de rechazo de solicitud inicial**: nuevo estado `RECHAZADO_AUDITORIA`; Auditoría puede rechazar con motivo e Infraestructura edita y reenvía el mismo proyecto (mismo ID, materiales reemplazados, vuelve a `CREADO`) en vez de duplicar. Independiente del flujo de revisión de documentos y del rechazo de cuadros comparativos de Procura.
 - **Correcciones y observaciones al rechazar**: nuevo tipo de documento CORRECCION + columna `audit_logs.observations` (separada del motivo); registrada la acción en el catálogo de notificaciones (evita fallback silencioso).
 
 ### Frontend
@@ -135,7 +135,7 @@
 | Mejora | Detalle |
 |---|---|
 | Versionado de documentos | V1→V2→V3 vía `document_group_id`, sin reemplazo físico, trazable |
-| Rechazo de solicitud inicial | Estado `RECHAZADO_CIERRE` + reenvío bajo mismo ID (sin duplicados) |
+| Rechazo de solicitud inicial | Estado `RECHAZADO_AUDITORIA` + reenvío bajo mismo ID (sin duplicados) |
 | Correcciones al rechazar | Doc tipo CORRECCION + `audit_logs.observations` + catálogo de notificaciones |
 | Eliminación de adjuntos | Endpoint restringido a petición rechazada; correcciones protegidas |
 | Materiales | Condición NUEVO/USADO/AMBAS obligatoria; garantía valor-unidad estructurada |

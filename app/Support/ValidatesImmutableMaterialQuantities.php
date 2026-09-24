@@ -7,8 +7,7 @@ use Illuminate\Contracts\Validation\Validator;
 
 /**
  * Las cantidades de los materiales base del expediente son inmutables desde
- * la carga/renegociación de propuestas: ya pasaron por auditoría de Cierre
- * de Obra, y permitir editarlas ahí rompería esa trazabilidad. El frontend ya
+ * la carga/renegociación de propuestas: ya pasaron por auditoría, y permitir editarlas ahí rompería esa trazabilidad. El frontend ya
  * bloquea la edición (input de solo lectura para filas no personalizadas),
  * pero esto se re-valida en el servidor porque el payload de materialItems
  * llega como JSON libre — nada impide un request directo a la API con una

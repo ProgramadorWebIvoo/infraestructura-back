@@ -78,7 +78,7 @@ class ProjectHistoryDetailBuilder
         $states = [
             'obra' => true,
             'presupuesto' => $project->materials->isNotEmpty(),
-            'solicitud' => $reached('REVISADO_CIERRE'),
+            'solicitud' => $reached('REVISADO_AUDITORIA'),
             'proveedores' => $project->proposals->isNotEmpty(),
             'adjudicacion' => $project->selected_proposal_id !== null,
             'pagos' => $paid->contains('FINAL'),

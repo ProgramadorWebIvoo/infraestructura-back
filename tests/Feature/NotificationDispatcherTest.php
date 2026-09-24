@@ -31,14 +31,14 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $otroRol = User::factory()->create(['role' => 'FINANZAS']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
         // CREADO -> notifica a AUDITORIA (+ SUPERADMIN/ADMIN), no a FINANZAS.
-        Notification::assertSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertSentTo($auditoria, ProjectActionNotification::class);
         Notification::assertNotSentTo($otroRol, ProjectActionNotification::class);
     }
 
@@ -71,13 +71,13 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra');
 
         Notification::assertSentTo(
-            $cierre,
+            $auditoria,
             ProjectActionNotification::class,
             function (ProjectActionNotification $notification) use ($project) {
                 return $notification->project->id === $project->id
@@ -91,13 +91,13 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
         $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $cierre->id,
+            'user_id' => $auditoria->id,
             'project_id' => $project->id,
             'action' => 'Creacion de peticion de obra',
             'details' => 'detalle',
@@ -113,14 +113,14 @@ class NotificationDispatcherTest extends TestCase
         // destinatarios por rol (CREADO -> AUDITORIA + SUPERADMIN/ADMIN)
         // pero no debe notificarse a sí mismo.
         $actor = User::factory()->create(['role' => 'SUPERADMIN']);
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         $this->actingAs($actor);
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
         Notification::assertNotSentTo($actor, ProjectActionNotification::class);
-        Notification::assertSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertSentTo($auditoria, ProjectActionNotification::class);
 
         $this->assertDatabaseMissing('app_notifications', [
             'user_id' => $actor->id,
@@ -133,12 +133,12 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra');
 
-        Notification::assertNotSentTo($cierre, ProjectActionMail::class);
+        Notification::assertNotSentTo($auditoria, ProjectActionMail::class);
     }
 
     public function test_critical_action_sends_mail_to_recipients(): void
@@ -149,13 +149,13 @@ class NotificationDispatcherTest extends TestCase
         // COMPLETADO_PAGADO (después del pago) — status real donde la
         // matriz sembrada tiene destinatarios de correo (AUDITORIA,
         // INFRAESTRUCTURA, PRESIDENCIA), no LISTO_PAGO_FINAL (antes del pago).
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'COMPLETADO_PAGADO']);
 
         AuditLog::record($project, 'AUDITORIA', 'Liberacion total de fondos', 'Pago final liberado');
 
         Notification::assertSentTo(
-            $cierre,
+            $auditoria,
             ProjectActionMail::class,
             fn (ProjectActionMail $mail) => $mail->project->id === $project->id
                 && $mail->action === 'Liberacion total de fondos'
@@ -185,7 +185,7 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AppSetting::where('key', 'acciones_con_notificacion_app')->update([
@@ -195,9 +195,9 @@ class NotificationDispatcherTest extends TestCase
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
-        Notification::assertNotSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertNotSentTo($auditoria, ProjectActionNotification::class);
         $this->assertDatabaseMissing('app_notifications', [
-            'user_id' => $cierre->id,
+            'user_id' => $auditoria->id,
             'action' => 'Creacion de peticion de obra',
         ]);
     }
@@ -206,7 +206,7 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AppSetting::where('key', 'acciones_con_notificacion_app')->update([
@@ -216,7 +216,7 @@ class NotificationDispatcherTest extends TestCase
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
-        Notification::assertSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertSentTo($auditoria, ProjectActionNotification::class);
     }
 
     public function test_mark_read_endpoint_updates_read_at(): void
@@ -367,27 +367,27 @@ class NotificationDispatcherTest extends TestCase
         Notification::fake();
 
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'AUDITORIA', 'Rechazo de petición de obra', 'Descripción insuficiente.');
 
         Notification::assertSentTo($infra, ProjectActionNotification::class);
         Notification::assertSentTo($infra, ProjectActionMail::class);
-        Notification::assertNotSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertNotSentTo($auditoria, ProjectActionNotification::class);
     }
 
     public function test_project_resubmission_notifies_auditoria_via_app(): void
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
-        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+        $project = Project::factory()->create(['status' => 'RECHAZADO_AUDITORIA']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Reenvío de petición corregida', 'Petición corregida y reenviada.');
 
-        Notification::assertSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertSentTo($auditoria, ProjectActionNotification::class);
         Notification::assertNotSentTo($infra, ProjectActionNotification::class);
     }
 
@@ -395,14 +395,14 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $procura = User::factory()->create(['role' => 'PROCURA']);
         $project = Project::factory()->reviewed()->create();
 
         AuditLog::record($project, 'PROCURA', 'Solicitud de reevaluación a Auditoría', 'La cubicación no coincide con los planos.');
 
-        Notification::assertSentTo($cierre, ProjectActionNotification::class);
-        Notification::assertSentTo($cierre, ProjectActionMail::class);
+        Notification::assertSentTo($auditoria, ProjectActionNotification::class);
+        Notification::assertSentTo($auditoria, ProjectActionMail::class);
         Notification::assertNotSentTo($procura, ProjectActionNotification::class);
     }
 
@@ -411,13 +411,13 @@ class NotificationDispatcherTest extends TestCase
         Notification::fake();
 
         $procura = User::factory()->create(['role' => 'PROCURA']);
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
-        $project = Project::factory()->reviewed()->create(['status' => 'EN_REEVALUACION_CIERRE']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
+        $project = Project::factory()->reviewed()->create(['status' => 'EN_REEVALUACION_AUDITORIA']);
 
         AuditLog::record($project, 'AUDITORIA', 'Reevaluación resuelta, reenviado a Procura', 'Se corrigió la cubicación.');
 
         Notification::assertSentTo($procura, ProjectActionNotification::class);
-        Notification::assertNotSentTo($cierre, ProjectActionNotification::class);
+        Notification::assertNotSentTo($auditoria, ProjectActionNotification::class);
     }
 
     public function test_admin_action_without_project_notifies_via_rule_matrix(): void
@@ -494,7 +494,7 @@ class NotificationDispatcherTest extends TestCase
 
     public function test_app_notification_row_defaults_to_informacion_for_non_critical_actions(): void
     {
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra');
@@ -527,23 +527,23 @@ class NotificationDispatcherTest extends TestCase
     {
         Event::fake([NotificationCreated::class]);
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
         Event::assertDispatched(
             NotificationCreated::class,
-            fn (NotificationCreated $event) => $event->notification->user_id === $cierre->id
+            fn (NotificationCreated $event) => $event->notification->user_id === $auditoria->id
                 && $event->notification->action === 'Creacion de peticion de obra'
         );
     }
 
     public function test_notification_created_broadcasts_on_the_recipients_private_channel(): void
     {
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $notification = AppNotification::create([
-            'user_id' => $cierre->id,
+            'user_id' => $auditoria->id,
             'action' => 'Test',
         ]);
 
@@ -552,7 +552,7 @@ class NotificationDispatcherTest extends TestCase
 
         $this->assertCount(1, $channels);
         $this->assertInstanceOf(PrivateChannel::class, $channels[0]);
-        $this->assertSame('private-App.Models.User.'.$cierre->id, $channels[0]->name);
+        $this->assertSame('private-App.Models.User.'.$auditoria->id, $channels[0]->name);
         $this->assertSame('notification.created', $event->broadcastAs());
         $this->assertSame($notification->toArray(), $event->broadcastWith());
     }
@@ -567,13 +567,13 @@ class NotificationDispatcherTest extends TestCase
             throw new \RuntimeException('Reverb unavailable');
         });
 
-        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
         $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $cierre->id,
+            'user_id' => $auditoria->id,
             'action' => 'Creacion de peticion de obra',
         ]);
     }

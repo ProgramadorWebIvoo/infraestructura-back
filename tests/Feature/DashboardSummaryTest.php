@@ -175,7 +175,7 @@ class DashboardSummaryTest extends TestCase
     public function test_lists_stalled_projects_after_14_days_without_activity(): void
     {
         $old = Project::factory()->create([
-            'status' => 'REVISADO_CIERRE',
+            'status' => 'REVISADO_AUDITORIA',
             'created_date' => now()->subDays(40)->toDateString(),
             'updated_at' => now()->subDays(40),
         ]);
@@ -192,7 +192,7 @@ class DashboardSummaryTest extends TestCase
         $stalled = $response->json('stalledProjects');
         $this->assertCount(1, $stalled);
         $this->assertEquals($old->id, $stalled[0]['id']);
-        $this->assertEquals('REVISADO_CIERRE', $stalled[0]['status']);
+        $this->assertEquals('REVISADO_AUDITORIA', $stalled[0]['status']);
         $this->assertGreaterThanOrEqual(14, $stalled[0]['daysSinceUpdate']);
     }
 
@@ -201,7 +201,7 @@ class DashboardSummaryTest extends TestCase
         // Proyecto con 10 días de inactividad: no estancado con el umbral
         // default (14), pero sí con un umbral configurado a 7.
         $project = Project::factory()->create([
-            'status' => 'REVISADO_CIERRE',
+            'status' => 'REVISADO_AUDITORIA',
             'created_date' => now()->subDays(10)->toDateString(),
             'updated_at' => now()->subDays(10),
         ]);

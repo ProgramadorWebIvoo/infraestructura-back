@@ -19,7 +19,7 @@ class ProjectLifecycleTest extends TestCase
     use RefreshDatabase;
 
     private User $infra;
-    private User $cierre;
+    private User $auditoria;
     private User $procura;
     private User $analista;
     private User $finanzas;
@@ -29,7 +29,7 @@ class ProjectLifecycleTest extends TestCase
     {
         parent::setUp();
         $this->infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
-        $this->cierre = User::factory()->create(['role' => 'AUDITORIA']);
+        $this->auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $this->procura = User::factory()->create(['role' => 'PROCURA']);
         $this->analista = User::factory()->create(['role' => 'ANALISTA']);
         $this->finanzas = User::factory()->create(['role' => 'FINANZAS']);
@@ -136,17 +136,17 @@ class ProjectLifecycleTest extends TestCase
         $response->assertJsonPath('data.materials.1.warrantyUnit', null);
     }
 
-    public function test_review_project_cierre(): void
+    public function test_review_project_auditoria(): void
     {
         $project = Project::factory()->create(['status' => 'CREADO']);
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/review", [
                 'notes' => 'Planos aprobados con correcciones menores',
             ]);
 
         $response->assertStatus(200);
-        $response->assertJsonPath('data.status', 'REVISADO_CIERRE');
+        $response->assertJsonPath('data.status', 'REVISADO_AUDITORIA');
         $response->assertJsonPath('data.auditNotes', 'Planos aprobados con correcciones menores');
 
         // Audit log
@@ -157,28 +157,28 @@ class ProjectLifecycleTest extends TestCase
         ]);
     }
 
-    public function test_review_project_cierre_without_notes(): void
+    public function test_review_project_auditoria_without_notes(): void
     {
         $project = Project::factory()->create(['status' => 'CREADO']);
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/review", []);
 
         $response->assertStatus(200);
-        $response->assertJsonPath('data.status', 'REVISADO_CIERRE');
+        $response->assertJsonPath('data.status', 'REVISADO_AUDITORIA');
     }
 
     public function test_reject_project_from_creado(): void
     {
         $project = Project::factory()->create(['status' => 'CREADO']);
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/reject-project", [
                 'reason' => 'La descripción no detalla el alcance del trabajo.',
             ]);
 
         $response->assertStatus(200);
-        $response->assertJsonPath('data.status', 'RECHAZADO_CIERRE');
+        $response->assertJsonPath('data.status', 'RECHAZADO_AUDITORIA');
 
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
@@ -194,7 +194,7 @@ class ProjectLifecycleTest extends TestCase
     {
         $project = Project::factory()->create(['status' => 'CREADO']);
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/reject-project", [
                 'reason' => 'La descripción no detalla el alcance del trabajo.',
                 'observations' => 'Revisar también la cubicación de concreto.',
@@ -212,13 +212,13 @@ class ProjectLifecycleTest extends TestCase
     public function test_upload_correccion_document_after_rejection(): void
     {
         $project = Project::factory()->create(['status' => 'CREADO']);
-        $this->actingAs($this->cierre)
+        $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/reject-project", ['reason' => 'Motivo cualquiera'])
             ->assertStatus(200);
 
         $file = \Illuminate\Http\UploadedFile::fake()->create('correccion.pdf', 100, 'application/pdf');
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/documents", [
                 'document_type' => 'CORRECCION',
                 'files' => [$file],
@@ -247,9 +247,9 @@ class ProjectLifecycleTest extends TestCase
         return $doc;
     }
 
-    public function test_infraestructura_can_delete_document_while_rechazado_cierre(): void
+    public function test_infraestructura_can_delete_document_while_rechazado_auditoria(): void
     {
-        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+        $project = Project::factory()->create(['status' => 'RECHAZADO_AUDITORIA']);
         $doc = $this->makeDocument($project);
 
         $response = $this->actingAs($this->infra)
@@ -264,7 +264,7 @@ class ProjectLifecycleTest extends TestCase
         ]);
     }
 
-    public function test_infraestructura_cannot_delete_document_outside_rechazado_cierre(): void
+    public function test_infraestructura_cannot_delete_document_outside_rechazado_auditoria(): void
     {
         $project = Project::factory()->create(['status' => 'CREADO']);
         $doc = $this->makeDocument($project);
@@ -278,7 +278,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_infraestructura_cannot_delete_correccion_document(): void
     {
-        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+        $project = Project::factory()->create(['status' => 'RECHAZADO_AUDITORIA']);
         $doc = $this->makeDocument($project, 'CORRECCION');
 
         $response = $this->actingAs($this->infra)
@@ -292,7 +292,7 @@ class ProjectLifecycleTest extends TestCase
     {
         $project = Project::factory()->reviewed()->create();
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/reject-project", [
                 'reason' => 'Motivo cualquiera',
             ]);
@@ -302,7 +302,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_resubmit_project_after_rejection(): void
     {
-        $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
+        $project = Project::factory()->create(['status' => 'RECHAZADO_AUDITORIA']);
         $project->materials()->create([
             'id' => $project->id . '-MAT-1',
             'name' => 'Cemento viejo',
@@ -338,7 +338,7 @@ class ProjectLifecycleTest extends TestCase
     public function test_resubmit_project_clears_stale_dossier_ai_evaluation(): void
     {
         $project = Project::factory()->create([
-            'status' => 'RECHAZADO_CIERRE',
+            'status' => 'RECHAZADO_AUDITORIA',
             'dossier_ai_score' => 90,
             'dossier_ai_summary' => 'Análisis del expediente antes de la corrección.',
             'dossier_ai_alerts' => ['Alguna alerta vieja.'],
@@ -409,7 +409,7 @@ class ProjectLifecycleTest extends TestCase
         ]);
     }
 
-    public function test_send_to_reevaluation_from_revisado_cierre(): void
+    public function test_send_to_reevaluation_from_revisado_auditoria(): void
     {
         $project = Project::factory()->reviewed()->create();
 
@@ -419,7 +419,7 @@ class ProjectLifecycleTest extends TestCase
             ]);
 
         $response->assertStatus(200);
-        $response->assertJsonPath('data.status', 'EN_REEVALUACION_CIERRE');
+        $response->assertJsonPath('data.status', 'EN_REEVALUACION_AUDITORIA');
 
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
@@ -454,17 +454,17 @@ class ProjectLifecycleTest extends TestCase
         $response->assertJsonValidationErrors('reason');
     }
 
-    public function test_resolve_reevaluation_returns_to_revisado_cierre(): void
+    public function test_resolve_reevaluation_returns_to_revisado_auditoria(): void
     {
-        $project = Project::factory()->reviewed()->create(['status' => 'EN_REEVALUACION_CIERRE']);
+        $project = Project::factory()->reviewed()->create(['status' => 'EN_REEVALUACION_AUDITORIA']);
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/resolve-reevaluation", [
                 'notes' => 'Se corrigió la cubicación según lo indicado.',
             ]);
 
         $response->assertStatus(200);
-        $response->assertJsonPath('data.status', 'REVISADO_CIERRE');
+        $response->assertJsonPath('data.status', 'REVISADO_AUDITORIA');
 
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
@@ -477,7 +477,7 @@ class ProjectLifecycleTest extends TestCase
     {
         $project = Project::factory()->reviewed()->create();
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/resolve-reevaluation", []);
 
         $response->assertStatus(422);
@@ -833,11 +833,11 @@ class ProjectLifecycleTest extends TestCase
         $projectId = $createResponse->json('data.id');
 
         // 2. Review (AUDITORIA)
-        $this->actingAs($this->cierre)
+        $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$projectId}/review", [
                 'notes' => 'Revisión completa',
             ])
-            ->assertJsonPath('data.status', 'REVISADO_CIERRE');
+            ->assertJsonPath('data.status', 'REVISADO_AUDITORIA');
 
         // 3. Approve investment (PROCURA)
         $this->actingAs($this->procura)
@@ -894,12 +894,12 @@ class ProjectLifecycleTest extends TestCase
         ]);
 
         // 8. Report finished (AUDITORIA)
-        $this->actingAs($this->cierre)
+        $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$projectId}/report-finished")
             ->assertJsonPath('data.status', 'VERIFICANDO_FINALIZACION');
 
         // 9. Verify completion (AUDITORIA) — approve
-        $this->actingAs($this->cierre)
+        $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$projectId}/verify-completion", [
                 'qualityVerified'        => true,
                 'completionVerifiedDate' => '2026-07-22',
@@ -970,7 +970,7 @@ class ProjectLifecycleTest extends TestCase
     {
         $project = Project::factory()->create(['status' => 'VERIFICANDO_FINALIZACION']);
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/verify-completion", [
                 'qualityVerified' => false,
                 'details'         => 'Se requieren correcciones en instalaciones eléctricas',
@@ -1001,7 +1001,7 @@ class ProjectLifecycleTest extends TestCase
 
         // Filter by status
         $response = $this->actingAs($this->infra)
-            ->getJson('/api/projects?status=REVISADO_CIERRE');
+            ->getJson('/api/projects?status=REVISADO_AUDITORIA');
         $response->assertStatus(200);
         $this->assertCount(1, $response->json('data'));
     }
@@ -1131,7 +1131,7 @@ class ProjectLifecycleTest extends TestCase
     {
         $project = Project::factory()->create(['status' => 'CREADO']);
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/report-finished");
 
         $response->assertStatus(422);
@@ -1142,7 +1142,7 @@ class ProjectLifecycleTest extends TestCase
     {
         $project = Project::factory()->create(['status' => 'EN_EJECUCION']);
 
-        $response = $this->actingAs($this->cierre)
+        $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/verify-completion", [
                 'qualityVerified' => true,
             ]);

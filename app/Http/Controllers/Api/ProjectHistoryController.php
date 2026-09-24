@@ -33,6 +33,17 @@ class ProjectHistoryController extends Controller
         ]);
     }
 
+    /** Todas las obras que cumplen los filtros (tope ProjectHistoryService::EXPORT_LIMIT), sin paginar, para exportar. */
+    public function export(ProjectHistoryIndexRequest $request)
+    {
+        $filters = $request->validated();
+        $filters['withAlerts'] = $request->boolean('withAlerts');
+
+        return response()->json([
+            'items' => ProjectHistoryRowResource::collection($this->history->getExportRows($filters))->resolve(),
+        ]);
+    }
+
     public function show(Project $project)
     {
         return response()->json(['data' => $this->history->getDetail($project)]);

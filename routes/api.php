@@ -225,6 +225,9 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/project-history', [\App\Http\Controllers\Api\ProjectHistoryController::class, 'index'])
         ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/project-history/export', [\App\Http\Controllers\Api\ProjectHistoryController::class, 'export'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/project-history/{project}', [\App\Http\Controllers\Api\ProjectHistoryController::class, 'show'])
         ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

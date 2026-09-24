@@ -150,6 +150,90 @@ class ProjectHistoryTest extends TestCase
         $this->assertSame([$project->id], $ids);
     }
 
+    public function test_list_row_includes_awarded_contractor_with_rating_or_null(): void
+    {
+        Contractor::where('code', 'CON-1')->update(['rating' => 4.5]);
+        $awarded = $this->fullProject();
+        $bare = Project::factory()->create(['status' => 'CREADO', 'created_date' => '2020-01-01']);
+
+        $items = collect($this->actingAs($this->presidencia)->getJson('/api/project-history')->assertOk()->json('items'))->keyBy('id');
+
+        $this->assertSame('Proveedor Uno', $items[$awarded->id]['contractor']['name']);
+        $this->assertSame('CON-1', $items[$awarded->id]['contractor']['code']);
+        $this->assertEquals(4.5, $items[$awarded->id]['contractor']['rating']);
+        $this->assertNull($items[$bare->id]['contractor']);
+    }
+
+    public function test_list_filters_by_type_dates_and_location_search(): void
+    {
+        $a = Project::factory()->create(['type' => 'INFRAESTRUCTURA', 'location' => 'Caracas', 'created_date' => '2026-01-10']);
+        $b = Project::factory()->create(['type' => 'MANTENIMIENTO', 'location' => 'Maracay', 'created_date' => '2026-03-10']);
+        $ids = fn (string $qs) => collect($this->actingAs($this->presidencia)->getJson("/api/project-history?{$qs}")->assertOk()->json('items'))->pluck('id')->all();
+
+        $this->assertSame([$a->id], $ids('type=INFRAESTRUCTURA'));
+        $this->assertSame([$b->id], $ids('dateFrom=2026-02-01'));
+        $this->assertSame([$a->id], $ids('dateTo=2026-02-01'));
+        $this->assertSame([$b->id], $ids('q=maracay'));
+        $this->assertSame([], $ids('dateFrom=2026-04-01'));
+    }
+
+    public function test_list_rejects_inverted_date_range_and_oversized_page(): void
+    {
+        $this->actingAs($this->presidencia)->getJson('/api/project-history?dateFrom=2026-05-01&dateTo=2026-01-01')->assertStatus(422);
+        $this->actingAs($this->presidencia)->getJson('/api/project-history?perPage=500')->assertStatus(422);
+    }
+
+    public function test_list_paginates_and_reports_totals(): void
+    {
+        Project::factory()->count(5)->create();
+
+        $page2 = $this->actingAs($this->presidencia)->getJson('/api/project-history?perPage=2&page=2')->assertOk()->json();
+
+        $this->assertSame(5, $page2['total']);
+        $this->assertSame(3, $page2['lastPage']);
+        $this->assertSame(2, $page2['currentPage']);
+        $this->assertCount(2, $page2['items']);
+    }
+
+    public function test_search_treats_like_wildcards_literally(): void
+    {
+        Project::factory()->create(['title' => 'Obra 100% lista']);
+        Project::factory()->create(['title' => 'Obra cualquiera']);
+
+        $items = $this->actingAs($this->presidencia)->getJson('/api/project-history?q=' . urlencode('%'))->assertOk()->json('items');
+
+        $this->assertCount(1, $items);
+        $this->assertSame('Obra 100% lista', $items[0]['title']);
+    }
+
+    public function test_export_returns_all_filtered_rows_without_pagination_and_is_role_protected(): void
+    {
+        Project::factory()->count(20)->create(['type' => 'MANTENIMIENTO']);
+        Project::factory()->create(['type' => 'INFRAESTRUCTURA']);
+
+        $all = $this->actingAs($this->presidencia)->getJson('/api/project-history/export')->assertOk()->json('items');
+        $filtered = $this->actingAs($this->presidencia)->getJson('/api/project-history/export?type=INFRAESTRUCTURA')->assertOk()->json('items');
+
+        $this->assertCount(21, $all);
+        $this->assertCount(1, $filtered);
+        $this->assertArrayHasKey('figures', $all[0]);
+
+        $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $this->actingAs($infra)->getJson('/api/project-history/export')->assertForbidden();
+    }
+
+    public function test_export_route_is_not_swallowed_by_the_project_wildcard(): void
+    {
+        $this->actingAs($this->presidencia)->getJson('/api/project-history/export')->assertOk()->assertJsonStructure(['items']);
+        $this->actingAs($this->presidencia)->getJson('/api/project-history/NO-EXISTE')->assertNotFound();
+    }
+
+    public function test_unauthenticated_requests_are_rejected(): void
+    {
+        $this->getJson('/api/project-history')->assertUnauthorized();
+        $this->getJson('/api/project-history/export')->assertUnauthorized();
+    }
+
     public function test_list_query_count_does_not_grow_with_number_of_projects(): void
     {
         Project::factory()->count(3)->create();

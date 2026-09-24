@@ -8,6 +8,8 @@ use App\Models\Project;
 use App\Models\ProjectProposal;
 use App\Models\User;
 use App\Notifications\ProjectActionMail;
+use App\Notifications\SupplierAwardNotice;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -84,6 +86,18 @@ class AwardApprovalNotificationsTest extends TestCase
         $this->assertSame(1, $this->inbox($this->finanzas, 'Confirmacion de contratacion'));
         $this->assertSame(1, $this->inbox($this->presidencia, 'Confirmacion de contratacion'));
         Notification::assertSentTo($this->finanzas, ProjectActionMail::class);
+    }
+
+    public function test_supplier_is_notified_only_when_sent_to_finance(): void
+    {
+        $this->select();
+        $this->actingAs($this->presidencia)->postJson("/api/projects/{$this->project->id}/award-approval")->assertStatus(200);
+        Notification::assertNothingSentTo(new AnonymousNotifiable());
+
+        $this->actingAs($this->procura)->postJson("/api/projects/{$this->project->id}/send-to-finance")->assertStatus(200);
+
+        $email = Contractor::where('code', $this->project->fresh()->selected_contractor_code)->value('email');
+        Notification::assertSentOnDemand(SupplierAwardNotice::class, fn ($n, $channels, $notifiable) => $notifiable->routes['mail'] === $email);
     }
 
     public function test_rejection_notifies_procura_by_app_and_mail(): void

@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\ProjectRateFreeze;
+use App\Notifications\SupplierAwardNotice;
 use App\Support\CacheVersion;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * Circuito de aprobación de la adjudicación:
@@ -82,7 +85,25 @@ class AwardApprovalService
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$project->selected_contractor_code} adjudicado y enviado a Finanzas.");
         CacheVersion::bump('contractor_history:' . $project->selected_contractor_code);
+        $this->notifySupplier($project);
 
         return $project;
+    }
+
+    /** Mejora, no requisito: un SMTP caído o un proveedor sin correo no debe revertir el envío ya confirmado. */
+    private function notifySupplier(Project $project): void
+    {
+        $contractor = Contractor::where('code', $project->selected_contractor_code)->first();
+
+        if (!$contractor?->email) {
+            return;
+        }
+
+        try {
+            Notification::route('mail', $contractor->email)
+                ->notify(new SupplierAwardNotice($project->title, $contractor->name));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

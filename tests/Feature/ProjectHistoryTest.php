@@ -99,7 +99,7 @@ class ProjectHistoryTest extends TestCase
         $project = $this->fullProject();
 
         $row = $this->actingAs($this->presidencia)->getJson('/api/project-history')
-            ->assertOk()->json('data.0');
+            ->assertOk()->json('items.0');
 
         $this->assertSame($project->id, $row['id']);
         $this->assertEquals(1400, $row['figures']['estimated']);
@@ -116,7 +116,7 @@ class ProjectHistoryTest extends TestCase
     {
         Project::factory()->create(['status' => 'CREADO', 'estimated_total' => 900, 'approved_investment_amount' => null]);
 
-        $figures = $this->actingAs($this->presidencia)->getJson('/api/project-history')->json('data.0.figures');
+        $figures = $this->actingAs($this->presidencia)->getJson('/api/project-history')->json('items.0.figures');
 
         $this->assertNull($figures['approved']);
         $this->assertNull($figures['executionPercent']);
@@ -129,7 +129,7 @@ class ProjectHistoryTest extends TestCase
         $over = $this->fullProject();
         $ok = Project::factory()->create(['status' => 'CREADO', 'title' => 'Pintura fachada', 'estimated_total' => 100, 'approved_investment_amount' => 500]);
 
-        $ids = fn (string $qs) => collect($this->actingAs($this->presidencia)->getJson("/api/project-history?{$qs}")->assertOk()->json('data'))->pluck('id')->all();
+        $ids = fn (string $qs) => collect($this->actingAs($this->presidencia)->getJson("/api/project-history?{$qs}")->assertOk()->json('items'))->pluck('id')->all();
 
         $this->assertSame([$over->id], $ids('withAlerts=1'));
         $this->assertSame([$ok->id], $ids('status=CREADO'));
@@ -145,7 +145,7 @@ class ProjectHistoryTest extends TestCase
         ProjectPayment::create(['project_id' => $project->id, 'proposal_id' => 'P-9', 'payment_type' => 'ADVANCE', 'amount' => 2100, 'paid_date' => '2026-09-16']);
         Project::factory()->create(['status' => 'CREADO', 'approved_investment_amount' => 500]);
 
-        $ids = collect($this->actingAs($this->presidencia)->getJson('/api/project-history?withAlerts=1')->json('data'))->pluck('id')->all();
+        $ids = collect($this->actingAs($this->presidencia)->getJson('/api/project-history?withAlerts=1')->json('items'))->pluck('id')->all();
 
         $this->assertSame([$project->id], $ids);
     }

@@ -34,6 +34,7 @@ class StoreProjectRequest extends FormRequest
             'materials.*.specifications' => ['sometimes', 'nullable', 'string'],
             'materials.*.observations' => ['sometimes', 'nullable', 'string'],
             'estimatedTotal' => ['nullable', 'numeric', 'min:0'],
+            'residentUserId' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', 'INFRAESTRUCTURA')],
         ];
     }
 }

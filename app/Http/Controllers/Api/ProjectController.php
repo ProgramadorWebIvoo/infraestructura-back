@@ -26,6 +26,7 @@ use App\Models\ProjectProposal;
 use App\Models\ProjectRateFreeze;
 use App\Services\AiFeatureGate;
 use App\Services\DossierEvaluationService;
+use App\Services\ClosureReportLinkService;
 use App\Services\ProjectStateMachine;
 use App\Services\ProposalRenegotiationService;
 use App\Services\RateFreezeService;
@@ -75,6 +76,7 @@ class ProjectController extends Controller
                 'created_date' => now()->toDateString(),
                 'status' => self::STATUSES['CREADO'],
                 'estimated_total' => $data['estimatedTotal'] ?? $this->materialsTotal($data['materials']),
+                'resident_user_id' => $data['residentUserId'] ?? null,
             ]);
 
             $this->syncMaterials($project, $data['materials']);
@@ -476,7 +478,7 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(Project::detailRelations()));
     }
 
-    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService)
+    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService, ClosureReportLinkService $closureLinks)
     {
         $data = $request->validated();
 
@@ -526,32 +528,9 @@ class ProjectController extends Controller
 
         AuditLog::record($project, 'FINANZAS', $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos', $data['notes'] ?? null);
 
-        return new ProjectResource($project->load(Project::detailRelations()));
-    }
-
-    public function reportFinished(Project $project)
-    {
-        ProjectStateMachine::assertStatus($project, self::STATUSES['EN_EJECUCION'], 'Solo se puede reportar como finalizada una obra en ejecución (EN_EJECUCION).');
-
-        $project->update(['status' => self::STATUSES['VERIFICANDO_FINALIZACION']]);
-        AuditLog::record($project, 'SISTEMA', 'Reporte de obra finalizada', 'La obra fue marcada como finalizada y pendiente de certificacion.');
-
-        return new ProjectResource($project->load(Project::detailRelations()));
-    }
-
-    public function verifyCompletion(VerifyCompletionRequest $request, Project $project)
-    {
-        ProjectStateMachine::assertStatus($project, self::STATUSES['VERIFICANDO_FINALIZACION'], 'Solo se puede verificar la finalización de una obra reportada como terminada (VERIFICANDO_FINALIZACION).');
-
-        $data = $request->validated();
-
-        $project->update([
-            'status' => $data['qualityVerified'] ? self::STATUSES['LISTO_PAGO_FINAL'] : self::STATUSES['EN_EJECUCION'],
-            'quality_verified' => $data['qualityVerified'],
-            'completion_verified_date' => $data['completionVerifiedDate'] ?? now()->toDateString(),
-        ]);
-
-        AuditLog::record($project, 'AUDITORIA', 'Verificacion de finalizacion y calidad de obra', $data['details'] ?? null);
+        if ($data['paymentType'] === 'ADVANCE') {
+            $closureLinks->open($project);
+        }
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }

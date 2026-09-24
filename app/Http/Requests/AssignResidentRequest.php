@@ -3,8 +3,9 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
-class VerifyCompletionRequest extends FormRequest
+class AssignResidentRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,9 +15,7 @@ class VerifyCompletionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'qualityVerified' => ['required', 'boolean'],
-            'completionVerifiedDate' => ['nullable', 'date'],
-            'details' => ['nullable', 'string'],
+            'residentUserId' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', 'INFRAESTRUCTURA')],
         ];
     }
 }

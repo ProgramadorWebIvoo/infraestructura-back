@@ -6,7 +6,9 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AwardApprovalController;
 use App\Http\Controllers\Api\AccessAdminController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ClosureReportController;
 use App\Http\Controllers\Api\ContractorController;
+use App\Http\Controllers\Api\PublicClosureReportController;
 use App\Http\Controllers\Api\MarketingProjectController;
 use App\Http\Controllers\Api\MarketingProjectAttachmentController;
 use App\Http\Controllers\Api\ModuleController;
@@ -59,6 +61,11 @@ Route::get('/public/invitations/{token}/proposal-image/{path}', [SupplierProposa
     ->where('path', '.*')
     ->middleware('throttle:public-api');
 
+Route::get('/public/closures/{token}', [PublicClosureReportController::class, 'show'])->middleware('throttle:public-api');
+Route::post('/public/closures/{token}/photos', [PublicClosureReportController::class, 'uploadPhoto'])->middleware('throttle:public-api');
+Route::delete('/public/closures/{token}/photos/{photo}', [PublicClosureReportController::class, 'deletePhoto'])->middleware('throttle:public-api');
+Route::get('/public/closures/{token}/photos/{photo}', [PublicClosureReportController::class, 'photo'])->middleware('throttle:public-api');
+Route::post('/public/closures/{token}/submit', [PublicClosureReportController::class, 'submit'])->middleware('throttle:public-api');
 Route::get('/public/renegotiations/{token}', [RenegotiationInvitationController::class, 'publicInfo'])->middleware('throttle:public-api');
 Route::post('/public/renegotiations/{token}/proposal', [RenegotiationInvitationController::class, 'submit'])->middleware('throttle:public-api');
 
@@ -312,10 +319,28 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/projects/{project}/rate-freezes', [ProjectRateFreezeController::class, 'index']);
     Route::post('/projects/{project}/rate-freezes', [ProjectRateFreezeController::class, 'store'])
         ->middleware('role:SUPERADMIN');
-    Route::post('/projects/{project}/report-finished', [ProjectController::class, 'reportFinished'])
+    // Cierre posterior a la ejecución (finiquito): residente → Auditoría → Procura → Finanzas
+    Route::get('/residents', [ClosureReportController::class, 'residents'])
+        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+    Route::patch('/projects/{project}/resident', [ClosureReportController::class, 'assignResident'])
+        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+    Route::get('/projects/{project}/closure-report', [ClosureReportController::class, 'show']);
+    Route::get('/projects/{project}/closure-report/photos/{photo}', [ClosureReportController::class, 'photo'])
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::post('/projects/{project}/closure-report/photos', [ClosureReportController::class, 'uploadPhoto'])
+        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/closure-report/resend-link', [ClosureReportController::class, 'resendLink'])
+        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/closure-report/resident-approval', [ClosureReportController::class, 'residentApproval'])
+        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/closure-report/rejection', [ClosureReportController::class, 'reject'])
+        ->middleware('role:INFRAESTRUCTURA,AUDITORIA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/closure-report/audit-approval', [ClosureReportController::class, 'auditApproval'])
         ->middleware('role:AUDITORIA,ADMIN,SUPERADMIN');
-    Route::post('/projects/{project}/verify-completion', [ProjectController::class, 'verifyCompletion'])
-        ->middleware('role:AUDITORIA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/closure-report/finiquito-request', [ClosureReportController::class, 'requestFiniquito'])
+        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/closure-report/finiquito-return', [ClosureReportController::class, 'returnToAudit'])
+        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
 
     // AI Evaluation — mismo endpoint sirve a Procura (evaluación oficial del
     // cuadro comparativo) y a Analistas (vista previa antes de enviar a

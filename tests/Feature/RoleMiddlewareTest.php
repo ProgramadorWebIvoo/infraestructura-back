@@ -56,8 +56,8 @@ class RoleMiddlewareTest extends TestCase
             'reject-proposals'     => ['POST', "/api/projects/{$projectId}/reject-proposals",     ['PROCURA']],
             'select-contractor'    => ['POST', "/api/projects/{$projectId}/select-contractor",    ['PROCURA']],
             'pay'                  => ['POST', "/api/projects/{$projectId}/payments",             ['FINANZAS']],
-            'report-finished'      => ['POST', "/api/projects/{$projectId}/report-finished",      ['AUDITORIA']],
-            'verify-completion'    => ['POST', "/api/projects/{$projectId}/verify-completion",    ['AUDITORIA']],
+            'closure-audit'        => ['POST', "/api/projects/{$projectId}/closure-report/audit-approval",    ['AUDITORIA']],
+            'closure-finiquito'    => ['POST', "/api/projects/{$projectId}/closure-report/finiquito-request", ['PROCURA']],
         ];
     }
 

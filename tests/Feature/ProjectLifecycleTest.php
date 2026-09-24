@@ -903,19 +903,9 @@ class ProjectLifecycleTest extends TestCase
             'comprobante_document_id' => $advanceProof->id,
         ]);
 
-        // 8. Report finished (AUDITORIA)
-        $this->actingAs($this->auditoria)
-            ->postJson("/api/projects/{$projectId}/report-finished")
-            ->assertJsonPath('data.status', 'VERIFICANDO_FINALIZACION');
-
-        // 9. Verify completion (AUDITORIA) — approve
-        $this->actingAs($this->auditoria)
-            ->postJson("/api/projects/{$projectId}/verify-completion", [
-                'qualityVerified'        => true,
-                'completionVerifiedDate' => '2026-07-22',
-                'details'                => 'Trabajo verificado satisfactoriamente',
-            ])
-            ->assertJsonPath('data.status', 'LISTO_PAGO_FINAL');
+        // 8-9. Cierre: contratista → residente → Auditoría → Procura solicita finiquito
+        $this->runClosureFlow($projectId);
+        $this->assertEquals('LISTO_PAGO_FINAL', Project::find($projectId)->status);
 
         // 10. Pay final (FINANZAS) — requiere comprobante previo
         $this->makeDocument(Project::find($projectId), 'COMPROBANTE_FINIQUITO');
@@ -974,20 +964,6 @@ class ProjectLifecycleTest extends TestCase
         $this->assertCount(0, $project->fresh()->proposals);
         $this->assertCount(1, \App\Models\ProjectProposal::withTrashed()->where('project_id', $project->id)->get());
         $this->assertSoftDeleted('project_proposals', ['project_id' => $project->id]);
-    }
-
-    public function test_verify_completion_rejects_and_returns_to_execution(): void
-    {
-        $project = Project::factory()->create(['status' => 'VERIFICANDO_FINALIZACION']);
-
-        $response = $this->actingAs($this->auditoria)
-            ->postJson("/api/projects/{$project->id}/verify-completion", [
-                'qualityVerified' => false,
-                'details'         => 'Se requieren correcciones en instalaciones eléctricas',
-            ]);
-
-        $response->assertJsonPath('data.status', 'EN_EJECUCION');
-        $response->assertJsonPath('data.qualityVerified', false);
     }
 
     public function test_index_lists_projects_with_filters(): void
@@ -1137,27 +1113,27 @@ class ProjectLifecycleTest extends TestCase
         $this->assertEquals('COMPLETADO_PAGADO', $project->fresh()->status);
     }
 
-    public function test_report_finished_rejects_project_not_in_en_ejecucion(): void
+
+    private function runClosureFlow(string $projectId): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $token = \App\Models\ProjectClosureReport::where('project_id', $projectId)->value('id');
 
-        $response = $this->actingAs($this->auditoria)
-            ->postJson("/api/projects/{$project->id}/report-finished");
+        $this->post("/api/public/closures/{$token}/photos", ['image' => \Illuminate\Http\UploadedFile::fake()->image('obra.jpg')])->assertStatus(201);
+        $items = \App\Models\ProjectClosureReport::find($token)->items->map(fn ($i) => ['id' => $i->id, 'executedQuantity' => $i->contracted_quantity])->all();
+        $this->postJson("/api/public/closures/{$token}/submit", ['notes' => 'Trabajo terminado', 'items' => $items])->assertOk();
+        $this->assertEquals('INFORME_ENVIADO', Project::find($projectId)->status);
 
-        $response->assertStatus(422);
-        $this->assertEquals('CREADO', $project->fresh()->status);
-    }
-
-    public function test_verify_completion_rejects_project_not_in_verificando_finalizacion(): void
-    {
-        $project = Project::factory()->create(['status' => 'EN_EJECUCION']);
-
-        $response = $this->actingAs($this->auditoria)
-            ->postJson("/api/projects/{$project->id}/verify-completion", [
-                'qualityVerified' => true,
-            ]);
-
-        $response->assertStatus(422);
-        $this->assertEquals('EN_EJECUCION', $project->fresh()->status);
+        $this->actingAs($this->infra)
+            ->post("/api/projects/{$projectId}/closure-report/photos", ['image' => \Illuminate\Http\UploadedFile::fake()->image('verif.jpg')])->assertStatus(201);
+        $this->actingAs($this->infra)
+            ->postJson("/api/projects/{$projectId}/closure-report/resident-approval", ['notes' => 'Corroborado'])
+            ->assertJsonPath('data.status', 'VERIFICANDO_FINALIZACION');
+        $this->actingAs($this->auditoria)
+            ->postJson("/api/projects/{$projectId}/closure-report/audit-approval", ['notes' => 'Verificado'])
+            ->assertJsonPath('data.status', 'PENDIENTE_SOLICITUD_FINIQUITO');
+        $this->actingAs($this->procura)
+            ->postJson("/api/projects/{$projectId}/closure-report/finiquito-request", ['notes' => 'Solicito pago'])
+            ->assertJsonPath('data.status', 'LISTO_PAGO_FINAL');
     }
 }

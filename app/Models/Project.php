@@ -128,6 +128,8 @@ class Project extends Model
             'proposals.contractor:code,rating',
             'payments',
             'rateFreezes.frozenByUser:id,name',
+            'resident:id,name',
+            'closureReport:id,project_id,status,revision,finiquito_amount',
             'documents' => fn ($q) => $q->latestVersionOnly(),
         ];
     }

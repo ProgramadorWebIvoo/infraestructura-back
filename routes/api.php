@@ -221,6 +221,14 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->where('path', '.*')
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
 
+    // Histórico de Obras (Presidencia): cadena obra → cierre con estimado vs aprobado vs ejecutado
+    Route::get('/project-history', [\App\Http\Controllers\Api\ProjectHistoryController::class, 'index'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/project-history/{project}', [\App\Http\Controllers\Api\ProjectHistoryController::class, 'show'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+
     // Resumen ejecutivo del dashboard de Presidencia (agregados exactos, sin paginación)
     Route::get('/dashboard/summary', DashboardSummaryController::class)
         ->middleware('role:PRESIDENCIA,SUPERADMIN');

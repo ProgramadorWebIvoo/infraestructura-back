@@ -17,7 +17,9 @@ class DashboardSummaryService
     private const COMMITTED_STATUSES = [
         'CONTRATADO',
         'EN_EJECUCION',
+        'INFORME_ENVIADO',
         'VERIFICANDO_FINALIZACION',
+        'PENDIENTE_SOLICITUD_FINIQUITO',
         'LISTO_PAGO_FINAL',
     ];
 

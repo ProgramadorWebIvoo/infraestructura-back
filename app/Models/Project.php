@@ -49,6 +49,7 @@ class Project extends Model
         'approved_investment_amount',
         'selected_contractor_code',
         'selected_proposal_id',
+        'resident_user_id',
         'quality_verified',
         'completion_verified_date',
     ];
@@ -91,6 +92,16 @@ class Project extends Model
     public function rateFreezes()
     {
         return $this->hasMany(ProjectRateFreeze::class);
+    }
+
+    public function resident()
+    {
+        return $this->belongsTo(User::class, 'resident_user_id');
+    }
+
+    public function closureReport()
+    {
+        return $this->hasOne(ProjectClosureReport::class);
     }
 
     public function documents()

@@ -26,7 +26,9 @@ class ProjectStateMachine
         'APROBADO_PRESIDENCIA'     => 'APROBADO_PRESIDENCIA',
         'CONTRATADO'               => 'CONTRATADO',
         'EN_EJECUCION'             => 'EN_EJECUCION',
+        'INFORME_ENVIADO'          => 'INFORME_ENVIADO',
         'VERIFICANDO_FINALIZACION' => 'VERIFICANDO_FINALIZACION',
+        'PENDIENTE_SOLICITUD_FINIQUITO' => 'PENDIENTE_SOLICITUD_FINIQUITO',
         'LISTO_PAGO_FINAL'         => 'LISTO_PAGO_FINAL',
         'COMPLETADO_PAGADO'        => 'COMPLETADO_PAGADO',
     ];
@@ -44,9 +46,11 @@ class ProjectStateMachine
         'APROBADO_PRESIDENCIA'     => 5,
         'CONTRATADO'               => 6,
         'EN_EJECUCION'             => 7,
-        'VERIFICANDO_FINALIZACION' => 8,
-        'LISTO_PAGO_FINAL'         => 9,
-        'COMPLETADO_PAGADO'        => 10,
+        'INFORME_ENVIADO'          => 8,
+        'VERIFICANDO_FINALIZACION' => 9,
+        'PENDIENTE_SOLICITUD_FINIQUITO' => 10,
+        'LISTO_PAGO_FINAL'         => 11,
+        'COMPLETADO_PAGADO'        => 12,
     ];
 
     /**

@@ -43,6 +43,18 @@ return new class extends Migration
         }
 
         DB::table('notification_rules')->upsert($rules, ['action', 'role', 'channel'], ['enabled', 'updated_at']);
+
+        // 'acciones_con_notificacion_app' es una whitelist: sin esto las acciones
+        // nuevas se auditan pero nunca disparan push/bandeja interna.
+        $setting = DB::table('app_settings')->where('key', 'acciones_con_notificacion_app')->first();
+        if ($setting !== null) {
+            $current = json_decode($setting->value, true) ?? [];
+            $missing = array_values(array_diff(array_keys(self::ACTIONS), $current));
+            if ($missing) {
+                DB::table('app_settings')->where('key', 'acciones_con_notificacion_app')
+                    ->update(['value' => json_encode([...$current, ...$missing]), 'updated_at' => $now]);
+            }
+        }
     }
 
     public function down(): void
@@ -51,5 +63,12 @@ return new class extends Migration
 
         DB::table('notification_rules')->whereIn('action', $keys)->delete();
         DB::table('notification_actions')->whereIn('key', $keys)->delete();
+
+        $setting = DB::table('app_settings')->where('key', 'acciones_con_notificacion_app')->first();
+        if ($setting !== null) {
+            $remaining = array_values(array_diff(json_decode($setting->value, true) ?? [], $keys));
+            DB::table('app_settings')->where('key', 'acciones_con_notificacion_app')
+                ->update(['value' => json_encode($remaining), 'updated_at' => now()]);
+        }
     }
 };

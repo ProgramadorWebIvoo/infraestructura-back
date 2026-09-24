@@ -98,6 +98,62 @@ class AuditLogController extends Controller
         }, 'auditoria-proyectos-' . now()->format('Y-m-d') . '.csv', ['Content-Type' => 'text/csv']);
     }
 
+    /**
+     * Panel ejecutivo de Presidencia — agregados sobre el mismo conjunto
+     * filtrado que `index()`/`export()` (reutiliza `filtered()`, así que
+     * respeta cualquier combinación de filtros activa en la UI): actividad
+     * diaria (últimos 30 días con datos), distribución por rol, top acciones
+     * y top proyectos por volumen de logs. Todo agregado en BD (`groupBy` +
+     * `count`), nunca trayendo filas a PHP para contar en memoria.
+     */
+    public function summary(Request $request): JsonResponse
+    {
+        $base = $this->filtered($request);
+
+        $byRole = (clone $base)
+            ->selectRaw('role, count(*) as total')
+            ->groupBy('role')
+            ->orderByDesc('total')
+            ->get();
+
+        $byAction = (clone $base)
+            ->selectRaw('action, count(*) as total')
+            ->groupBy('action')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get();
+
+        $byProject = (clone $base)
+            ->whereNotNull('project_id')
+            ->selectRaw('project_id, project_title_snapshot, count(*) as total')
+            ->groupBy('project_id', 'project_title_snapshot')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get();
+
+        $daily = (clone $base)
+            ->where('logged_at', '>=', now()->subDays(30)->startOfDay())
+            ->selectRaw('DATE(logged_at) as day, count(*) as total')
+            ->groupBy('day')
+            ->orderBy('day')
+            ->get();
+
+        $withoutProject = (clone $base)->whereNull('project_id')->count();
+
+        return response()->json(['data' => [
+            'total' => (clone $base)->count(),
+            'withoutProject' => $withoutProject,
+            'byRole' => $byRole->map(fn ($r) => ['role' => $r->role, 'total' => (int) $r->total]),
+            'byAction' => $byAction->map(fn ($r) => ['action' => $r->action, 'total' => (int) $r->total]),
+            'byProject' => $byProject->map(fn ($r) => [
+                'projectId' => $r->project_id,
+                'projectTitle' => $r->project_title_snapshot,
+                'total' => (int) $r->total,
+            ]),
+            'daily' => $daily->map(fn ($r) => ['day' => $r->day, 'total' => (int) $r->total]),
+        ]]);
+    }
+
     private function filtered(Request $request): Builder
     {
         $query = AuditLog::query();

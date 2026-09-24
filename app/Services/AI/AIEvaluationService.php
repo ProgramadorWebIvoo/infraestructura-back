@@ -23,17 +23,23 @@ class AIEvaluationService
      * mismo AIEvaluationService ahora sirve más de un tipo de evaluación
      * (propuestas, expediente) y cada una necesita su propio prompt/esquema
      * inyectado en los providers. */
-    private array $providerConfigs = [];
-
     /** Bitácora de intentos (para devolver al frontend) */
     private array $attemptLog = [];
 
     private AiConfigurationService $configService;
 
+    /** Config ya resuelta (memoizada tras la primera llamada). Resolver en
+     * el constructor rompía cualquier comando artisan en una instalación
+     * fresca: Console\Application resuelve el constructor de TODOS los
+     * comandos registrados (incluye RunRatingIaCommand -> RatingIaBatchService
+     * -> este service) para armar la lista de comandos, incluso antes de
+     * correr `migrate` — y esto consultaba la tabla `cache`, que todavía no
+     * existe. */
+    private ?array $resolvedProviderConfigs = null;
+
     public function __construct(AiConfigurationService $configService)
     {
         $this->configService = $configService;
-        $this->providerConfigs = $this->resolveProviderConfigs();
     }
 
     /**
@@ -83,10 +89,15 @@ class AIEvaluationService
     private function buildProviders(EvaluationStrategyInterface $strategy): array
     {
         $providers = [];
-        foreach ($this->providerConfigs as $key => $config) {
+        foreach ($this->getProviderConfigs() as $key => $config) {
             $providers[$key] = AIProviderFactory::make($key, $config, $strategy);
         }
         return $providers;
+    }
+
+    private function getProviderConfigs(): array
+    {
+        return $this->resolvedProviderConfigs ??= $this->resolveProviderConfigs();
     }
 
     /**

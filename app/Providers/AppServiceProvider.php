@@ -93,8 +93,15 @@ class AppServiceProvider extends ServiceProvider
             if (!str_starts_with($event->command ?? '', 'migrate')) {
                 return;
             }
-            NotificationRuleResolver::forget();
-            SettingsService::forget();
+            // Try/catch: en un install fresco, `migrate` corre esto ANTES de
+            // que exista la tabla `cache` (CACHE_DRIVER=database) — sin esto,
+            // `php artisan migrate` no puede ni crear esa tabla por primera vez.
+            try {
+                NotificationRuleResolver::forget();
+                SettingsService::forget();
+            } catch (\Throwable $e) {
+                // Sin DB/cache disponible aún — se ignora, no es crítico.
+            }
         });
     }
 

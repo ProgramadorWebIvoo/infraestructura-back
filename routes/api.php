@@ -205,10 +205,13 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::get('/materials', [MaterialController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/project-types', [ProjectTypeController::class, 'activeList'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/audit-logs', [AuditLogController::class, 'index'])
-        ->middleware('role:SUPERADMIN')
+        ->middleware('role:PRESIDENCIA,SUPERADMIN')
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/audit-logs/export', [AuditLogController::class, 'export'])
-        ->middleware('role:SUPERADMIN')
+        ->middleware('role:PRESIDENCIA,SUPERADMIN')
+        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    Route::get('/audit-logs/summary', [AuditLogController::class, 'summary'])
+        ->middleware('role:PRESIDENCIA,SUPERADMIN')
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/supplier-invitations', [SupplierInvitationController::class, 'store']);
     Route::get('/supplier-invitations/latest', [SupplierInvitationController::class, 'latest'])

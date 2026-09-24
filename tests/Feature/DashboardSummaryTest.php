@@ -91,7 +91,7 @@ class DashboardSummaryTest extends TestCase
         $this->assertEquals(0, $response->json('totalProjects'));
         $this->assertEquals(0, $response->json('totalApprovedInvestment'));
         $this->assertEquals(0, $response->json('releasedPercent'));
-        $this->assertCount(9, $response->json('funnel'));
+        $this->assertCount(11, $response->json('funnel'));
     }
 
     public function test_aggregates_financials_and_funnel(): void

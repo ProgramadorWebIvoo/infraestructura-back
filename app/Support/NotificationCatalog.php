@@ -40,6 +40,8 @@ class NotificationCatalog
      */
     private const TYPE_OVERRIDES = [
         'Rechazo de cuadro comparativo' => NotificationType::ACCION_REQUERIDA,
+        'Rechazo de adjudicacion por Presidencia' => NotificationType::ACCION_REQUERIDA,
+        'Aprobacion de adjudicacion por Presidencia' => NotificationType::EXITO,
         'Rechazo de petición de obra' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de reevaluación a Auditoría' => NotificationType::ACCION_REQUERIDA,
         'Rechazo de propuesta de marketing' => NotificationType::ACCION_REQUERIDA,

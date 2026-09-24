@@ -112,7 +112,7 @@ class RateFreezeTest extends TestCase
 
     // ===== Integración con los triggers reales (ProjectController) =====
 
-    public function test_select_contractor_freezes_rate_for_contratado(): void
+    public function test_send_to_finance_freezes_rate_for_contratado(): void
     {
         $project = Project::factory()->create(['status' => 'COMPARATIVA_ENVIADA']);
         $proposal = ProjectProposal::factory()->create([
@@ -126,6 +126,14 @@ class RateFreezeTest extends TestCase
                 'contractorCode' => $this->contractor->code,
                 'proposalId' => $proposal->id,
             ])
+            ->assertStatus(200)
+            ->assertJsonPath('data.status', 'PENDIENTE_PRESIDENCIA');
+
+        $this->assertDatabaseMissing('project_rate_freezes', ['project_id' => $project->id]);
+
+        $project->update(['status' => 'APROBADO_PRESIDENCIA']);
+        $this->actingAs($this->procura)
+            ->postJson("/api/projects/{$project->id}/send-to-finance")
             ->assertStatus(200)
             ->assertJsonPath('data.status', 'CONTRATADO');
 

@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\AwardApprovalController;
 use App\Http\Controllers\Api\AccessAdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContractorController;
@@ -297,6 +298,14 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
     Route::post('/projects/{project}/reject-proposals', [ProjectController::class, 'rejectProposals'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/select-contractor', [ProjectController::class, 'selectContractor'])
+        ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+    Route::post('/projects/award-approvals/batch', [AwardApprovalController::class, 'approveBatch'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/award-approval', [AwardApprovalController::class, 'approve'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/award-rejection', [AwardApprovalController::class, 'reject'])
+        ->middleware('role:PRESIDENCIA,ADMIN,SUPERADMIN');
+    Route::post('/projects/{project}/send-to-finance', [AwardApprovalController::class, 'sendToFinance'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/payments', [ProjectController::class, 'pay'])
         ->middleware('role:FINANZAS,ADMIN,SUPERADMIN');

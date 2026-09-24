@@ -23,6 +23,7 @@ class ProjectLifecycleTest extends TestCase
     private User $procura;
     private User $analista;
     private User $finanzas;
+    private User $presidencia;
     private Contractor $contractor;
 
     protected function setUp(): void
@@ -33,6 +34,7 @@ class ProjectLifecycleTest extends TestCase
         $this->procura = User::factory()->create(['role' => 'PROCURA']);
         $this->analista = User::factory()->create(['role' => 'ANALISTA']);
         $this->finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $this->presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
         $this->contractor = Contractor::factory()->create();
         MaterialCatalog::factory()->count(3)->create();
     }
@@ -874,6 +876,14 @@ class ProjectLifecycleTest extends TestCase
                 'contractorCode' => $this->contractor->code,
                 'proposalId'     => $proposalId,
             ])
+            ->assertJsonPath('data.status', 'PENDIENTE_PRESIDENCIA');
+
+        // 6b. Presidencia aprueba y Procura envía a Finanzas
+        $this->actingAs($this->presidencia)
+            ->postJson("/api/projects/{$projectId}/award-approval")
+            ->assertJsonPath('data.status', 'APROBADO_PRESIDENCIA');
+        $this->actingAs($this->procura)
+            ->postJson("/api/projects/{$projectId}/send-to-finance")
             ->assertJsonPath('data.status', 'CONTRATADO');
 
         // 7. Pay advance (FINANZAS) — requiere comprobante previo

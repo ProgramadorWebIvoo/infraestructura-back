@@ -456,33 +456,22 @@ class ProjectController extends Controller
         return new ProjectResource($project);
     }
 
-    public function selectContractor(SelectContractorRequest $request, Project $project, RateFreezeService $rateFreezeService)
+    public function selectContractor(SelectContractorRequest $request, Project $project)
     {
-        ProjectStateMachine::assertStatus($project, self::STATUSES['COMPARATIVA_ENVIADA'], 'Solo se puede adjudicar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
+        ProjectStateMachine::assertStatus($project, self::STATUSES['COMPARATIVA_ENVIADA'], 'Solo se puede seleccionar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
 
         $data = $request->validated();
 
         $selectedProposal = $project->proposals()->whereKey($data['proposalId'])->first();
         abort_unless($selectedProposal, 422, 'La propuesta no pertenece al proyecto.');
 
-        DB::transaction(function () use ($project, $data, $selectedProposal, $rateFreezeService) {
-            $project->update([
-                'status' => self::STATUSES['CONTRATADO'],
-                'selected_contractor_code' => $data['contractorCode'],
-                'selected_proposal_id' => $data['proposalId'],
-            ]);
+        $project->update([
+            'status' => self::STATUSES['PENDIENTE_PRESIDENCIA'],
+            'selected_contractor_code' => $data['contractorCode'],
+            'selected_proposal_id' => $data['proposalId'],
+        ]);
 
-            // Congela la tasa BCV vigente para este proyecto (si el trigger
-            // está habilitado en CONFIG APP) — ver RateFreezeService.
-            $rateFreezeService->freezeForTrigger(
-                $project,
-                ProjectRateFreeze::TRIGGER_CONTRATADO,
-                (float) $selectedProposal->total_cost
-            );
-        });
-
-        AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$data['contractorCode']} adjudicado.");
-        \App\Support\CacheVersion::bump('contractor_history:' . $data['contractorCode']);
+        AuditLog::record($project, 'PROCURA', 'Seleccion de contratista pendiente de Presidencia', "Contratista {$data['contractorCode']} seleccionado; pendiente de aprobación de Presidencia.");
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }

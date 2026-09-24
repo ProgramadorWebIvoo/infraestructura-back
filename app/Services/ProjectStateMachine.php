@@ -22,6 +22,8 @@ class ProjectStateMachine
         'EN_REEVALUACION_AUDITORIA'   => 'EN_REEVALUACION_AUDITORIA',
         'CONFIRMADO_PROCURA'       => 'CONFIRMADO_PROCURA',
         'COMPARATIVA_ENVIADA'      => 'COMPARATIVA_ENVIADA',
+        'PENDIENTE_PRESIDENCIA'    => 'PENDIENTE_PRESIDENCIA',
+        'APROBADO_PRESIDENCIA'     => 'APROBADO_PRESIDENCIA',
         'CONTRATADO'               => 'CONTRATADO',
         'EN_EJECUCION'             => 'EN_EJECUCION',
         'VERIFICANDO_FINALIZACION' => 'VERIFICANDO_FINALIZACION',
@@ -38,11 +40,13 @@ class ProjectStateMachine
         // a REVISADO_AUDITORIA), no una etapa nueva del avance del proyecto.
         'CONFIRMADO_PROCURA'       => 2,
         'COMPARATIVA_ENVIADA'      => 3,
-        'CONTRATADO'               => 4,
-        'EN_EJECUCION'             => 5,
-        'VERIFICANDO_FINALIZACION' => 6,
-        'LISTO_PAGO_FINAL'         => 7,
-        'COMPLETADO_PAGADO'        => 8,
+        'PENDIENTE_PRESIDENCIA'    => 4,
+        'APROBADO_PRESIDENCIA'     => 5,
+        'CONTRATADO'               => 6,
+        'EN_EJECUCION'             => 7,
+        'VERIFICANDO_FINALIZACION' => 8,
+        'LISTO_PAGO_FINAL'         => 9,
+        'COMPLETADO_PAGADO'        => 10,
     ];
 
     /**

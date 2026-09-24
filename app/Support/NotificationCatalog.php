@@ -49,6 +49,7 @@ class NotificationCatalog
         'Creacion de usuario' => NotificationType::EXITO,
         'Confirmacion de contratacion' => NotificationType::EXITO,
         'Obra sin actividad reciente' => NotificationType::ADVERTENCIA,
+        'Sobre-ejecucion de presupuesto' => NotificationType::ADVERTENCIA,
         'Invitacion a proveedor proxima a vencer' => NotificationType::ADVERTENCIA,
         'Racha de rechazos detectada' => NotificationType::ADVERTENCIA,
     ];

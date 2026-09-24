@@ -20,13 +20,20 @@ use Illuminate\Console\Command;
  * ya existe una AppNotification de esa acción para ese proyecto/invitación
  * dentro de la ventana de "un día" — evitar spam sin necesitar una columna
  * nueva de tracking en projects/supplier_invitations.
+ *
+ * Fase 3 de la auditoría del módulo Presidencia: sumó la alerta de
+ * sobre-ejecución de presupuesto, misma mecánica (chequeo diario +
+ * anti-spam de "una vez por día"), reutilizando el cálculo que ya hacía
+ * DashboardSummaryService::excessReleased pero a nivel de obra individual
+ * en vez de agregado del portafolio.
  */
 class AlertStaleProjectsAndExpiringInvitations extends Command
 {
     protected $signature = 'alertas:vencimientos';
-    protected $description = 'Notifica obras sin actividad reciente e invitaciones a proveedor próximas a vencer';
+    protected $description = 'Notifica obras sin actividad reciente, sobre-ejecución de presupuesto e invitaciones a proveedor próximas a vencer';
 
     private const STALE_ACTION = 'Obra sin actividad reciente';
+    private const OVER_EXECUTION_ACTION = 'Sobre-ejecucion de presupuesto';
     private const INVITATION_EXPIRING_ACTION = 'Invitacion a proveedor proxima a vencer';
 
     /** Ventana antes del vencimiento en la que se considera "próxima a vencer". */
@@ -35,9 +42,10 @@ class AlertStaleProjectsAndExpiringInvitations extends Command
     public function handle(): int
     {
         $staleCount = $this->alertStaleProjects();
+        $overExecutedCount = $this->alertOverExecutedProjects();
         $invitationCount = $this->alertExpiringInvitations();
 
-        $this->info("Obras estancadas notificadas: {$staleCount}. Invitaciones por vencer notificadas: {$invitationCount}.");
+        $this->info("Obras estancadas notificadas: {$staleCount}. Obras con sobre-ejecución notificadas: {$overExecutedCount}. Invitaciones por vencer notificadas: {$invitationCount}.");
 
         return self::SUCCESS;
     }
@@ -60,6 +68,48 @@ class AlertStaleProjectsAndExpiringInvitations extends Command
                     'SISTEMA',
                     self::STALE_ACTION,
                     "Sin actividad hace {$days} día(s), estado actual: {$project->status}."
+                );
+                $notified++;
+            });
+
+        return $notified;
+    }
+
+    /**
+     * Sobre-ejecución a nivel de obra: lo liquidado (anticipos + finiquitos)
+     * supera lo aprobado. Sin filtro de status — a diferencia de "obra
+     * estancada" (que solo importa mientras sigue activa), un desfase
+     * presupuestario ya ocurrido sigue siendo relevante para Presidencia
+     * aunque la obra haya cerrado, hasta que quede documentado/resuelto.
+     */
+    private function alertOverExecutedProjects(): int
+    {
+        $notified = 0;
+
+        Project::with('payments:id,project_id,amount')
+            ->get()
+            ->each(function (Project $project) use (&$notified) {
+                $approved = (float) ($project->approved_investment_amount ?? $project->estimated_total ?? 0);
+                $released = (float) $project->payments->sum('amount');
+                $excess = $released - $approved;
+
+                if ($excess <= 0) {
+                    return;
+                }
+                if ($this->alreadyNotifiedToday($project->id, self::OVER_EXECUTION_ACTION)) {
+                    return;
+                }
+
+                NotificationDispatcher::notify(
+                    $project,
+                    'SISTEMA',
+                    self::OVER_EXECUTION_ACTION,
+                    sprintf(
+                        'Liquidado $%s supera lo aprobado ($%s) por $%s.',
+                        number_format($released, 2),
+                        number_format($approved, 2),
+                        number_format($excess, 2),
+                    ),
                 );
                 $notified++;
             });

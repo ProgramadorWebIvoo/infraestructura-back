@@ -21,7 +21,7 @@ class DossierEvaluationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->cierreDeObra = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $this->cierreDeObra = User::factory()->create(['role' => 'AUDITORIA']);
         $this->procura = User::factory()->create(['role' => 'PROCURA']);
     }
 
@@ -53,7 +53,7 @@ class DossierEvaluationTest extends TestCase
         ]);
     }
 
-    public function test_cierre_de_obra_can_evaluate_a_created_project(): void
+    public function test_auditoria_can_evaluate_a_created_project(): void
     {
         AiConfiguration::create([
             'provider' => 'openai',
@@ -80,7 +80,7 @@ class DossierEvaluationTest extends TestCase
 
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
-            'role' => 'CIERRE_DE_OBRA',
+            'role' => 'AUDITORIA',
             'action' => 'Evaluacion inteligente de expediente',
         ]);
     }
@@ -138,9 +138,9 @@ class DossierEvaluationTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_evaluate_dossier_is_blocked_when_cierre_de_obra_department_gate_is_disabled(): void
+    public function test_evaluate_dossier_is_blocked_when_auditoria_department_gate_is_disabled(): void
     {
-        AiFeatureGate::setDepartmentEnabled('CIERRE_DE_OBRA', false);
+        AiFeatureGate::setDepartmentEnabled('AUDITORIA', false);
 
         $project = Project::factory()->create();
 
@@ -154,7 +154,7 @@ class DossierEvaluationTest extends TestCase
 
     public function test_evaluate_dossier_is_blocked_when_the_specific_action_gate_is_disabled(): void
     {
-        AiFeatureGate::setActionEnabled('CIERRE_DE_OBRA', 'ia.cierre_obra.evaluacion_expediente', false);
+        AiFeatureGate::setActionEnabled('AUDITORIA', 'ia.auditoria.evaluacion_expediente', false);
 
         $project = Project::factory()->create();
 

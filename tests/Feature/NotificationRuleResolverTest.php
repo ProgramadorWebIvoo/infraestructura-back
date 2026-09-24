@@ -75,7 +75,7 @@ class NotificationRuleResolverTest extends TestCase
 
     public function test_unconfigured_actions_lists_catalog_entries_without_any_rule(): void
     {
-        NotificationRule::create(['action' => 'Creacion de peticion de obra', 'role' => 'CIERRE_DE_OBRA', 'channel' => 'app', 'enabled' => true]);
+        NotificationRule::create(['action' => 'Creacion de peticion de obra', 'role' => 'AUDITORIA', 'channel' => 'app', 'enabled' => true]);
         NotificationRuleResolver::forget();
 
         $unconfigured = NotificationRuleResolver::unconfiguredActions();

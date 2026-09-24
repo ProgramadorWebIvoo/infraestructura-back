@@ -13,7 +13,7 @@
 * Al faltar campos lanzar un TOASTERROR
 * En este paso debe adjuntar LOS PLANOS (Evaluacion de este cambio de proceso en el flujo)
 
----- CIERRE DE OBRA ---
+---- AUDITORÍA ---
 * Mejorar visualizacion de los cuadros de la seccion
 
 ---- PROCURA --- 
@@ -40,7 +40,7 @@
 * CONFIG APP para evitar programar cambios de aplicacion
 
 ----> GENERALES <----
-* Sistema de Rating inteligente (Basado en actividad y datos) para PROVEEDORES, ANALISTAS, AUDITORES (Cierre de Obra)
+* Sistema de Rating inteligente (Basado en actividad y datos) para PROVEEDORES, ANALISTAS, AUDITORES (Auditoría)
 * Para todo lo que sean los pagos y movimientos contables adjuntar comprobantes de pago OBLIGATORIAMENTE
 * Hint Tip para iconos de ayuda y de indicacon de campos obligatorios
 * NUEVA VISTA - Inflacion y Analisis de datos de productos SEGUN el historico de productos construido en base a las peticiones de los Proveedores

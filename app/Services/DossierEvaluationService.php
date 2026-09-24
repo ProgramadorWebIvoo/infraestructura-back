@@ -8,7 +8,7 @@ use App\Services\AI\AIEvaluationService;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Evaluación IA del expediente completo — herramienta de Cierre de Obra
+ * Evaluación IA del expediente completo — herramienta de Auditoría
  * para apoyar su revisión previa a aprobar/rechazar un proyecto CREADO (o
  * RECHAZADO_CIERRE en un reenvío corregido). Nunca lanza excepción: el
  * auditor debe poder seguir revisando/aprobando/rechazando aunque la IA
@@ -48,7 +48,7 @@ class DossierEvaluationService
 
             AuditLog::record(
                 $project,
-                'CIERRE_DE_OBRA',
+                'AUDITORIA',
                 'Evaluacion inteligente de expediente',
                 sprintf('Evaluación via %s | Score: %d/100', $result['providerUsed'], $result['score'])
             );
@@ -87,7 +87,7 @@ class DossierEvaluationService
                 'projectLocation'    => $project->location,
                 'projectType'        => $project->type,
                 'estimatedTotal'     => (float) $project->estimated_total,
-                'cierreObraNotes'    => $project->cierre_obra_notes,
+                'auditNotes'    => $project->audit_notes,
                 'calculationsAdded'  => (bool) $project->calculations_added,
                 'blueprintsCount'    => (int) $project->blueprints_count,
             ],

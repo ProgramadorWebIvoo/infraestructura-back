@@ -214,7 +214,7 @@ class AIEvaluationService
         return $this->evaluate($payload, $strategy, $requestedByUserId);
     }
 
-    /** Evalúa el expediente completo (Cierre de Obra) con la estrategia de dossier. */
+    /** Evalúa el expediente completo (Auditoría) con la estrategia de dossier. */
     public function evaluateDossier(array $payload, ?string $forcedProvider = null): array
     {
         return $this->evaluateWithProvider($payload, $forcedProvider, new DossierEvaluationStrategy());

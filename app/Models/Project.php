@@ -22,7 +22,7 @@ class Project extends Model
         'created_date',
         'status',
         'estimated_total',
-        'cierre_obra_notes',
+        'audit_notes',
         'calculations_added',
         'blueprints_count',
         'dossier_ai_score',

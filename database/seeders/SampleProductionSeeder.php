@@ -72,7 +72,7 @@ class SampleProductionSeeder extends Seeder
         'Vialidad', 'Hormigón Armado', 'Instalaciones', 'Carpintería', 'Techos',
     ];
 
-    private const ROLES = ['PRESIDENCIA', 'INFRAESTRUCTURA', 'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'SISTEMA'];
+    private const ROLES = ['PRESIDENCIA', 'INFRAESTRUCTURA', 'AUDITORIA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'SISTEMA'];
 
     private const ACTIONS = [
         'Proyecto creado', 'Revisión técnica completada', 'Inversión aprobada',
@@ -176,7 +176,7 @@ class SampleProductionSeeder extends Seeder
                     'created_date' => $createdDate,
                     'status' => $status,
                     'estimated_total' => $estimatedTotal,
-                    'cierre_obra_notes' => in_array($status, ['REVISADO_CIERRE', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? 'Revisión técnica aprobada por Cierre de Obra.' : null,
+                    'audit_notes' => in_array($status, ['REVISADO_CIERRE', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? 'Revisión técnica aprobada por Auditoría.' : null,
                     'calculations_added' => in_array($status, ['REVISADO_CIERRE', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']),
                     'blueprints_count' => in_array($status, ['REVISADO_CIERRE', 'CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? mt_rand(1, 8) : 0,
                     'procura_review_notes' => in_array($status, ['CONFIRMADO_PROCURA', 'COMPARATIVA_ENVIADA', 'CONTRATADO', 'EN_EJECUCION', 'VERIFICANDO_FINALIZACION', 'LISTO_PAGO_FINAL', 'COMPLETADO_PAGADO']) ? 'Inversión aprobada por Procura.' : null,
@@ -296,7 +296,7 @@ class SampleProductionSeeder extends Seeder
                 'payment_type' => 'FINAL',
                 'amount' => round($winner->total_cost - $advanceAmount, 2),
                 'paid_date' => $updatedAt->format('Y-m-d'),
-                'notes' => 'Finiquito de cierre de obra',
+                'notes' => 'Finiquito de auditoría',
                 'created_at' => $updatedAt,
             ]);
         }

@@ -39,7 +39,7 @@ class ValidatesImmutableMaterialQuantities
             if ((float) $quantity !== (float) $auditedQuantities->get($name)) {
                 $validator->errors()->add(
                     "materialItems.{$index}.quantity",
-                    "La cantidad de \"{$name}\" no puede modificarse: ya fue auditada en Cierre de Obra.",
+                    "La cantidad de \"{$name}\" no puede modificarse: ya fue auditada en Auditoría.",
                 );
             }
         }

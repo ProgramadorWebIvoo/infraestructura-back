@@ -21,7 +21,7 @@ class ProjectDocumentTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->user = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $this->user = User::factory()->create(['role' => 'AUDITORIA']);
         Storage::fake('local');
     }
 

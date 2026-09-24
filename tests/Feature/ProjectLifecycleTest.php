@@ -29,7 +29,7 @@ class ProjectLifecycleTest extends TestCase
     {
         parent::setUp();
         $this->infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
-        $this->cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $this->cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $this->procura = User::factory()->create(['role' => 'PROCURA']);
         $this->analista = User::factory()->create(['role' => 'ANALISTA']);
         $this->finanzas = User::factory()->create(['role' => 'FINANZAS']);
@@ -147,12 +147,12 @@ class ProjectLifecycleTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.status', 'REVISADO_CIERRE');
-        $response->assertJsonPath('data.cierreObraNotes', 'Planos aprobados con correcciones menores');
+        $response->assertJsonPath('data.auditNotes', 'Planos aprobados con correcciones menores');
 
         // Audit log
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
-            'role'       => 'CIERRE_DE_OBRA',
+            'role'       => 'AUDITORIA',
             'action'     => 'Revision tecnica de calculos y planos',
         ]);
     }
@@ -182,7 +182,7 @@ class ProjectLifecycleTest extends TestCase
 
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
-            'role'       => 'CIERRE_DE_OBRA',
+            'role'       => 'AUDITORIA',
             'action'     => 'Rechazo de petición de obra',
         ]);
         $log = \App\Models\AuditLog::where('project_id', $project->id)
@@ -424,10 +424,10 @@ class ProjectLifecycleTest extends TestCase
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
             'role'       => 'PROCURA',
-            'action'     => 'Solicitud de reevaluación a Cierre de Obra',
+            'action'     => 'Solicitud de reevaluación a Auditoría',
         ]);
         $log = \App\Models\AuditLog::where('project_id', $project->id)
-            ->where('action', 'Solicitud de reevaluación a Cierre de Obra')->first();
+            ->where('action', 'Solicitud de reevaluación a Auditoría')->first();
         $this->assertStringContainsString('La cubicación de materiales no coincide con los planos adjuntos.', $log->details);
     }
 
@@ -468,7 +468,7 @@ class ProjectLifecycleTest extends TestCase
 
         $this->assertDatabaseHas('audit_logs', [
             'project_id' => $project->id,
-            'role'       => 'CIERRE_DE_OBRA',
+            'role'       => 'AUDITORIA',
             'action'     => 'Reevaluación resuelta, reenviado a Procura',
         ]);
     }
@@ -832,7 +832,7 @@ class ProjectLifecycleTest extends TestCase
         $createResponse->assertStatus(201);
         $projectId = $createResponse->json('data.id');
 
-        // 2. Review (CIERRE_DE_OBRA)
+        // 2. Review (AUDITORIA)
         $this->actingAs($this->cierre)
             ->postJson("/api/projects/{$projectId}/review", [
                 'notes' => 'Revisión completa',
@@ -893,12 +893,12 @@ class ProjectLifecycleTest extends TestCase
             'comprobante_document_id' => $advanceProof->id,
         ]);
 
-        // 8. Report finished (CIERRE_DE_OBRA)
+        // 8. Report finished (AUDITORIA)
         $this->actingAs($this->cierre)
             ->postJson("/api/projects/{$projectId}/report-finished")
             ->assertJsonPath('data.status', 'VERIFICANDO_FINALIZACION');
 
-        // 9. Verify completion (CIERRE_DE_OBRA) — approve
+        // 9. Verify completion (AUDITORIA) — approve
         $this->actingAs($this->cierre)
             ->postJson("/api/projects/{$projectId}/verify-completion", [
                 'qualityVerified'        => true,

@@ -78,40 +78,40 @@
 ### Backend
 - **Versionado de documentos**: cada carga genera una nueva versión (V1, V2, V3…) vinculada por `document_group_id` — los planos/documentos se corrigen sin reemplazar físicamente el archivo anterior, con trazabilidad de quién corrigió qué y cuándo (cumple la regla crítica del plan maestro).
 - **Condiciones de material obligatorias**: estado NUEVO/USADO/AMBAS requerido por material; garantía pasa de texto libre a par valor-unidad estructurado (DÍAS/MESES/AÑOS), validable y consultable.
-- **Flujo de rechazo de solicitud inicial**: nuevo estado `RECHAZADO_CIERRE`; Cierre de Obra puede rechazar con motivo e Infraestructura edita y reenvía el mismo proyecto (mismo ID, materiales reemplazados, vuelve a `CREADO`) en vez de duplicar. Independiente del flujo de revisión de documentos y del rechazo de cuadros comparativos de Procura.
+- **Flujo de rechazo de solicitud inicial**: nuevo estado `RECHAZADO_CIERRE`; Auditoría puede rechazar con motivo e Infraestructura edita y reenvía el mismo proyecto (mismo ID, materiales reemplazados, vuelve a `CREADO`) en vez de duplicar. Independiente del flujo de revisión de documentos y del rechazo de cuadros comparativos de Procura.
 - **Correcciones y observaciones al rechazar**: nuevo tipo de documento CORRECCION + columna `audit_logs.observations` (separada del motivo); registrada la acción en el catálogo de notificaciones (evita fallback silencioso).
 
 ### Frontend
-- **Componentes compartidos de documentos**: listado y previsualización inline (PDF e imágenes se ven en la UI, no solo descarga) + historial de versiones por grupo. Implementados en "Documentos revisados" de Cierre de Obra y reutilizados en aprobación de inversiones de Procura (reemplaza lista ad-hoc sin preview).
+- **Componentes compartidos de documentos**: listado y previsualización inline (PDF e imágenes se ven en la UI, no solo descarga) + historial de versiones por grupo. Implementados en "Documentos revisados" de Auditoría y reutilizados en aprobación de inversiones de Procura (reemplaza lista ad-hoc sin preview).
 - **Workflow de versiones/rechazo/reenvío**: `handleUploadDocumentVersion`, `handleRejectProject`, `handleResubmitProject` siguiendo el patrón existente del hook.
 - **Wizard de solicitudes (Infraestructura)**: formulario plano de una página → asistente de 3 pasos (datos, materiales, adjuntos) en tarjeta única con altura de viewport. Nuevos componentes reutilizables: `TextField` (etiqueta/error/contador), `SegmentedControl`, `Stepper`, prop `fillHeight` en `Card` (también aplicado a los 3 paneles de configuración que duplicaban el patrón flex-fill).
 - Estado de material obligatorio con indicador visible (sin default implícito); marca ámbar sutil en materiales no revisados; garantía como número+unidad; **adjuntos obligatorios** (al menos uno) con misma validación por paso.
 - **Sección "Rechazadas" en Infraestructura**: muestra dónde y por qué se devolvió cada solicitud (motivo desde audit log) con acción "Editar y reenviar" que reabre el wizard precargado bajo el mismo ID.
-- Cierre de Obra: acción de rechazar con motivo + adjuntar correcciones (CORRECCION) y observaciones opcionales en el mismo modal; botón "Ver petición" en cada card rechazada abre modal de solo lectura (motivo, observaciones, correcciones). Mejoras visuales: `RejectedWarningLabel`, animaciones, ordenamiento por fecha.
+- Auditoría: acción de rechazar con motivo + adjuntar correcciones (CORRECCION) y observaciones opcionales en el mismo modal; botón "Ver petición" en cada card rechazada abre modal de solo lectura (motivo, observaciones, correcciones). Mejoras visuales: `RejectedWarningLabel`, animaciones, ordenamiento por fecha.
 
 ---
 
 ## 24-08-2026
 
 ### Backend
-- **Endpoint de eliminación de adjuntos**: accesible a Infraestructura solo mientras la petición está rechazada; las correcciones adjuntas por Cierre de Obra están explícitamente protegidas del borrado. `review()` ya no depende de conteos reportados por el cliente — solo del historial persistido. Tests actualizados en ambos lados.
+- **Endpoint de eliminación de adjuntos**: accesible a Infraestructura solo mientras la petición está rechazada; las correcciones adjuntas por Auditoría están explícitamente protegidas del borrado. `review()` ya no depende de conteos reportados por el cliente — solo del historial persistido. Tests actualizados en ambos lados.
 - **Fix: versionado correcto de adjuntos** según expedientes rechazados.
 
-### Frontend — Rediseño de auditoría en Cierre de Obra
+### Frontend — Rediseño de auditoría en Auditoría
 - Paso "Revisar": muestra detalle completo del expediente (tipo, ubicación, fecha, materiales con condición/marca/garantía, contador de adjuntos) en vez de solo descripción y cantidades.
 - Paso "Documentación": deja de exigir subir archivos — es revisión pura (preview + descarga) de lo que Infraestructura adjuntó, reusando `ProjectDocumentsList`. Notas de revisión opcionales y sin texto precargado (cierra el bug del placeholder que se guardaba como dato).
 - Botón "Rechazar" con énfasis rojo sólido visible en cualquier paso del wizard.
 
 ### Frontend — Infraestructura
 - Wizard de reenvío de petición rechazada muestra los adjuntos existentes con opción de marcarlos para eliminar (reversible hasta confirmar) — antes quedaban invisibles e imposibles de quitar.
-- Correcciones de Cierre de Obra protegidas como histórico (no eliminables ni por UI ni por backend).
+- Correcciones de Auditoría protegidas como histórico (no eliminables ni por UI ni por backend).
 - Fix de toast duplicado al reenviar; nombres de grupos de adjuntos unificados entre "cargar" y "ya cargados"; eliminado botón de historial de versiones sin uso en `ProjectDocumentsList`; botones de acción sobre archivos agrandados.
 
 ### Frontend — Previsualizador de documentos
 - Soporte real para CSV (parser + tabla).
 - Fix crítico: ningún formato (PDF, imagen, CSV) cargaba — `apiDownload` no enviaba el header `Accept` esperado por el backend, y el CSP del dev server de Vite bloqueaba las URLs `blob:` usadas para render.
 
-### Frontend — Rediseño visual de Cierre de Obra (tabs + tabla + UI compartida)
+### Frontend — Rediseño visual de Auditoría (tabs + tabla + UI compartida)
 - De 3 secciones apiladas a sistema de tabs (Revisión de Cálculos y Planos / Auditoría de Fin de Obra / Documentos ya Revisados), replicando el patrón de Infraestructura: Tabs + TabPanel, KpiPill en vez de KpiCard, sin header redundante. "Flujo de Retornos" migrado a InfoBanner colapsable (un archivo menos).
 - Las 3 secciones pasan de tarjetas sueltas al componente Table global (fillViewport + useContainerRows): click en fila abre modal de detalle (wizard de revisión / modal de certificación / lista de documentos).
 - Adopción de componentes existentes no usados ahí: Stepper (permite volver a paso visitado), RequiredMark/HelpHint, AlertBanner, Spinner, Tooltip en botones de icono.
@@ -157,7 +157,7 @@
 | Accesibilidad/validación | RequiredMark con variantes, fuerza de contraseña, validación en vivo, fix de asociación label/campo |
 
 ### Bugs reales corregidos
-1. Placeholder de descripción precargado que se guardaba como dato (Procura/Cierre de Obra) → notas opcionales sin texto precargado.
+1. Placeholder de descripción precargado que se guardaba como dato (Procura/Auditoría) → notas opcionales sin texto precargado.
 2. Fallback de rating inconsistente al crear (4.0) vs editar (0) en proveedores.
 3. Toast duplicado al reenviar petición.
 4. Previsualizador sin cargar ningún formato: header `Accept` faltante en `apiDownload` + CSP de Vite bloqueando `blob:`.

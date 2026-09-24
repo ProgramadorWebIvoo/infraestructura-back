@@ -183,7 +183,7 @@ Todo movimiento contable requiere comprobante. Registrar: tipo de pago, banco, f
 Tipos: anticipo, pago parcial, pago final, finiquito.
 
 **Notificación automática de pago (2 días, usando motor de Fase 1)**
-Al confirmar pago → comprobante → notificación a: Procura, proveedor, cierre de obra, auditoría externa (destinatario configurable, no hardcode), área involucrada.
+Al confirmar pago → comprobante → notificación a: Procura, proveedor, auditoría, auditoría externa (destinatario configurable, no hardcode), área involucrada.
 Incluye: solicitud, adjudicación, proveedor, monto, fecha, referencia, comprobante, RIF, link.
 
 **Aceptación:** Ningún pago se puede confirmar sin comprobante adjunto. La notificación llega a todos los destinatarios configurados sin intervención manual.
@@ -246,7 +246,7 @@ Puntuación basada en datos (no IA generativa aún):
 Salida: `Proveedor ABC: 87/100 🟢`. La explicación textual vía IA generativa es un paso posterior, opcional.
 
 ### 5. Ratings internos
-Extender el mismo motor de pesos (CONFIG Rating) a analistas y auditores/cierre de obra.
+Extender el mismo motor de pesos (CONFIG Rating) a analistas y auditores/auditoría.
 
 ### 6. Análisis inteligente de expedientes
 Estructura de semáforos por factor (documentación, precio vs. histórico, rating proveedor, garantía, anticipo) en vez de una conclusión genérica. La IA explica, no decide.

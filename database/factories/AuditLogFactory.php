@@ -17,7 +17,7 @@ class AuditLogFactory extends Factory
             'id' => 'LOG-' . now()->format('YmdHisv') . fake()->unique()->randomNumber(2),
             'project_id' => Project::factory(),
             'project_title_snapshot' => fake()->sentence(4),
-            'role' => fake()->randomElement(['PRESIDENCIA', 'INFRAESTRUCTURA', 'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS']),
+            'role' => fake()->randomElement(['PRESIDENCIA', 'INFRAESTRUCTURA', 'AUDITORIA', 'PROCURA', 'ANALISTA', 'FINANZAS']),
             'user_id' => User::factory(),
             'user_name_snapshot' => fake()->name(),
             'action' => fake()->sentence(3),

@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Cache;
  * corto, para que el toggle se sienta inmediato en toda la sesión).
  *
  * Sin fila configurada = habilitado (fail-open a favor de las features que ya
- * existían antes de este sistema de toggles — Procura/Cierre de Obra no
+ * existían antes de este sistema de toggles — Procura/Auditoría no
  * deben apagarse solas al desplegar esto).
  */
 class AiFeatureGate

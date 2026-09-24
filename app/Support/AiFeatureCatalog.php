@@ -27,9 +27,9 @@ class AiFeatureCatalog
             'department' => 'PROCURA',
             'description' => 'Analiza el cuadro comparativo de ofertas y sugiere el contratista ganador con justificación.',
         ],
-        'ia.cierre_obra.evaluacion_expediente' => [
+        'ia.auditoria.evaluacion_expediente' => [
             'label' => 'Evaluación de expediente',
-            'department' => 'CIERRE_DE_OBRA',
+            'department' => 'AUDITORIA',
             'description' => 'Evalúa completitud y riesgo del expediente técnico al auditar una petición de obra.',
         ],
         'ia.analistas.evaluacion_propuestas' => [

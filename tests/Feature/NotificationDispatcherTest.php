@@ -31,13 +31,13 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $otroRol = User::factory()->create(['role' => 'FINANZAS']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
-        // CREADO -> notifica a CIERRE_DE_OBRA (+ SUPERADMIN/ADMIN), no a FINANZAS.
+        // CREADO -> notifica a AUDITORIA (+ SUPERADMIN/ADMIN), no a FINANZAS.
         Notification::assertSentTo($cierre, ProjectActionNotification::class);
         Notification::assertNotSentTo($otroRol, ProjectActionNotification::class);
     }
@@ -49,7 +49,7 @@ class NotificationDispatcherTest extends TestCase
         $user = User::factory()->create(['role' => 'ANALISTA']);
         $project = Project::factory()->create(['status' => 'VERIFICANDO_FINALIZACION']);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Verificacion de finalizacion y calidad de obra');
+        AuditLog::record($project, 'AUDITORIA', 'Verificacion de finalizacion y calidad de obra');
 
         // VERIFICANDO_FINALIZACION solo tiene SUPERADMIN/ADMIN como destinatarios.
         Notification::assertNotSentTo($user, ProjectActionNotification::class);
@@ -62,7 +62,7 @@ class NotificationDispatcherTest extends TestCase
         $finanzas = User::factory()->create(['role' => 'FINANZAS']);
         $project = Project::factory()->create(['status' => 'LISTO_PAGO_FINAL']);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Verificacion de finalizacion y calidad de obra');
+        AuditLog::record($project, 'AUDITORIA', 'Verificacion de finalizacion y calidad de obra');
 
         Notification::assertSentTo($finanzas, ProjectActionNotification::class);
     }
@@ -71,7 +71,7 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra');
@@ -91,7 +91,7 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
@@ -110,10 +110,10 @@ class NotificationDispatcherTest extends TestCase
         Notification::fake();
 
         // El SUPERADMIN que ejecuta la acción también está en la lista de
-        // destinatarios por rol (CREADO -> CIERRE_DE_OBRA + SUPERADMIN/ADMIN)
+        // destinatarios por rol (CREADO -> AUDITORIA + SUPERADMIN/ADMIN)
         // pero no debe notificarse a sí mismo.
         $actor = User::factory()->create(['role' => 'SUPERADMIN']);
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         $this->actingAs($actor);
@@ -133,7 +133,7 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra');
@@ -147,12 +147,12 @@ class NotificationDispatcherTest extends TestCase
 
         // "Liberacion total de fondos" ocurre con el proyecto en
         // COMPLETADO_PAGADO (después del pago) — status real donde la
-        // matriz sembrada tiene destinatarios de correo (CIERRE_DE_OBRA,
+        // matriz sembrada tiene destinatarios de correo (AUDITORIA,
         // INFRAESTRUCTURA, PRESIDENCIA), no LISTO_PAGO_FINAL (antes del pago).
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'COMPLETADO_PAGADO']);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Liberacion total de fondos', 'Pago final liberado');
+        AuditLog::record($project, 'AUDITORIA', 'Liberacion total de fondos', 'Pago final liberado');
 
         Notification::assertSentTo(
             $cierre,
@@ -176,7 +176,7 @@ class NotificationDispatcherTest extends TestCase
         ]);
         SettingsService::forget();
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Liberacion total de fondos');
+        AuditLog::record($project, 'AUDITORIA', 'Liberacion total de fondos');
 
         Notification::assertNotSentTo($finanzas, ProjectActionMail::class);
     }
@@ -185,7 +185,7 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AppSetting::where('key', 'acciones_con_notificacion_app')->update([
@@ -206,7 +206,7 @@ class NotificationDispatcherTest extends TestCase
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AppSetting::where('key', 'acciones_con_notificacion_app')->update([
@@ -221,7 +221,7 @@ class NotificationDispatcherTest extends TestCase
 
     public function test_mark_read_endpoint_updates_read_at(): void
     {
-        $user = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $user = User::factory()->create(['role' => 'AUDITORIA']);
         $notification = AppNotification::create([
             'user_id' => $user->id,
             'project_id' => null,
@@ -237,7 +237,7 @@ class NotificationDispatcherTest extends TestCase
 
     public function test_unread_count_endpoint_only_counts_own_unread(): void
     {
-        $user = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $user = User::factory()->create(['role' => 'AUDITORIA']);
         $other = User::factory()->create(['role' => 'PROCURA']);
 
         AppNotification::create(['user_id' => $user->id, 'action' => 'A']);
@@ -367,21 +367,21 @@ class NotificationDispatcherTest extends TestCase
         Notification::fake();
 
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Rechazo de petición de obra', 'Descripción insuficiente.');
+        AuditLog::record($project, 'AUDITORIA', 'Rechazo de petición de obra', 'Descripción insuficiente.');
 
         Notification::assertSentTo($infra, ProjectActionNotification::class);
         Notification::assertSentTo($infra, ProjectActionMail::class);
         Notification::assertNotSentTo($cierre, ProjectActionNotification::class);
     }
 
-    public function test_project_resubmission_notifies_cierre_de_obra_via_app(): void
+    public function test_project_resubmission_notifies_auditoria_via_app(): void
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
         $project = Project::factory()->create(['status' => 'RECHAZADO_CIERRE']);
 
@@ -391,15 +391,15 @@ class NotificationDispatcherTest extends TestCase
         Notification::assertNotSentTo($infra, ProjectActionNotification::class);
     }
 
-    public function test_send_to_reevaluation_notifies_cierre_de_obra_via_app_and_mail(): void
+    public function test_send_to_reevaluation_notifies_auditoria_via_app_and_mail(): void
     {
         Notification::fake();
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $procura = User::factory()->create(['role' => 'PROCURA']);
         $project = Project::factory()->reviewed()->create();
 
-        AuditLog::record($project, 'PROCURA', 'Solicitud de reevaluación a Cierre de Obra', 'La cubicación no coincide con los planos.');
+        AuditLog::record($project, 'PROCURA', 'Solicitud de reevaluación a Auditoría', 'La cubicación no coincide con los planos.');
 
         Notification::assertSentTo($cierre, ProjectActionNotification::class);
         Notification::assertSentTo($cierre, ProjectActionMail::class);
@@ -411,10 +411,10 @@ class NotificationDispatcherTest extends TestCase
         Notification::fake();
 
         $procura = User::factory()->create(['role' => 'PROCURA']);
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->reviewed()->create(['status' => 'EN_REEVALUACION_CIERRE']);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Reevaluación resuelta, reenviado a Procura', 'Se corrigió la cubicación.');
+        AuditLog::record($project, 'AUDITORIA', 'Reevaluación resuelta, reenviado a Procura', 'Se corrigió la cubicación.');
 
         Notification::assertSentTo($procura, ProjectActionNotification::class);
         Notification::assertNotSentTo($cierre, ProjectActionNotification::class);
@@ -484,7 +484,7 @@ class NotificationDispatcherTest extends TestCase
         $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
         $project = Project::factory()->create(['status' => 'COMPLETADO_PAGADO']);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Liberacion total de fondos', 'pago final');
+        AuditLog::record($project, 'AUDITORIA', 'Liberacion total de fondos', 'pago final');
 
         $this->assertDatabaseHas('app_notifications', [
             'action' => 'Liberacion total de fondos',
@@ -494,7 +494,7 @@ class NotificationDispatcherTest extends TestCase
 
     public function test_app_notification_row_defaults_to_informacion_for_non_critical_actions(): void
     {
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra');
@@ -527,7 +527,7 @@ class NotificationDispatcherTest extends TestCase
     {
         Event::fake([NotificationCreated::class]);
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
@@ -541,7 +541,7 @@ class NotificationDispatcherTest extends TestCase
 
     public function test_notification_created_broadcasts_on_the_recipients_private_channel(): void
     {
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $notification = AppNotification::create([
             'user_id' => $cierre->id,
             'action' => 'Test',
@@ -567,7 +567,7 @@ class NotificationDispatcherTest extends TestCase
             throw new \RuntimeException('Reverb unavailable');
         });
 
-        $cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');

@@ -16,7 +16,7 @@ Los roles son un campo de texto simple en `users.role` (no hay tablas `roles`/`p
 | **ADMIN** | Acceso total salvo `/presidencia` | Administración operativa (usuarios, catálogos, config) |
 | **PRESIDENCIA** | `/presidencia`, `/catalogos` | Visión ejecutiva agregada del portafolio. **Solo lectura**, sin acciones sobre proyectos |
 | **INFRAESTRUCTURA** | `/infraestructura` | Crea las peticiones de obra/mantenimiento (inicio del flujo) |
-| **CIERRE_DE_OBRA** | `/cierre-obra` | Revisión técnica inicial (planos/cálculos) y verificación final de calidad |
+| **AUDITORIA** | `/auditoria` | Revisión técnica inicial (planos/cálculos) y verificación final de calidad |
 | **PROCURA** | `/procura`, `/catalogos` | Aprueba presupuesto, rechaza propuestas, adjudica contratista |
 | **ANALISTA** | `/analistas` | Carga y compara propuestas de contratistas, envía comparativa |
 | **FINANZAS** | `/finanzas` | Libera pagos (anticipo y final) |
@@ -33,7 +33,7 @@ Notas:
 
 Un **Proyecto** (`app/Models/Project.php`, tabla `projects`) representa una obra de tipo `INFRAESTRUCTURA` o `MANTENIMIENTO`. Su ID es tipo `PRJ-001`, `PRJ-002`... generado de forma segura ante concurrencia.
 
-Campos clave: `title`, `type`, `description`, `location`, `estimated_total`, `status`, notas de revisión (`cierre_obra_notes`, `procura_review_notes`), `approved_investment_amount`, `selected_contractor_code`, `selected_proposal_id`, `quality_verified`, `completion_verified_date`.
+Campos clave: `title`, `type`, `description`, `location`, `estimated_total`, `status`, notas de revisión (`audit_notes`, `procura_review_notes`), `approved_investment_amount`, `selected_contractor_code`, `selected_proposal_id`, `quality_verified`, `completion_verified_date`.
 
 Relaciones: `materials` (lista inicial de materiales), `proposals` (ofertas de contratistas), `payments` (anticipo/final), `documents` (planos, hojas de cálculo), `auditLogs` (bitácora inmutable de cada transición).
 
@@ -43,7 +43,7 @@ Relaciones: `materials` (lista inicial de materiales), `proposals` (ofertas de c
 flowchart TD
     Start(["Proyecto creado"]) --> CREADO
 
-    CREADO["CREADO<br/><i>Infraestructura</i>"] -->|Cierre de Obra revisa| REVISADO["REVISADO_CIERRE<br/><i>Cierre de Obra</i>"]
+    CREADO["CREADO<br/><i>Infraestructura</i>"] -->|Auditoría revisa| REVISADO["REVISADO_CIERRE<br/><i>Auditoría</i>"]
     REVISADO -->|Procura aprueba presupuesto| CONFIRMADO["CONFIRMADO_PROCURA<br/><i>Procura</i>"]
     CONFIRMADO -->|Analista carga y compara propuestas| COMPARATIVA["COMPARATIVA_ENVIADA<br/><i>Analista</i>"]
 
@@ -51,9 +51,9 @@ flowchart TD
     COMPARATIVA -->|Procura rechaza propuestas| CONFIRMADO
 
     CONTRATADO -->|Finanzas libera anticipo| EJECUCION["EN_EJECUCION<br/><i>Finanzas</i>"]
-    EJECUCION -->|Cierre de Obra reporta obra terminada| VERIFICANDO["VERIFICANDO_FINALIZACION<br/><i>Cierre de Obra</i>"]
+    EJECUCION -->|Auditoría reporta obra terminada| VERIFICANDO["VERIFICANDO_FINALIZACION<br/><i>Auditoría</i>"]
 
-    VERIFICANDO -->|Calidad aprobada| LISTO["LISTO_PAGO_FINAL<br/><i>Cierre de Obra</i>"]
+    VERIFICANDO -->|Calidad aprobada| LISTO["LISTO_PAGO_FINAL<br/><i>Auditoría</i>"]
     VERIFICANDO -->|Calidad rechazada| EJECUCION
 
     LISTO -->|Finanzas libera pago final| COMPLETADO["COMPLETADO_PAGADO<br/><i>Finanzas</i>"]
@@ -81,7 +81,7 @@ CREADO
 
 Con dos caminos "hacia atrás" excepcionales:
 - `COMPARATIVA_ENVIADA → CONFIRMADO_PROCURA` (Procura rechaza todas las propuestas)
-- `VERIFICANDO_FINALIZACION → EN_EJECUCION` (Cierre de Obra rechaza la calidad de la obra terminada)
+- `VERIFICANDO_FINALIZACION → EN_EJECUCION` (Auditoría rechaza la calidad de la obra terminada)
 
 ---
 
@@ -90,16 +90,16 @@ Con dos caminos "hacia atrás" excepcionales:
 | # | Transición | Quién | Endpoint | Qué ocurre |
 |---|---|---|---|---|
 | 1 | `— → CREADO` | **INFRAESTRUCTURA** | `POST /projects` | Se crea la petición de obra con su lista de materiales |
-| 2 | `CREADO → REVISADO_CIERRE` | **CIERRE_DE_OBRA** | `POST /projects/{id}/review` | Revisión técnica: planos, cálculos, notas |
+| 2 | `CREADO → REVISADO_CIERRE` | **AUDITORIA** | `POST /projects/{id}/review` | Revisión técnica: planos, cálculos, notas |
 | 3 | `REVISADO_CIERRE → CONFIRMADO_PROCURA` | **PROCURA** | `POST /projects/{id}/approve-investment` | Aprueba el monto de inversión (`approved_investment_amount`), que rige el resto del proyecto |
 | 4 | *(sin cambio de estado)* | **ANALISTA** | `POST /projects/{id}/proposals`, `POST /projects/{id}/import-supplier-proposals` | Carga propuestas de contratistas, manualmente o importadas del portal público de proveedores |
 | 5 | `CONFIRMADO_PROCURA → COMPARATIVA_ENVIADA` | **ANALISTA** | `POST /projects/{id}/submit-comparative` | Envía el cuadro comparativo de propuestas (requiere al menos una propuesta cargada) |
 | 6a | `COMPARATIVA_ENVIADA → CONTRATADO` | **PROCURA** | `POST /projects/{id}/select-contractor` | Adjudica el contratista ganador |
 | 6b | `COMPARATIVA_ENVIADA → CONFIRMADO_PROCURA` | **PROCURA** | `POST /projects/{id}/reject-proposals` | Rechaza todas las propuestas (con motivo obligatorio) y vuelve a la etapa de comparativa |
 | 7 | `CONTRATADO → EN_EJECUCION` | **FINANZAS** | `POST /projects/{id}/payments` (anticipo) | Libera el pago de anticipo al contratista |
-| 8 | `EN_EJECUCION → VERIFICANDO_FINALIZACION` | **CIERRE_DE_OBRA** | `POST /projects/{id}/report-finished` | Reporta que la obra fue finalizada en campo |
-| 9a | `VERIFICANDO_FINALIZACION → LISTO_PAGO_FINAL` | **CIERRE_DE_OBRA** | `POST /projects/{id}/verify-completion` | Verifica calidad OK |
-| 9b | `VERIFICANDO_FINALIZACION → EN_EJECUCION` | **CIERRE_DE_OBRA** | `POST /projects/{id}/verify-completion` | Rechaza calidad, la obra vuelve a ejecución |
+| 8 | `EN_EJECUCION → VERIFICANDO_FINALIZACION` | **AUDITORIA** | `POST /projects/{id}/report-finished` | Reporta que la obra fue finalizada en campo |
+| 9a | `VERIFICANDO_FINALIZACION → LISTO_PAGO_FINAL` | **AUDITORIA** | `POST /projects/{id}/verify-completion` | Verifica calidad OK |
+| 9b | `VERIFICANDO_FINALIZACION → EN_EJECUCION` | **AUDITORIA** | `POST /projects/{id}/verify-completion` | Rechaza calidad, la obra vuelve a ejecución |
 | 10 | `LISTO_PAGO_FINAL → COMPLETADO_PAGADO` | **FINANZAS** | `POST /projects/{id}/payments` (final) | Libera el pago final. Cierre del proyecto |
 
 ### Guardas de integridad
@@ -112,7 +112,7 @@ Cada transición de estado genera un registro inmutable en `AuditLog` (rol actor
 
 ### Notificaciones
 
-Al cambiar de estado, `ProjectObserver` notifica (push) a los roles responsables de la siguiente etapa: p. ej. al llegar a `CREADO` se notifica a Cierre de Obra; a `REVISADO_CIERRE`, a Procura; a `CONFIRMADO_PROCURA`, a Analistas; y desde `CONTRATADO` en adelante se notifica también a Finanzas, Presidencia e Infraestructura para visibilidad ejecutiva.
+Al cambiar de estado, `ProjectObserver` notifica (push) a los roles responsables de la siguiente etapa: p. ej. al llegar a `CREADO` se notifica a Auditoría; a `REVISADO_CIERRE`, a Procura; a `CONFIRMADO_PROCURA`, a Analistas; y desde `CONTRATADO` en adelante se notifica también a Finanzas, Presidencia e Infraestructura para visibilidad ejecutiva.
 
 ---
 

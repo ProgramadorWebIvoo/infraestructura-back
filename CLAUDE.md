@@ -35,7 +35,7 @@ SUPERADMIN → Acceso total + auditoría exclusiva
 ADMIN → Gestión administrativa
 PRESIDENCIA → Dashboard ejecutivo
 INFRAESTRUCTURA → Creación y gestión de proyectos
-CIERRE_DE_OBRA → Auditoría de expedientes
+AUDITORIA → Auditoría de expedientes
 PROCURA → Licitación y adjudicación
 ANALISTA → Evaluación de ofertas
 FINANZAS → Control de pagos

@@ -34,7 +34,7 @@ class StoreProjectDocumentRequest extends FormRequest
     private const ALLOWED_FOTO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
 
     /**
-     * CORRECCION: adjuntos que Cierre de Obra sube al rechazar una petición
+     * CORRECCION: adjuntos que Auditoría sube al rechazar una petición
      * (planos u hojas de cálculo corregidas) — acepta la unión de tipos de
      * PLANO y CALC, ya que puede ser cualquiera de los dos.
      */
@@ -56,7 +56,7 @@ class StoreProjectDocumentRequest extends FormRequest
 
     /**
      * REEVALUACION: evidencia que Procura adjunta al enviar un expediente de
-     * vuelta a Cierre de Obra (ver ProjectController::sendToReevaluation) —
+     * vuelta a Auditoría (ver ProjectController::sendToReevaluation) —
      * misma unión de tipos que CORRECCION, ya que puede ser cualquier
      * documento técnico que sustente el motivo.
      */

@@ -3,7 +3,7 @@
 namespace App\Services\AI;
 
 /**
- * Evaluación del expediente completo (Cierre de Obra, herramienta de apoyo
+ * Evaluación del expediente completo (Auditoría, herramienta de apoyo
  * a la revisión técnica previa a enviar a Procura) — completitud documental,
  * consistencia presupuestaria, riesgo por historial de rechazos, y un monto
  * aprobable sugerido (referencial, no vinculante).
@@ -23,7 +23,7 @@ de calidad de expedientes de obra antes de su envío a Procura para
 presupuesto y licitación.
 
 Tu tarea es evaluar la COMPLETITUD y el RIESGO de un expediente de obra,
-para ayudar al auditor de Cierre de Obra a decidir si aprobarlo o rechazarlo,
+para ayudar al auditor de Auditoría a decidir si aprobarlo o rechazarlo,
 y a estimar si el monto propuesto es razonable.
 
 Evalúa CRÍTICAMENTE:
@@ -31,7 +31,7 @@ Evalúa CRÍTICAMENTE:
  2. CONSISTENCIA entre el monto estimado y la lista de materiales (precios unitarios,
     cantidades, condición nuevo/usado).
  3. HISTORIAL DE RECHAZOS: reenvíos repetidos son una señal de riesgo de calidad.
- 4. CLARIDAD de las notas de Cierre de Obra (ambigüedad, contradicciones).
+ 4. CLARIDAD de las notas de Auditoría (ambigüedad, contradicciones).
  5. RIESGOS específicos visibles en los datos (materiales sin precio, condición
     "usado" no justificada, ubicación de difícil acceso, etc).
  6. MONTO APROBABLE: cruzando materiales + precios unitarios + contexto del
@@ -81,8 +81,8 @@ PROMPT;
         $text .= "  - Fotos (FOTO): " . ($documentCounts['FOTO'] ?? 0) . "\n";
         $text .= "  - Correcciones (CORRECCION): " . ($documentCounts['CORRECCION'] ?? 0) . "\n\n";
 
-        $text .= "## NOTAS DE CIERRE DE OBRA\n";
-        $text .= $this->wrapData($sanitizer($project['cierreObraNotes'] ?? 'Sin notas.')) . "\n\n";
+        $text .= "## NOTAS DE AUDITORÍA\n";
+        $text .= $this->wrapData($sanitizer($project['auditNotes'] ?? 'Sin notas.')) . "\n\n";
 
         $total = count($materials);
         $shown = array_slice($materials, 0, 30);

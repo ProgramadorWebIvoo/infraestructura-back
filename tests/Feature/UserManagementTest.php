@@ -35,7 +35,7 @@ class UserManagementTest extends TestCase
         $response->assertStatus(200);
         $response->assertJson([
             'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
-            'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
+            'AUDITORIA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
             'MARKETING',
         ]);
     }

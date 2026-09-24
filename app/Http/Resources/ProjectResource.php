@@ -36,7 +36,7 @@ class ProjectResource extends JsonResource
                 'observations' => $item->observations,
             ])->values(),
             'estimatedTotal' => $this->estimated_total,
-            'cierreObraNotes' => $this->cierre_obra_notes,
+            'auditNotes' => $this->audit_notes,
             'calculationsAdded' => $this->calculations_added,
             'blueprintsCount' => $this->blueprints_count,
             'dossierAiScore' => $this->dossier_ai_score,

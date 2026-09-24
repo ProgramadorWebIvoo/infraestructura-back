@@ -138,7 +138,7 @@ class AIEvaluationController extends Controller
             );
         }
 
-        // Lista de materiales auditados del expediente (Cierre de Obra) — se toma
+        // Lista de materiales auditados del expediente (Auditoría) — se toma
         // de la BD, no del cliente, para que la IA compare contra la base real.
         $projectMaterials = $project->materials()->get(['name', 'quantity', 'unit', 'estimated_unit_price', 'condition'])
             ->map(fn ($m) => [

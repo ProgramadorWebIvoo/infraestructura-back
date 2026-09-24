@@ -160,9 +160,9 @@ class ProjectDocumentController extends Controller
      * Infraestructura solo puede borrar mientras el proyecto está
      * RECHAZADO_CIERRE (editando/reenviando su propia petición tras un
      * rechazo) — fuera de ese estado, borrar adjuntos queda reservado a
-     * Cierre de Obra (dueño natural de la documentación técnica, ver
+     * Auditoría (dueño natural de la documentación técnica, ver
      * RevisedDocumentsSection.tsx). Tampoco puede borrar CORRECCION: son
-     * las correcciones que Cierre de Obra adjuntó al rechazar, quedan como
+     * las correcciones que Auditoría adjuntó al rechazar, quedan como
      * histórico/evidencia, no un adjunto propio de Infraestructura.
      */
     public function destroy(Project $project, ProjectDocument $document)
@@ -172,7 +172,7 @@ class ProjectDocumentController extends Controller
         $role = auth()->user()->role;
         if ($role === 'INFRAESTRUCTURA') {
             abort_unless($project->status === 'RECHAZADO_CIERRE', 403, 'Solo puede eliminar adjuntos mientras corrige una petición rechazada.');
-            abort_if($document->document_type === 'CORRECCION', 403, 'Las correcciones de Cierre de Obra no pueden eliminarse.');
+            abort_if($document->document_type === 'CORRECCION', 403, 'Las correcciones de Auditoría no pueden eliminarse.');
         }
 
         $versions = ProjectDocument::where('document_group_id', $document->document_group_id)->get();

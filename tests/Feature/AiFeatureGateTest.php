@@ -12,7 +12,7 @@ class AiFeatureGateTest extends TestCase
 
     public function test_defaults_to_enabled_when_no_row_exists(): void
     {
-        // Fail-open: Procura/Cierre de Obra ya usan IA hoy y no deben
+        // Fail-open: Procura/Auditoría ya usan IA hoy y no deben
         // apagarse solas al desplegar este sistema de toggles.
         $this->assertTrue(AiFeatureGate::isEnabled('PROCURA', 'ia.procura.evaluacion_propuestas'));
     }
@@ -55,7 +55,7 @@ class AiFeatureGateTest extends TestCase
 
         $this->assertTrue($matrix['PROCURA']['master']);
         $this->assertTrue($matrix['PROCURA']['actions']['ia.procura.evaluacion_propuestas']);
-        $this->assertArrayHasKey('CIERRE_DE_OBRA', $matrix);
+        $this->assertArrayHasKey('AUDITORIA', $matrix);
         $this->assertArrayHasKey('ANALISTA', $matrix);
         $this->assertArrayHasKey('CATALOGOS', $matrix);
     }

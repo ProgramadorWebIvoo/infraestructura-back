@@ -82,7 +82,7 @@ PROMPT;
         }
 
         if (!empty($project['materials'])) {
-            $text .= "\n## LISTA DE MATERIALES AUDITADA DEL EXPEDIENTE (Cierre de Obra)\n";
+            $text .= "\n## LISTA DE MATERIALES AUDITADA DEL EXPEDIENTE (Auditoría)\n";
             $text .= "Cantidades y precios unitarios estimados de referencia — las cantidades son inmutables, cualquier oferta debe respetarlas:\n";
             foreach ($project['materials'] as $m) {
                 $text .= "- " . $sanitizer($m['name']) . ": {$m['quantity']} {$sanitizer($m['unit'])}"

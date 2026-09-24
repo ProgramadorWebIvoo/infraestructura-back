@@ -88,7 +88,7 @@ class ProjectController extends Controller
     }
 
     /**
-     * Cierre de Obra revisa (audita) la petición — no sube documentación
+     * Auditoría revisa (audita) la petición — no sube documentación
      * propia, solo confirma lo ya adjuntado por Infraestructura. Por eso no
      * recibe blueprintsCount/calculationsAdded del cliente: esos campos ya
      * los mantiene sincronizados ProjectDocumentController::syncProjectCounts()
@@ -100,16 +100,16 @@ class ProjectController extends Controller
 
         $project->update([
             'status' => self::STATUSES['REVISADO_CIERRE'],
-            'cierre_obra_notes' => $data['notes'] ?? null,
+            'audit_notes' => $data['notes'] ?? null,
         ]);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Revision tecnica de calculos y planos', $data['notes'] ?? null);
+        AuditLog::record($project, 'AUDITORIA', 'Revision tecnica de calculos y planos', $data['notes'] ?? null);
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }
 
     /**
-     * Evaluación IA del expediente — herramienta de Cierre de Obra para
+     * Evaluación IA del expediente — herramienta de Auditoría para
      * apoyar su revisión. Se llama desde el frontend tanto en la primera
      * apertura automática del wizard de revisión como en un reintento
      * manual explícito ("Reevaluar") — es la misma ruta en ambos casos.
@@ -122,13 +122,13 @@ class ProjectController extends Controller
         ProjectStateMachine::assertStatusIn(
             $project,
             [self::STATUSES['CREADO'], self::STATUSES['RECHAZADO_CIERRE'], self::STATUSES['EN_REEVALUACION_CIERRE']],
-            'Solo se puede evaluar el expediente mientras está pendiente de revisión por Cierre de Obra.'
+            'Solo se puede evaluar el expediente mientras está pendiente de revisión por Auditoría.'
         );
 
         abort_unless(
-            AiFeatureGate::isEnabled('CIERRE_DE_OBRA', 'ia.cierre_obra.evaluacion_expediente'),
+            AiFeatureGate::isEnabled('AUDITORIA', 'ia.auditoria.evaluacion_expediente'),
             403,
-            'La evaluación IA está deshabilitada para Cierre de Obra. Contacte a un SUPERADMIN.'
+            'La evaluación IA está deshabilitada para Auditoría. Contacte a un SUPERADMIN.'
         );
 
         // DossierEvaluationService::evaluate() es best-effort y nunca lanza
@@ -156,7 +156,7 @@ class ProjectController extends Controller
             $project,
             self::STATUSES['CREADO'],
             self::STATUSES['RECHAZADO_CIERRE'],
-            'CIERRE_DE_OBRA',
+            'AUDITORIA',
             'Rechazo de petición de obra',
             $request->validated(),
             function (Project $project, array $payload) {}
@@ -168,7 +168,7 @@ class ProjectController extends Controller
     /**
      * Infraestructura edita y reenvía una petición rechazada — mismo Project.id,
      * no crea uno nuevo. Reemplaza materiales (borrar+recrear, igual que store())
-     * y vuelve el status a CREADO para que Cierre de Obra la reevalúe.
+     * y vuelve el status a CREADO para que Auditoría la reevalúe.
      */
     public function resubmitProject(ResubmitProjectRequest $request, Project $project)
     {
@@ -201,7 +201,7 @@ class ProjectController extends Controller
             $project->materials()->delete();
             $this->syncMaterials($project, $data['materials']);
 
-            AuditLog::record($project, 'INFRAESTRUCTURA', 'Reenvío de petición corregida', 'Petición editada y reenviada a Cierre de Obra tras rechazo.');
+            AuditLog::record($project, 'INFRAESTRUCTURA', 'Reenvío de petición corregida', 'Petición editada y reenviada a Auditoría tras rechazo.');
 
             return $project;
         });
@@ -210,10 +210,10 @@ class ProjectController extends Controller
     }
 
     /**
-     * Procura devuelve a Cierre de Obra, con motivo obligatorio, un
+     * Procura devuelve a Auditoría, con motivo obligatorio, un
      * expediente que acaba de recibir (REVISADO_CIERRE) para que lo
      * reevalúe antes de autorizar inversión — distinto de rejectProject()
-     * (Cierre de Obra rechaza hacia Infraestructura) y de rejectProposals()
+     * (Auditoría rechaza hacia Infraestructura) y de rejectProposals()
      * (Procura rechaza el cuadro comparativo ya en licitación).
      */
     public function sendToReevaluation(SendToReevaluationRequest $request, Project $project)
@@ -223,7 +223,7 @@ class ProjectController extends Controller
             self::STATUSES['REVISADO_CIERRE'],
             self::STATUSES['EN_REEVALUACION_CIERRE'],
             'PROCURA',
-            'Solicitud de reevaluación a Cierre de Obra',
+            'Solicitud de reevaluación a Auditoría',
             $request->validated(),
             function (Project $project, array $payload) {}
         );
@@ -232,7 +232,7 @@ class ProjectController extends Controller
     }
 
     /**
-     * Cierre de Obra resuelve la reevaluación solicitada por Procura y
+     * Auditoría resuelve la reevaluación solicitada por Procura y
      * reenvía el expediente (mismo Project.id) de vuelta a REVISADO_CIERRE
      * para que Procura lo revise nuevamente — no pasa por CREADO porque la
      * cubicación y planos ya fueron aprobados, solo se corrige lo señalado.
@@ -245,7 +245,7 @@ class ProjectController extends Controller
 
         $project->update(['status' => self::STATUSES['REVISADO_CIERRE']]);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Reevaluación resuelta, reenviado a Procura', $data['notes'] ?? null);
+        AuditLog::record($project, 'AUDITORIA', 'Reevaluación resuelta, reenviado a Procura', $data['notes'] ?? null);
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }
@@ -562,7 +562,7 @@ class ProjectController extends Controller
             'completion_verified_date' => $data['completionVerifiedDate'] ?? now()->toDateString(),
         ]);
 
-        AuditLog::record($project, 'CIERRE_DE_OBRA', 'Verificacion de finalizacion y calidad de obra', $data['details'] ?? null);
+        AuditLog::record($project, 'AUDITORIA', 'Verificacion de finalizacion y calidad de obra', $data['details'] ?? null);
 
         return new ProjectResource($project->load(Project::detailRelations()));
     }

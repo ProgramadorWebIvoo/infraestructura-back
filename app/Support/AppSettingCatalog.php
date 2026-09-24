@@ -71,7 +71,7 @@ class AppSettingCatalog
         ],
         'documento_tamano_maximo_mb' => [
             'label' => 'Tamaño máximo por archivo (MB)',
-            'description' => 'Peso máximo de cada archivo adjunto en el cierre de obra. Acotado a 40 MB porque es el límite físico del servidor PHP (upload_max_filesize/post_max_size); subirlo por encima requiere cambiar php.ini primero.',
+            'description' => 'Peso máximo de cada archivo adjunto en la auditoría. Acotado a 40 MB porque es el límite físico del servidor PHP (upload_max_filesize/post_max_size); subirlo por encima requiere cambiar php.ini primero.',
         ],
         'documento_cantidad_maxima_archivos' => [
             'label' => 'Cantidad máxima de archivos por carga',

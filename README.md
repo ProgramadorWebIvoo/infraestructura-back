@@ -13,7 +13,7 @@ IVOO Gestión Infraestructura es el sistema corporativo que gestiona el **ciclo 
 | Módulo | Qué hace |
 |--------|----------|
 | **Proyectos** | Creación, edición, seguimiento de obras de infraestructura |
-| **Revisión** | Auditoría de expedientes técnicos por Cierre de Obra |
+| **Revisión** | Auditoría de expedientes técnicos por Auditoría |
 | **Licitación** | Evaluación comparativa de ofertas por Procura |
 | **Adjudicación** | Selección de contratista y gestión de contratos |
 | **Pagos** | Control de anticipos y pagos finales por Finanzas |
@@ -31,7 +31,7 @@ SUPERADMIN          → Acceso total + configuración + auditoría
 ADMIN               → Gestión administrativa (sin config de IA)
 PRESIDENCIA         → Dashboard ejecutivo, métricas, catálogos
 INFRAESTRUCTURA     → Creación y gestión de proyectos
-CIERRE_DE_OBRA      → Auditoría de expedientes técnicos
+AUDITORIA      → Auditoría de expedientes técnicos
 PROCURA             → Licitación, evaluación, adjudicación
 ANALISTA            → Evaluación de ofertas, renegociación
 FINANZAS            → Control financiero, pagos
@@ -279,10 +279,10 @@ php artisan serve --host=0.0.0.0 --port=8000
 | Dominio | Endpoints | Roles permitidos |
 |---------|-----------|------------------|
 | **Projects** | CRUD + 14 acciones de workflow | Según acción |
-| **Documents** | Upload, download, versionado | INFRAESTRUCTURA, CIERRE_DE_OBRA |
+| **Documents** | Upload, download, versionado | INFRAESTRUCTURA, AUDITORIA |
 | **Proposals** | Agregar, renegociar, remover | ANALISTA |
 | **Payments** | Registrar pagos | FINANZAS |
-| **AI** | Evaluar propuestas/expedientes | PROCURA, CIERRE_DE_OBRA |
+| **AI** | Evaluar propuestas/expedientes | PROCURA, AUDITORIA |
 | **Notifications** | Inbox, marcar leído, eliminar | Todos autenticados |
 | **Settings** | Configuración de app | SUPERADMIN, ADMIN |
 | **Users** | CRUD de usuarios | SUPERADMIN, ADMIN |
@@ -323,7 +323,7 @@ El control de roles funciona en **dos capas**:
 | `ADMIN` | Gestión administrativa | Todo excepto config de IA |
 | `PRESIDENCIA` | Dashboard ejecutivo | Dashboard + catálogos |
 | `INFRAESTRUCTURA` | Gestión de proyectos | Proyectos + documentos |
-| `CIERRE_DE_OBRA` | Auditoría de expedientes | Revisión + cierre |
+| `AUDITORIA` | Auditoría de expedientes | Revisión + cierre |
 | `PROCURA` | Licitación y adjudicación | Procura + catálogos |
 | `ANALISTA` | Evaluación de ofertas | Analistas |
 | `FINANZAS` | Control financiero | Finanzas |
@@ -374,13 +374,13 @@ CREADO ──▶ REVISADO_CIERRE ──▶ CONFIRMADO_PROCURA ──▶ COMPARAT
 
 | Estado | Acciones disponibles | Rol |
 |--------|---------------------|-----|
-| `CREADO` | Revisar, Rechazar | CIERRE_DE_OBRA |
+| `CREADO` | Revisar, Rechazar | AUDITORIA |
 | `REVISADO_CIERRE` | Aprobar inversión, Rechazar | PROCURA |
 | `RECHAZADO_CIERRE` | Reenviar | INFRAESTRUCTURA |
 | `CONFIRMADO_PROCURA` | Agregar propuestas, Renegociar | ANALISTA |
 | `COMPARATIVA_ENVIADA` | Seleccionar contratista, Rechazar propuestas | PROCURA |
-| `CONTRATADO` | Reportar finalización | CIERRE_DE_OBRA |
-| `EN_EJECUCION` | Verificar finalización, Pagar | CIERRE_DE_OBRA, FINANZAS |
+| `CONTRATADO` | Reportar finalización | AUDITORIA |
+| `EN_EJECUCION` | Verificar finalización, Pagar | AUDITORIA, FINANZAS |
 | `VERIFICANDO_FINALIZACION` | Pagar | FINANZAS |
 | `LISTO_PAGO_FINAL` | Pagar | FINANZAS |
 | `COMPLETADO_PAGADO` | — (terminal) | — |

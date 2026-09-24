@@ -119,7 +119,7 @@ class ProjectHistoryDetailBuilder
         return [
             'createdDate' => optional($project->created_date)->format('Y-m-d'),
             'createdBy' => $firstLog?->user_name_snapshot,
-            'reviewNotes' => $project->cierre_obra_notes,
+            'reviewNotes' => $project->audit_notes,
             'procuraNotes' => $project->procura_review_notes,
             'dossierAiScore' => $project->dossier_ai_score,
         ];

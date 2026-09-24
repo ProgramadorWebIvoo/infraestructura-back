@@ -34,7 +34,7 @@ class ProjectStateMachine
         'CREADO'                   => 0,
         'REVISADO_CIERRE'          => 1,
         // 'EN_REEVALUACION_CIERRE' se omite a propósito del orden canónico del
-        // funnel: es un desvío temporal (Procura -> Cierre de Obra -> de vuelta
+        // funnel: es un desvío temporal (Procura -> Auditoría -> de vuelta
         // a REVISADO_CIERRE), no una etapa nueva del avance del proyecto.
         'CONFIRMADO_PROCURA'       => 2,
         'COMPARATIVA_ENVIADA'      => 3,

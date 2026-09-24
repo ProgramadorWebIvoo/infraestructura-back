@@ -30,7 +30,7 @@ class RoleMiddlewareTest extends TestCase
         $this->analista = User::factory()->create(['role' => 'ANALISTA']);
         $this->procura = User::factory()->create(['role' => 'PROCURA']);
         $this->finanzas = User::factory()->create(['role' => 'FINANZAS']);
-        $this->cierre = User::factory()->create(['role' => 'CIERRE_DE_OBRA']);
+        $this->cierre = User::factory()->create(['role' => 'AUDITORIA']);
         $this->infraestructura = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
         $this->noRole = User::factory()->create(['role' => 'PRESIDENCIA']);
         $this->marketing = User::factory()->create(['role' => 'MARKETING']);
@@ -48,7 +48,7 @@ class RoleMiddlewareTest extends TestCase
         $projectId = '__PROJECT__';
 
         return [
-            'review'               => ['POST', "/api/projects/{$projectId}/review",               ['CIERRE_DE_OBRA']],
+            'review'               => ['POST', "/api/projects/{$projectId}/review",               ['AUDITORIA']],
             'approve-investment'   => ['POST', "/api/projects/{$projectId}/approve-investment",   ['PROCURA']],
             'add-proposal'         => ['POST', "/api/projects/{$projectId}/proposals",            ['ANALISTA']],
             'submit-comparative'   => ['POST', "/api/projects/{$projectId}/submit-comparative",   ['ANALISTA']],
@@ -56,8 +56,8 @@ class RoleMiddlewareTest extends TestCase
             'reject-proposals'     => ['POST', "/api/projects/{$projectId}/reject-proposals",     ['PROCURA']],
             'select-contractor'    => ['POST', "/api/projects/{$projectId}/select-contractor",    ['PROCURA']],
             'pay'                  => ['POST', "/api/projects/{$projectId}/payments",             ['FINANZAS']],
-            'report-finished'      => ['POST', "/api/projects/{$projectId}/report-finished",      ['CIERRE_DE_OBRA']],
-            'verify-completion'    => ['POST', "/api/projects/{$projectId}/verify-completion",    ['CIERRE_DE_OBRA']],
+            'report-finished'      => ['POST', "/api/projects/{$projectId}/report-finished",      ['AUDITORIA']],
+            'verify-completion'    => ['POST', "/api/projects/{$projectId}/verify-completion",    ['AUDITORIA']],
         ];
     }
 
@@ -67,7 +67,7 @@ class RoleMiddlewareTest extends TestCase
         $project = $this->createProject();
         $uri = str_replace('__PROJECT__', $project->id, $uri);
         $userMap = [
-            'CIERRE_DE_OBRA' => $this->cierre,
+            'AUDITORIA' => $this->cierre,
             'PROCURA'        => $this->procura,
             'ANALISTA'       => $this->analista,
             'FINANZAS'       => $this->finanzas,

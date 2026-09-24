@@ -711,9 +711,9 @@ public function isValidStatus(string $status): bool {
 | GET `/projects` | GET | Sanctum | api | ProjectController@index (paginado 20-100 items) |
 | POST `/projects` | POST | INFRAESTRUCTURA | api | ProjectController@store (crear obra) |
 | GET `/projects/{id}` | GET | Sanctum | api | ProjectController@show |
-| POST `/projects/{id}/review` | POST | CIERRE_DE_OBRA | api | ProjectController@review (auditar expediente) |
-| POST `/projects/{id}/evaluate-dossier` | POST | CIERRE_DE_OBRA | api | ProjectController@evaluateDossier (IA async) |
-| POST `/projects/{id}/reject-project` | POST | CIERRE_DE_OBRA | api | ProjectController@rejectProject |
+| POST `/projects/{id}/review` | POST | AUDITORIA | api | ProjectController@review (auditar expediente) |
+| POST `/projects/{id}/evaluate-dossier` | POST | AUDITORIA | api | ProjectController@evaluateDossier (IA async) |
+| POST `/projects/{id}/reject-project` | POST | AUDITORIA | api | ProjectController@rejectProject |
 | POST `/projects/{id}/resubmit` | POST | INFRAESTRUCTURA | api | ProjectController@resubmitProject |
 | POST `/projects/{id}/approve-investment` | POST | PROCURA | api | ProjectController@approveInvestment |
 | POST `/projects/{id}/proposals` | POST | ANALISTA | api | ProjectController@addProposal |
@@ -724,8 +724,8 @@ public function isValidStatus(string $status): bool {
 | POST `/projects/{id}/reject-proposals` | POST | PROCURA | api | ProjectController@rejectProposals |
 | POST `/projects/{id}/select-contractor` | POST | PROCURA | api | ProjectController@selectContractor |
 | POST `/projects/{id}/payments` | POST | FINANZAS | api | ProjectController@pay |
-| POST `/projects/{id}/report-finished` | POST | CIERRE_DE_OBRA | api | ProjectController@reportFinished |
-| POST `/projects/{id}/verify-completion` | POST | CIERRE_DE_OBRA | api | ProjectController@verifyCompletion |
+| POST `/projects/{id}/report-finished` | POST | AUDITORIA | api | ProjectController@reportFinished |
+| POST `/projects/{id}/verify-completion` | POST | AUDITORIA | api | ProjectController@verifyCompletion |
 
 #### 5.2.3 Project Documents (Versionado)
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MaterialCatalog;
 use App\Models\ProductPriceHistory;
+use App\Services\ProductPriceStatsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,6 +18,11 @@ use Illuminate\Http\Request;
  */
 class CatalogProductController extends Controller
 {
+    public function __construct(
+        private ProductPriceStatsService $priceStatsService
+    ) {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = MaterialCatalog::query()->with(['category', 'suppliers']);
@@ -110,27 +116,45 @@ class CatalogProductController extends Controller
     }
 
     /**
-     * Serie temporal de precios de un producto — base de lectura para el
-     * hito 3 (inflación), sin cálculo de inflación todavía. `supplier_code`
-     * opcional filtra a un solo proveedor; sin filtro, trae todos.
+     * Serie temporal de precios de un producto + estadísticas agregadas
+     * (último, mínimo, máximo, promedio, variación, % de cambio) — base de
+     * lectura de la vista de inflación (Fase 5.1). `supplier_code`/
+     * `project_id` opcionales filtran a un proveedor/proyecto; sin filtro,
+     * trae todos.
      */
     public function priceHistory(Request $request, MaterialCatalog $catalogProduct): JsonResponse
     {
         $query = ProductPriceHistory::where('catalog_product_id', $catalogProduct->id)
-            ->orderBy('quoted_at');
+            ->orderBy('quoted_at')
+            ->orderBy('id');
 
         if ($request->filled('supplier_code')) {
             $query->where('supplier_code', $request->string('supplier_code'));
         }
 
+        if ($request->filled('project_id')) {
+            $query->where('project_id', $request->string('project_id'));
+        }
+
         if ($request->filled('from')) {
-            $query->where('quoted_at', '>=', $request->date('from'));
+            $query->where('quoted_at', '>=', $request->date('from')->startOfDay());
         }
 
         if ($request->filled('to')) {
-            $query->where('quoted_at', '<=', $request->date('to'));
+            // endOfDay: `to` es una fecha (YYYY-MM-DD) inclusiva de todo el
+            // día — sin esto, Carbon parsea a medianoche y excluye cualquier
+            // cotización hecha ese mismo día después de las 00:00.
+            $query->where('quoted_at', '<=', $request->date('to')->endOfDay());
         }
 
-        return response()->json(['data' => $query->get()]);
+        $stats = $this->priceStatsService->getStats(
+            catalogProductId: $catalogProduct->id,
+            supplierCode: $request->filled('supplier_code') ? (string) $request->string('supplier_code') : null,
+            projectId: $request->filled('project_id') ? (string) $request->string('project_id') : null,
+            from: $request->filled('from') ? $request->date('from')->startOfDay()->toDateTimeString() : null,
+            to: $request->filled('to') ? $request->date('to')->endOfDay()->toDateTimeString() : null,
+        );
+
+        return response()->json(['data' => ['series' => $query->get(), 'stats' => $stats]]);
     }
 }

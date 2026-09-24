@@ -57,6 +57,7 @@ class CatalogSyncService
                 ProductPriceHistory::create([
                     'catalog_product_id' => $catalogProductId,
                     'supplier_code' => $supplierCode,
+                    'quantity' => $line->quantity,
                     'supplier_material_proposal_line_id' => $line->id,
                     'price_usd' => $line->unit_price_usd,
                     'original_currency' => $line->quote_currency,
@@ -64,6 +65,7 @@ class CatalogSyncService
                     'fx_rate_to_usd' => $line->fx_rate_to_usd,
                     'fx_rate_source' => 'BCV',
                     'quoted_at' => $proposal->submitted_at ?? now(),
+                    'project_id' => $proposal->project_id,
                 ]);
             }
         });

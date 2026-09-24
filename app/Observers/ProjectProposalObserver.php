@@ -64,6 +64,7 @@ class ProjectProposalObserver
                 $this->createPriceHistoryEntry(
                     catalogProductId: $catalogProductId !== null ? (int) $catalogProductId : null,
                     supplierCode: $proposal->contractor_code,
+                    quantity: isset($item['quantity']) ? (float) $item['quantity'] : null,
                     priceUsd: $originalPrice * $fxRateToUsd,
                     originalCurrency: $quoteCurrency,
                     originalPrice: $originalPrice, // ← En moneda original
@@ -71,6 +72,7 @@ class ProjectProposalObserver
                     quotedAt: $quotedAt,
                     proposalId: $proposal->id,
                     proposalLineId: null, // No hay línea ID para Analistas
+                    projectId: $proposal->project_id,
                 );
             }
         } else {
@@ -79,6 +81,7 @@ class ProjectProposalObserver
             $this->createPriceHistoryEntry(
                 catalogProductId: null, // No mapeable sin material_items
                 supplierCode: $proposal->contractor_code,
+                quantity: null,
                 priceUsd: (float) $proposal->total_cost, // Ya en USD
                 originalCurrency: $quoteCurrency,
                 originalPrice: (float) ($proposal->total_cost_original ?? $proposal->total_cost),
@@ -86,6 +89,7 @@ class ProjectProposalObserver
                 quotedAt: $quotedAt,
                 proposalId: $proposal->id,
                 proposalLineId: null,
+                projectId: $proposal->project_id,
             );
         }
     }
@@ -97,13 +101,15 @@ class ProjectProposalObserver
     private function createPriceHistoryEntry(
         ?int $catalogProductId,
         string $supplierCode,
+        ?float $quantity,
         float $priceUsd,
         string $originalCurrency,
         float $originalPrice,
         float $fxRateToUsd,
         $quotedAt,
         string $proposalId,
-        ?string $proposalLineId
+        ?string $proposalLineId,
+        ?string $projectId
     ): void {
         // Solo registrar si hay catalog_product_id (de otro modo no se puede hacer trending)
         if (!$catalogProductId) {
@@ -114,6 +120,7 @@ class ProjectProposalObserver
             ProductPriceHistory::create([
                 'catalog_product_id' => $catalogProductId,
                 'supplier_code' => $supplierCode,
+                'quantity' => $quantity,
                 'supplier_material_proposal_line_id' => $proposalLineId,
                 'project_proposal_id' => $proposalId,
                 'price_usd' => $priceUsd,
@@ -123,6 +130,7 @@ class ProjectProposalObserver
                 'fx_rate_source' => 'PROJECT_PROPOSAL',
                 'quoted_at' => $quotedAt,
                 'origin' => 'PROJECT_PROPOSAL',
+                'project_id' => $projectId,
             ]);
         } catch (\Exception $e) {
             Log::error("ProductPriceHistory sync failed for proposal {$proposalId}", [

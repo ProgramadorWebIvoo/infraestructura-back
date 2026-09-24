@@ -199,6 +199,7 @@ class SupplierProposalImportService
             ProductPriceHistory::create([
                 'catalog_product_id' => $line->catalog_product_id,
                 'supplier_code' => $supplierCode,
+                'quantity' => $line->quantity,
                 'supplier_material_proposal_line_id' => $line->id,
                 // unit_price_usd ya viene calculado correctamente contra la
                 // moneda base por ProposalLineNormalizer (rateBetween, no la
@@ -211,6 +212,7 @@ class SupplierProposalImportService
                 'fx_rate_to_usd' => $line->fx_rate_to_usd,
                 'fx_rate_source' => $line->quote_currency && $line->quote_currency !== 'USD' ? 'bcv_rate' : 'usd_only',
                 'quoted_at' => $proposal->submitted_at ?? now(),
+                'project_id' => $proposal->project_id,
             ]);
         }
     }

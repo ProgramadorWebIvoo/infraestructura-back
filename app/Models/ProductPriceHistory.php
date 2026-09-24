@@ -16,6 +16,7 @@ class ProductPriceHistory extends Model
     protected $fillable = [
         'catalog_product_id',
         'supplier_code',
+        'quantity',
         'supplier_material_proposal_line_id',
         'project_proposal_id',
         'price_usd',
@@ -25,9 +26,11 @@ class ProductPriceHistory extends Model
         'fx_rate_source',
         'quoted_at',
         'origin',
+        'project_id',
     ];
 
     protected $casts = [
+        'quantity' => 'float',
         'price_usd' => 'float',
         'original_price' => 'float',
         'fx_rate_to_usd' => 'float',
@@ -47,5 +50,10 @@ class ProductPriceHistory extends Model
     public function proposalLine()
     {
         return $this->belongsTo(SupplierMaterialProposalLine::class, 'supplier_material_proposal_line_id');
+    }
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class, 'project_id');
     }
 }

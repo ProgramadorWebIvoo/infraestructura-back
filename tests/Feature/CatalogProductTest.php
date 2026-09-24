@@ -110,9 +110,41 @@ class CatalogProductTest extends TestCase
         $response = $this->actingAs($presidencia)->getJson("/api/catalog/products/{$product->id}/price-history");
 
         $response->assertStatus(200);
-        $response->assertJsonCount(2, 'data');
-        $response->assertJsonPath('data.0.price_usd', 8);
-        $response->assertJsonPath('data.1.price_usd', 9);
+        $response->assertJsonCount(2, 'data.series');
+        $response->assertJsonPath('data.series.0.price_usd', 8);
+        $response->assertJsonPath('data.series.1.price_usd', 9);
+        $response->assertJsonPath('data.stats.lastPriceUsd', 9);
+        $response->assertJsonPath('data.stats.minPriceUsd', 8);
+        $response->assertJsonPath('data.stats.maxPriceUsd', 9);
+        $response->assertJsonPath('data.stats.dataPoints', 2);
+    }
+
+    public function test_price_history_to_filter_includes_the_whole_day(): void
+    {
+        Contractor::create(['code' => 'CON-301', 'name' => 'Acero del Sur', 'rif' => 'J-12345678-9', 'specialty' => 'Materiales', 'status' => 'active']);
+        $product = MaterialCatalog::create(['name' => 'Cemento Portland', 'unit' => 'saco', 'estimated_unit_price' => 8, 'is_active' => true]);
+
+        // Cotización a las 18:00 del día que se usará como límite `to`.
+        $quotedAt = now()->startOfDay()->addHours(18);
+        ProductPriceHistory::create([
+            'catalog_product_id' => $product->id, 'supplier_code' => 'CON-301',
+            'supplier_material_proposal_line_id' => $this->makeLineFor($product),
+            'price_usd' => 9, 'original_currency' => 'USD', 'original_price' => 9,
+            'fx_rate_to_usd' => 1, 'fx_rate_source' => 'BCV', 'quoted_at' => $quotedAt,
+        ]);
+
+        $presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
+
+        $response = $this->actingAs($presidencia)->getJson(
+            "/api/catalog/products/{$product->id}/price-history?to=" . $quotedAt->toDateString()
+        );
+
+        $response->assertStatus(200);
+        // Una cotización hecha a las 18:00 del día usado como `to` debe
+        // quedar incluida — `to` es una fecha inclusiva de todo el día, no
+        // un timestamp exacto de medianoche.
+        $response->assertJsonCount(1, 'data.series');
+        $response->assertJsonPath('data.stats.dataPoints', 1);
     }
 
     private function makeLineFor(MaterialCatalog $product): int

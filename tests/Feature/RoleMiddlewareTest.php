@@ -216,6 +216,12 @@ class RoleMiddlewareTest extends TestCase
         $response->assertStatus(403);
     }
 
+    /**
+     * /api/users es exclusivo de SUPERADMIN (ver comentario en routes/api.php:
+     * "un ADMIN no debe poder asignarse ni asignarle a otro el rol
+     * SUPERADMIN") — este test antes esperaba que ADMIN también pasara, dato
+     * desactualizado tras ese endurecimiento de seguridad.
+     */
     public function test_superadmin_admin_routes_require_elevated_role(): void
     {
         // SUPERADMIN can access users list
@@ -223,10 +229,10 @@ class RoleMiddlewareTest extends TestCase
             ->getJson('/api/users');
         $response->assertStatus(200);
 
-        // ADMIN can access users list
+        // ADMIN cannot access users list
         $response = $this->actingAs($this->admin)
             ->getJson('/api/users');
-        $response->assertStatus(200);
+        $response->assertStatus(403);
 
         // ANALISTA cannot access users list
         $response = $this->actingAs($this->analista)

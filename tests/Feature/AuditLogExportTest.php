@@ -19,7 +19,7 @@ class AuditLogExportTest extends TestCase
 
     public function test_audit_logs_export_streams_csv_with_filtered_rows(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'SUPERADMIN']);
         $this->actingAs($user);
         $project = Project::factory()->create(['title' => 'Proyecto Exportable']);
 

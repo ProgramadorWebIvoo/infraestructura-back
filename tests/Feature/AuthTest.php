@@ -134,22 +134,37 @@ class AuthTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_permissions_returns_route_matrix_for_all_roles(): void
+    /**
+     * AuthController::permissions() pasó de devolver la matriz completa
+     * rol×vista (config/permissions.php) a resolver el acceso EFECTIVO del
+     * propio usuario autenticado (AccessResolver::resolveViews(), fuente:
+     * role_view_access + overrides individuales en user_view_access) — este
+     * test comprobaba el contrato viejo (una key por cada rol del sistema).
+     */
+    public function test_permissions_returns_effective_views_for_the_authenticated_user(): void
     {
-        $user = User::factory()->create();
-        $token = $user->createToken('test');
+        $presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
+        $token = $presidencia->createToken('test');
 
         $response = $this->getJson('/api/auth/permissions', [
             'Authorization' => 'Bearer ' . $token->plainTextToken,
         ]);
 
         $response->assertStatus(200);
-        $response->assertJsonStructure([
-            'SUPERADMIN', 'ADMIN', 'PRESIDENCIA', 'INFRAESTRUCTURA',
-            'CIERRE_DE_OBRA', 'PROCURA', 'ANALISTA', 'FINANZAS', 'CATALOGOS',
+        $this->assertContains('/presidencia', $response->json());
+    }
+
+    public function test_permissions_does_not_include_views_outside_the_users_role(): void
+    {
+        $admin = User::factory()->create(['role' => 'ADMIN']);
+        $token = $admin->createToken('test');
+
+        $response = $this->getJson('/api/auth/permissions', [
+            'Authorization' => 'Bearer ' . $token->plainTextToken,
         ]);
-        $this->assertContains('/presidencia', $response->json('PRESIDENCIA'));
-        $this->assertNotContains('/presidencia', $response->json('ADMIN'));
+
+        $response->assertStatus(200);
+        $this->assertNotContains('/presidencia', $response->json());
     }
 
     public function test_permissions_without_token_returns_401(): void

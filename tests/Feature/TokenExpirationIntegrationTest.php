@@ -88,7 +88,15 @@ class TokenExpirationIntegrationTest extends TestCase
         $this->assertNotNull($response->json('token'));
     }
 
-    /** @test */
+    /**
+     * @test
+     *
+     * /api/users pasó a ser exclusivo de SUPERADMIN (ver routes/api.php) —
+     * un ADMIN ahora recibe 403 ahí, pero eso es justamente lo que este test
+     * verifica que NO afecte al refresh: el middleware `refresh.token` corre
+     * ANTES que el chequeo de rol, así que el token se refresca sin importar
+     * si el rol termina siendo rechazado.
+     */
     public function role_middleware_grants_access_after_refresh(): void
     {
         $admin = User::factory()->create(['role' => 'ADMIN']);
@@ -103,8 +111,9 @@ class TokenExpirationIntegrationTest extends TestCase
             'Authorization' => 'Bearer '.$token->plainTextToken,
         ]);
 
-        $response->assertStatus(200);
-        // Token refresh happens regardless of role check success
+        // ADMIN ya no tiene acceso a /api/users (exclusivo SUPERADMIN) —
+        // el punto del test es que el refresh ocurre de todos modos.
+        $response->assertStatus(403);
         $response->assertHeader('X-Refresh-Token');
     }
 

@@ -64,12 +64,18 @@ class AppSettingTest extends TestCase
             ->assertStatus(403);
     }
 
-    public function test_admin_can_update_a_string_setting(): void
+    /**
+     * Escritura de settings es exclusiva de SUPERADMIN (ver comentario en
+     * routes/api.php: "impacto global del sistema") — este test antes usaba
+     * un ADMIN, dato que quedó desactualizado tras ese endurecimiento de
+     * seguridad (fix(auth): restringir a SUPERADMIN endpoints críticos).
+     */
+    public function test_superadmin_can_update_a_string_setting(): void
     {
-        $admin = User::factory()->create(['role' => 'ADMIN']);
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
         $setting = AppSetting::where('key', 'razon_social')->firstOrFail();
 
-        $response = $this->actingAs($admin)
+        $response = $this->actingAs($superadmin)
             ->patchJson("/api/settings/{$setting->id}", ['value' => 'IVOO Construcciones C.A.']);
 
         $response->assertStatus(200);
@@ -77,6 +83,16 @@ class AppSettingTest extends TestCase
             'key' => 'razon_social',
             'value' => 'IVOO Construcciones C.A.',
         ]);
+    }
+
+    public function test_admin_cannot_update_a_setting(): void
+    {
+        $admin = User::factory()->create(['role' => 'ADMIN']);
+        $setting = AppSetting::where('key', 'razon_social')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/settings/{$setting->id}", ['value' => 'IVOO Construcciones C.A.'])
+            ->assertStatus(403);
     }
 
     public function test_update_rejects_invalid_integer_value(): void

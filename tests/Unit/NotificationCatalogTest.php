@@ -4,10 +4,22 @@ namespace Tests\Unit;
 
 use App\Support\NotificationCatalog;
 use App\Support\NotificationType;
-use PHPUnit\Framework\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
+/**
+ * Requiere el framework de Laravel (RefreshDatabase + facade Cache): desde
+ * que NotificationCatalog pasó a leer el catálogo de `notification_actions`
+ * en BD (antes era un array estático embebido en la clase), ya no puede
+ * correr como PHPUnit\Framework\TestCase puro — sin contenedor de la app,
+ * la llamada a Cache::remember() revienta con "A facade root has not been
+ * set." antes de llegar siquiera a la aserción.
+ */
 class NotificationCatalogTest extends TestCase
 {
+    use RefreshDatabase;
+
+
     public function test_every_catalog_action_resolves_to_a_valid_notification_type(): void
     {
         foreach (NotificationCatalog::keys() as $action) {

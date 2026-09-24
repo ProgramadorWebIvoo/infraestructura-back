@@ -21,7 +21,7 @@ class AuditLogFilterTest extends TestCase
 
     public function test_filters_by_role(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'SUPERADMIN']);
         $this->actingAs($user);
         $projectA = Project::factory()->create();
         $projectB = Project::factory()->create();
@@ -39,7 +39,7 @@ class AuditLogFilterTest extends TestCase
 
     public function test_filters_by_project_id(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'SUPERADMIN']);
         $this->actingAs($user);
         $projectA = Project::factory()->create();
         $projectB = Project::factory()->create();
@@ -57,7 +57,7 @@ class AuditLogFilterTest extends TestCase
 
     public function test_filters_by_free_text_query(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'SUPERADMIN']);
         $this->actingAs($user);
         $project = Project::factory()->create();
 
@@ -72,7 +72,7 @@ class AuditLogFilterTest extends TestCase
 
     public function test_filters_by_date_range(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'SUPERADMIN']);
         $this->actingAs($user);
         $project = Project::factory()->create();
 
@@ -91,7 +91,7 @@ class AuditLogFilterTest extends TestCase
 
     public function test_per_page_default_covers_more_than_fifty_entries(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'SUPERADMIN']);
         $this->actingAs($user);
         $project = Project::factory()->create();
 
@@ -108,7 +108,7 @@ class AuditLogFilterTest extends TestCase
 
     public function test_paginates_with_page_and_per_page_params(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'SUPERADMIN']);
         $this->actingAs($user);
         $project = Project::factory()->create();
 

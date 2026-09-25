@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ContractorController;
 use App\Http\Controllers\Api\DebugClosureFixtureController;
 use App\Http\Controllers\Api\PublicClosureReportController;
 use App\Http\Controllers\Api\ResidentClosureController;
+use App\Http\Controllers\Api\ProjectModificationController;
 use App\Http\Controllers\Api\ResidentDocumentController;
 use App\Http\Controllers\Api\MarketingProjectController;
 use App\Http\Controllers\Api\MarketingProjectAttachmentController;
@@ -364,6 +365,16 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/closure-report/finiquito-return', [ClosureReportController::class, 'returnToAudit'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+
+    // Modificaciones de obra (F3): los roles que solicitan/aprueban son configurables (app_settings); se validan en el servicio.
+    Route::group([], function () {
+        Route::get('/modification-requests', [ProjectModificationController::class, 'index']);
+        Route::get('/projects/{project}/modifications', [ProjectModificationController::class, 'forProject']);
+        Route::post('/projects/{project}/modifications', [ProjectModificationController::class, 'store']);
+        Route::put('/projects/{project}/modifications/{modification}', [ProjectModificationController::class, 'update']);
+        Route::post('/projects/{project}/modifications/{modification}/approval', [ProjectModificationController::class, 'approve']);
+        Route::post('/projects/{project}/modifications/{modification}/rejection', [ProjectModificationController::class, 'reject']);
+    });
 
     // DEBUG-MODE: fixtures del cierre (404 si APP_DEBUG=false)
     Route::middleware('role:ADMIN,SUPERADMIN')->prefix('debug/closure-fixtures')->group(function () {

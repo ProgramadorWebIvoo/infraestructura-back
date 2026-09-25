@@ -21,6 +21,14 @@ class AppSettingCatalog
 {
     /** @var array<string, array{label: string, description: ?string}> */
     private const ENTRIES = [
+        'modificaciones_roles_solicitantes' => [
+            'label' => 'Modificaciones de obra — roles que solicitan',
+            'description' => 'Lista JSON de roles que pueden crear solicitudes de modificación (aumento/disminución) de una obra en ejecución; solo sobre obras propias. ADMIN y SUPERADMIN siempre pueden.',
+        ],
+        'modificaciones_roles_aprobadores' => [
+            'label' => 'Modificaciones de obra — roles que aprueban',
+            'description' => 'Lista JSON de roles que pueden aprobar o rechazar solicitudes de modificación de obra. ADMIN y SUPERADMIN siempre pueden.',
+        ],
         'anticipo_maximo_porcentaje' => [
             'label' => 'Anticipo máximo (%)',
             'description' => 'Porcentaje máximo de anticipo permitido en una oferta/propuesta.',

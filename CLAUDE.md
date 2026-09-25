@@ -26,7 +26,7 @@
 - **Auth:** Sanctum SPA con cookies httpOnly (NO tokens Bearer)
 - **CSRF:** Cookie `XSRF-TOKEN` + header `X-XSRF-TOKEN`
 - **Rate limiting:** 180 req/min API, 10 req/min público, 5 login/15min
-- **Roles:** 10 roles definidos en `app/Support/Roles.php`
+- **Roles:** 11 roles definidos (incl. `RESIDENTE`) en `app/Support/Roles.php`
 
 ### Roles del sistema
 

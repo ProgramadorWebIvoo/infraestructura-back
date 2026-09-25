@@ -167,7 +167,7 @@ class SupplierProposalImageTest extends TestCase
         $path = $this->postJson("/api/public/invitations/{$invitation->id}/proposal-image", ['image' => $file])
             ->json('path');
 
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'PROCURA']);
         // $path viene con el prefijo "supplier-proposal-images/" ya incluido
         // (ver uploadImage()); la ruta interna solo necesita {token}/{archivo}.
         $relativePath = str_replace('supplier-proposal-images/', '', $path);

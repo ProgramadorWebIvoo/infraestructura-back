@@ -86,6 +86,7 @@ class ProjectHistoryTest extends TestCase
     {
         $project = $this->fullProject();
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $project->update(['requested_by_user_id' => $infra->id]);
         $admin = User::factory()->create(['role' => 'ADMIN']);
 
         $this->actingAs($infra)->getJson('/api/project-history')->assertForbidden();

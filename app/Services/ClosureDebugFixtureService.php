@@ -34,7 +34,7 @@ class ClosureDebugFixtureService
 
     public function create(User $actor, string $target): Project
     {
-        $project = DB::transaction(function () {
+        $project = DB::transaction(function () use ($actor) {
             $contractor = Contractor::firstOrCreate(
                 ['code' => 'CON-DEBUG'],
                 ['name' => 'Contratista de Prueba (debug)', 'rif' => 'J-00000000-0', 'specialty' => 'Pruebas', 'rating' => 4, 'email' => null, 'registration_source' => 'SEED', 'status' => 'ACTIVE']
@@ -51,6 +51,7 @@ class ClosureDebugFixtureService
                 'estimated_total' => 1000,
                 'approved_investment_amount' => 1000,
                 'selected_contractor_code' => $contractor->code,
+                'requested_by_user_id' => $actor->id,
             ]);
 
             foreach ([['Tomacorriente', 12, 'und', 50], ['Cable', 100, 'm', 2]] as $i => [$name, $qty, $unit, $price]) {

@@ -42,6 +42,7 @@ class ProjectClosureFlowTest extends TestCase
         $this->project = Project::factory()->create([
             'status' => 'EN_EJECUCION',
             'selected_contractor_code' => $contractor->code,
+            'requested_by_user_id' => $this->infra->id,
         ]);
         ProjectMaterial::factory()->create(['project_id' => $this->project->id, 'name' => 'Tomacorriente', 'quantity' => 12, 'unit' => 'und']);
         ProjectMaterial::factory()->create(['project_id' => $this->project->id, 'name' => 'Cable', 'quantity' => 100, 'unit' => 'm']);
@@ -162,21 +163,21 @@ class ProjectClosureFlowTest extends TestCase
         $this->project->update(['resident_user_id' => $this->infra->id]);
         $this->submitReport();
 
-        $this->actingAs($this->otherInfra)->post("/api/projects/{$this->project->id}/closure-report/photos", ['image' => $this->photo()])->assertStatus(403);
-        $this->actingAs($this->otherInfra)->postJson("/api/projects/{$this->project->id}/closure-report/resident-approval", $this->residentPayload())->assertStatus(403);
+        $this->actingAs($this->otherInfra)->post("/api/projects/{$this->project->id}/closure-report/photos", ['image' => $this->photo()])->assertStatus(404);
+        $this->actingAs($this->otherInfra)->postJson("/api/projects/{$this->project->id}/closure-report/resident-approval", $this->residentPayload())->assertStatus(404);
 
         $this->actingAs($this->infra)->post("/api/projects/{$this->project->id}/closure-report/photos", ['image' => $this->photo()])->assertStatus(201);
         $this->actingAs($this->infra)->postJson("/api/projects/{$this->project->id}/closure-report/resident-approval", $this->residentPayload())
             ->assertJsonPath('data.status', 'VERIFICANDO_FINALIZACION');
     }
 
-    public function test_any_infra_user_can_verify_when_no_resident_assigned(): void
+    public function test_infra_user_who_does_not_own_the_project_cannot_reach_its_closure(): void
     {
         $this->submitReport();
 
-        $this->actingAs($this->otherInfra)->post("/api/projects/{$this->project->id}/closure-report/photos", ['image' => $this->photo()])->assertStatus(201);
-        $this->actingAs($this->otherInfra)->postJson("/api/projects/{$this->project->id}/closure-report/resident-approval", $this->residentPayload())
-            ->assertJsonPath('data.status', 'VERIFICANDO_FINALIZACION');
+        $this->actingAs($this->otherInfra)->getJson("/api/projects/{$this->project->id}/closure-report")->assertStatus(404);
+        $this->actingAs($this->otherInfra)->post("/api/projects/{$this->project->id}/closure-report/photos", ['image' => $this->photo()])->assertStatus(404);
+        $this->actingAs($this->otherInfra)->postJson("/api/projects/{$this->project->id}/closure-report/resident-approval", $this->residentPayload())->assertStatus(404);
     }
 
     public function test_resident_rejection_returns_to_execution_and_reopens_report(): void
@@ -234,8 +235,8 @@ class ProjectClosureFlowTest extends TestCase
     public function test_assign_resident_only_accepts_infrastructure_users(): void
     {
         $this->actingAs($this->infra)->patchJson("/api/projects/{$this->project->id}/resident", ['residentUserId' => $this->auditoria->id])->assertStatus(422);
-        $this->actingAs($this->infra)->patchJson("/api/projects/{$this->project->id}/resident", ['residentUserId' => $this->otherInfra->id])->assertOk();
-        $this->assertEquals($this->otherInfra->id, $this->project->fresh()->resident_user_id);
+        $this->actingAs($this->infra)->patchJson("/api/projects/{$this->project->id}/resident", ['residentUserId' => $this->infra->id])->assertOk();
+        $this->assertEquals($this->infra->id, $this->project->fresh()->resident_user_id);
     }
 
     public function test_final_payment_requires_procura_request(): void

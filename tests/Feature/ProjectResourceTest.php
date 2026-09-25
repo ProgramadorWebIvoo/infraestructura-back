@@ -23,7 +23,7 @@ class ProjectResourceTest extends TestCase
 
     public function test_project_resource_exposes_created_at_and_updated_at(): void
     {
-        $project = Project::factory()->create([
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 
             'created_at' => '2026-07-01 10:00:00',
             'updated_at' => '2026-07-20 15:30:00',
         ]);
@@ -41,7 +41,7 @@ class ProjectResourceTest extends TestCase
     public function test_project_resource_includes_contractor_rating_in_proposals(): void
     {
         $contractor = Contractor::factory()->create(['rating' => 4.7]);
-        $project = Project::factory()->create();
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id]);
 
         ProjectProposal::factory()->create([
             'project_id' => $project->id,

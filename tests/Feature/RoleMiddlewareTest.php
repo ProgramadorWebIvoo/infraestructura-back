@@ -40,7 +40,7 @@ class RoleMiddlewareTest extends TestCase
 
     private function createProject(array $overrides = []): Project
     {
-        return Project::factory()->create($overrides);
+        return Project::factory()->create($overrides + ['requested_by_user_id' => $this->infraestructura->id]);
     }
 
     public static function routeRoleProvider(): array

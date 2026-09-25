@@ -50,6 +50,7 @@ class Project extends Model
         'selected_contractor_code',
         'selected_proposal_id',
         'resident_user_id',
+        'requested_by_user_id',
         'quality_verified',
         'completion_verified_date',
     ];
@@ -92,6 +93,27 @@ class Project extends Model
     public function rateFreezes()
     {
         return $this->hasMany(ProjectRateFreeze::class);
+    }
+
+    public function requestedBy()
+    {
+        return $this->belongsTo(User::class, 'requested_by_user_id');
+    }
+
+    /**
+     * Propiedad (F2-R D7): INFRAESTRUCTURA solo ve los proyectos que creó; el
+     * resto de roles no se filtra aquí.
+     */
+    public function scopeVisibleTo($query, User $user)
+    {
+        return $user->role === 'INFRAESTRUCTURA'
+            ? $query->where('requested_by_user_id', $user->id)
+            : $query;
+    }
+
+    public function isVisibleTo(User $user): bool
+    {
+        return $user->role !== 'INFRAESTRUCTURA' || (int) $this->requested_by_user_id === (int) $user->id;
     }
 
     public function resident()

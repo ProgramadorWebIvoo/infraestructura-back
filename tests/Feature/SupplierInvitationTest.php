@@ -25,7 +25,7 @@ class SupplierInvitationTest extends TestCase
     {
         parent::setUp();
         $this->user = User::factory()->create();
-        $this->project = Project::factory()->create();
+        $this->project = Project::factory()->create(['requested_by_user_id' => $this->user->id]);
         // Create materials for the project so the public view returns them
         $this->project->materials()->create([
             'id'                  => 'MAT-TEST-1',

@@ -44,7 +44,7 @@ class ProjectController extends Controller
     {
         $perPage = min((int) ($request->get('per_page', 20)), 100);
 
-        $query = Project::with(Project::listRelations())->latest('created_date');
+        $query = Project::visibleTo($request->user())->with(Project::listRelations())->latest('created_date');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -65,8 +65,9 @@ class ProjectController extends Controller
     public function store(StoreProjectRequest $request)
     {
         $data = $request->validated();
+        $requesterId = $request->user()->id;
 
-        $project = DB::transaction(function () use ($data) {
+        $project = DB::transaction(function () use ($data, $requesterId) {
             $project = Project::create([
                 'id' => Project::nextId(),
                 'title' => $data['title'],
@@ -77,6 +78,7 @@ class ProjectController extends Controller
                 'status' => self::STATUSES['CREADO'],
                 'estimated_total' => $data['estimatedTotal'] ?? $this->materialsTotal($data['materials']),
                 'resident_user_id' => $data['residentUserId'] ?? null,
+                'requested_by_user_id' => $requesterId,
             ]);
 
             $this->syncMaterials($project, $data['materials']);

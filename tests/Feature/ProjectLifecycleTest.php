@@ -140,7 +140,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_review_project_auditoria(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
 
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/review", [
@@ -161,7 +161,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_review_project_auditoria_without_notes(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
 
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/review", []);
@@ -172,7 +172,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_reject_project_from_creado(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
 
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/reject-project", [
@@ -194,7 +194,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_reject_project_persists_observations_separately_from_reason(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
 
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/reject-project", [
@@ -213,7 +213,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_upload_correccion_document_after_rejection(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
         $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/reject-project", ['reason' => 'Motivo cualquiera'])
             ->assertStatus(200);
@@ -251,7 +251,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_infraestructura_can_delete_document_while_rechazado_auditoria(): void
     {
-        $project = Project::factory()->create(['status' => 'RECHAZADO_AUDITORIA']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'RECHAZADO_AUDITORIA']);
         $doc = $this->makeDocument($project);
 
         $response = $this->actingAs($this->infra)
@@ -268,7 +268,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_infraestructura_cannot_delete_document_outside_rechazado_auditoria(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
         $doc = $this->makeDocument($project);
 
         $response = $this->actingAs($this->infra)
@@ -280,7 +280,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_infraestructura_cannot_delete_correccion_document(): void
     {
-        $project = Project::factory()->create(['status' => 'RECHAZADO_AUDITORIA']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'RECHAZADO_AUDITORIA']);
         $doc = $this->makeDocument($project, 'CORRECCION');
 
         $response = $this->actingAs($this->infra)
@@ -292,7 +292,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_reject_project_fails_from_non_creado_status(): void
     {
-        $project = Project::factory()->reviewed()->create();
+        $project = Project::factory()->reviewed()->create(['requested_by_user_id' => $this->infra->id]);
 
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/reject-project", [
@@ -304,7 +304,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_resubmit_project_after_rejection(): void
     {
-        $project = Project::factory()->create(['status' => 'RECHAZADO_AUDITORIA']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'RECHAZADO_AUDITORIA']);
         $project->materials()->create([
             'id' => $project->id . '-MAT-1',
             'name' => 'Cemento viejo',
@@ -339,7 +339,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_resubmit_project_clears_stale_dossier_ai_evaluation(): void
     {
-        $project = Project::factory()->create([
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 
             'status' => 'RECHAZADO_AUDITORIA',
             'dossier_ai_score' => 90,
             'dossier_ai_summary' => 'Análisis del expediente antes de la corrección.',
@@ -374,7 +374,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_resubmit_project_fails_from_non_rechazado_status(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
 
         $response = $this->actingAs($this->infra)
             ->postJson("/api/projects/{$project->id}/resubmit", [
@@ -391,7 +391,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_approve_investment(): void
     {
-        $project = Project::factory()->reviewed()->create();
+        $project = Project::factory()->reviewed()->create(['requested_by_user_id' => $this->infra->id]);
 
         $response = $this->actingAs($this->procura)
             ->postJson("/api/projects/{$project->id}/approve-investment", [
@@ -413,7 +413,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_send_to_reevaluation_from_revisado_auditoria(): void
     {
-        $project = Project::factory()->reviewed()->create();
+        $project = Project::factory()->reviewed()->create(['requested_by_user_id' => $this->infra->id]);
 
         $response = $this->actingAs($this->procura)
             ->postJson("/api/projects/{$project->id}/send-to-reevaluation", [
@@ -435,7 +435,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_send_to_reevaluation_fails_from_non_revisado_status(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
 
         $response = $this->actingAs($this->procura)
             ->postJson("/api/projects/{$project->id}/send-to-reevaluation", [
@@ -447,7 +447,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_send_to_reevaluation_requires_reason(): void
     {
-        $project = Project::factory()->reviewed()->create();
+        $project = Project::factory()->reviewed()->create(['requested_by_user_id' => $this->infra->id]);
 
         $response = $this->actingAs($this->procura)
             ->postJson("/api/projects/{$project->id}/send-to-reevaluation", []);
@@ -458,7 +458,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_resolve_reevaluation_returns_to_revisado_auditoria(): void
     {
-        $project = Project::factory()->reviewed()->create(['status' => 'EN_REEVALUACION_AUDITORIA']);
+        $project = Project::factory()->reviewed()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'EN_REEVALUACION_AUDITORIA']);
 
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/resolve-reevaluation", [
@@ -477,7 +477,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_resolve_reevaluation_fails_from_non_reevaluation_status(): void
     {
-        $project = Project::factory()->reviewed()->create();
+        $project = Project::factory()->reviewed()->create(['requested_by_user_id' => $this->infra->id]);
 
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/resolve-reevaluation", []);
@@ -487,7 +487,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_add_and_remove_proposals(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor1 = Contractor::factory()->create();
         $contractor2 = Contractor::factory()->create();
 
@@ -542,7 +542,7 @@ class ProjectLifecycleTest extends TestCase
         // configurado solo dispara una alerta visual en el frontend, nunca
         // bloquea el registro de la propuesta, siempre que se justifique con
         // un motivo obligatorio.
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
 
         AppSetting::where('key', 'anticipo_maximo_porcentaje')->update(['value' => '20']);
@@ -569,7 +569,7 @@ class ProjectLifecycleTest extends TestCase
         // Sin motivo, exceder el máximo configurado ahora se rechaza — el
         // motivo es lo que documenta/audita la excepción, ya no queda
         // silenciosa.
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
 
         AppSetting::where('key', 'anticipo_maximo_porcentaje')->update(['value' => '20']);
@@ -592,7 +592,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_add_proposal_rejects_advance_percent_above_sanity_ceiling(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
 
         $this->actingAs($this->analista)
@@ -612,7 +612,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_add_proposal_rejects_altered_quantity_for_audited_material(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
         \App\Models\ProjectMaterial::factory()->create([
             'project_id' => $project->id,
@@ -642,7 +642,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_renegotiate_proposal_requires_motivo(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
 
         $addResponse = $this->actingAs($this->analista)
@@ -675,7 +675,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_renegotiate_proposal_replaces_original_and_derives_precio_anterior(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
 
         $addResponse = $this->actingAs($this->analista)
@@ -726,7 +726,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_renegotiate_proposal_requires_separate_motivo_when_advance_also_exceeds_max(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
 
         AppSetting::where('key', 'anticipo_maximo_porcentaje')->update(['value' => '20']);
@@ -786,7 +786,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_renegotiate_proposal_rejects_fecha_oferta_before_original(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
 
         $addResponse = $this->actingAs($this->analista)
@@ -930,7 +930,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_reject_proposals_returns_to_previous_state(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
         $contractor = Contractor::factory()->create();
 
         // Add proposal
@@ -968,10 +968,10 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_index_lists_projects_with_filters(): void
     {
-        Project::factory()->create(['type' => 'INFRAESTRUCTURA']);
-        Project::factory()->create(['type' => 'INFRAESTRUCTURA']);
-        Project::factory()->create(['type' => 'INFRAESTRUCTURA']);
-        Project::factory()->reviewed()->create(['type' => 'MANTENIMIENTO']);
+        Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'type' => 'INFRAESTRUCTURA']);
+        Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'type' => 'INFRAESTRUCTURA']);
+        Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'type' => 'INFRAESTRUCTURA']);
+        Project::factory()->reviewed()->create(['requested_by_user_id' => $this->infra->id, 'type' => 'MANTENIMIENTO']);
 
         // List all
         $response = $this->actingAs($this->infra)
@@ -994,7 +994,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_submit_comparative_without_proposals_returns_422(): void
     {
-        $project = Project::factory()->confirmed()->create();
+        $project = Project::factory()->confirmed()->create(['requested_by_user_id' => $this->infra->id]);
 
         $response = $this->actingAs($this->analista)
             ->postJson("/api/projects/{$project->id}/submit-comparative");
@@ -1004,7 +1004,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_remove_awarded_proposal_returns_422(): void
     {
-        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CONTRATADO']);
         $proposal = ProjectProposal::factory()->create([
             'project_id' => $project->id,
             'contractor_code' => $this->contractor->code,
@@ -1020,7 +1020,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_show_returns_single_project(): void
     {
-        $project = Project::factory()->create();
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id]);
 
         $response = $this->actingAs($this->infra)
             ->getJson("/api/projects/{$project->id}");
@@ -1037,7 +1037,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_select_contractor_rejects_project_not_in_comparativa_enviada(): void
     {
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
         $proposal = ProjectProposal::factory()->create([
             'project_id' => $project->id,
             'contractor_code' => $this->contractor->code,
@@ -1055,7 +1055,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_pay_rejects_payment_without_proof_document(): void
     {
-        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CONTRATADO']);
 
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100])
@@ -1070,7 +1070,7 @@ class ProjectLifecycleTest extends TestCase
     {
         // Escenario exacto de la auditoría: FINANZAS paga un proyecto
         // recién creado, saltándose adjudicación, ejecución y verificación.
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
 
         $response = $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [
@@ -1085,7 +1085,7 @@ class ProjectLifecycleTest extends TestCase
 
     public function test_pay_final_rejects_project_not_in_listo_pago_final(): void
     {
-        $project = Project::factory()->create(['status' => 'EN_EJECUCION']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'EN_EJECUCION']);
 
         $response = $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [
@@ -1101,7 +1101,7 @@ class ProjectLifecycleTest extends TestCase
     {
         // Escenario exacto de la auditoría: pagar sobre un proyecto ya
         // COMPLETADO_PAGADO no debe poder reabrirlo.
-        $project = Project::factory()->create(['status' => 'COMPLETADO_PAGADO']);
+        $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'COMPLETADO_PAGADO']);
 
         $response = $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [

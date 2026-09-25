@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\LogsPublicAccess;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSupplierProposalImageRequest;
 use App\Http\Resources\SupplierProposalResource;
+use App\Models\Project;
 use App\Models\SupplierInvitation;
 use App\Models\SupplierMaterialProposal;
 use App\Services\CatalogSyncService;
@@ -223,6 +224,13 @@ class SupplierProposalController extends Controller
         $projectId = $request->filled('project_id') ? (string) $request->project_id : null;
         $version = \App\Support\CacheVersion::get('supplier_proposals');
 
+        // INFRAESTRUCTURA solo ve propuestas de sus proyectos (F2-R D7): sin caché compartida.
+        if ($request->user()?->role === 'INFRAESTRUCTURA') {
+            return response()->json($this->fetchAndSerializeProposals(
+                $projectId, $page, $perPage, Project::visibleTo($request->user())->pluck('id')->all()
+            ));
+        }
+
         // Clave de caché por página + proyecto + versión (invalidación)
         $cacheKey = $projectId
             ? "supplier_proposals:v{$version}:project:{$projectId}:page:{$page}:per:{$perPage}"
@@ -238,7 +246,7 @@ class SupplierProposalController extends Controller
         );
     }
 
-    private function fetchAndSerializeProposals(?string $projectId, int $page, int $perPage): array
+    private function fetchAndSerializeProposals(?string $projectId, int $page, int $perPage, ?array $onlyProjectIds = null): array
     {
         $query = SupplierMaterialProposal::query()
             ->select('id', 'project_id', 'project_title_snapshot', 'supplier_name', 'supplier_company',
@@ -254,6 +262,10 @@ class SupplierProposalController extends Controller
 
         if ($projectId) {
             $query->where('project_id', $projectId);
+        }
+
+        if ($onlyProjectIds !== null) {
+            $query->whereIn('project_id', $onlyProjectIds);
         }
 
         $paginated = $query->paginate($perPage);

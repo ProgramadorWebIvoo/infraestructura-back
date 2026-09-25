@@ -504,7 +504,7 @@ class ProjectDocumentTest extends TestCase
     public function test_destroy_denied_for_role_without_access(): void
     {
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
-        $project = Project::factory()->create();
+        $project = Project::factory()->create(['requested_by_user_id' => $infra->id]);
         $doc = $this->createDocument($project);
 
         $response = $this->withHeaders([
@@ -518,7 +518,7 @@ class ProjectDocumentTest extends TestCase
     public function test_upload_allowed_for_infraestructura(): void
     {
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
-        $project = Project::factory()->create();
+        $project = Project::factory()->create(['requested_by_user_id' => $infra->id]);
 
         $response = $this->withHeaders([
             'Authorization' => 'Bearer ' . $infra->createToken('test')->plainTextToken,
@@ -608,7 +608,7 @@ class ProjectDocumentTest extends TestCase
     public function test_upload_denies_infraestructura_uploading_comprobante_types(): void
     {
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
-        $project = Project::factory()->create();
+        $project = Project::factory()->create(['requested_by_user_id' => $infra->id]);
 
         $response = $this->withHeaders([
             'Authorization' => 'Bearer ' . $infra->createToken('test')->plainTextToken,

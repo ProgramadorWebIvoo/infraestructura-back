@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AssignResidentRequest;
 use App\Http\Requests\AuditApprovalRequest;
+use App\Http\Requests\AuditRejectionRequest;
 use App\Http\Requests\ResidentApprovalRequest;
 use App\Http\Requests\ClosureNotesRequest;
 use App\Http\Requests\ClosureReasonRequest;
@@ -60,9 +61,9 @@ class ClosureReportController extends Controller
         return $this->projectResponse($project);
     }
 
-    public function reject(ClosureReasonRequest $request, Project $project)
+    public function reject(AuditRejectionRequest $request, Project $project)
     {
-        $this->service->reject($project, auth()->user(), $request->validated('reason'));
+        $this->service->reject($project, auth()->user(), $request->validated('reason'), $request->validated('target'));
 
         return $this->projectResponse($project);
     }

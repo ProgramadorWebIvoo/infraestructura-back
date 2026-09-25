@@ -29,6 +29,7 @@ class ResidentClosureResource extends JsonResource
                 'contractorNotes' => $report->contractor_notes,
                 'submittedAt' => optional($report->submitted_at)->toIso8601String(),
                 'rejectionReason' => $report->rejection_reason,
+                'rejectionTarget' => $report->rejection_target,
                 'residentNotes' => $report->resident_notes,
                 'residentVerifiedAt' => optional($report->resident_verified_at)->toIso8601String(),
                 'items' => $report->items->map(fn ($i) => [

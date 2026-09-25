@@ -15,12 +15,14 @@ class ProjectClosureReport extends Model
     public const STATUS_RESIDENT_APPROVED = 'APROBADO_RESIDENTE';
     public const STATUS_AUDIT_APPROVED = 'APROBADO_AUDITORIA';
     public const STATUS_REJECTED = 'RECHAZADO';
+    public const TARGET_CONTRACTOR = 'CONTRATISTA';
+    public const TARGET_RESIDENT = 'RESIDENTE';
 
     protected $fillable = [
         'id', 'project_id', 'contractor_code', 'contractor_email', 'status', 'revision',
         'contractor_notes', 'submitted_at', 'resident_user_id', 'resident_notes', 'resident_verified_at',
         'audit_user_id', 'audit_notes', 'audit_verified_at', 'finiquito_amount',
-        'rejection_reason', 'rejected_by_role',
+        'rejection_reason', 'rejected_by_role', 'rejection_target',
     ];
 
     protected $casts = [

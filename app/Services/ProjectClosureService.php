@@ -66,6 +66,7 @@ class ProjectClosureService
                 'submitted_at' => now(),
                 'rejection_reason' => null,
                 'rejected_by_role' => null,
+                'rejection_target' => null,
             ]);
             $project->update(['status' => self::S['INFORME_ENVIADO']]);
         });
@@ -91,6 +92,9 @@ class ProjectClosureService
                 'resident_user_id' => $user->id,
                 'resident_notes' => $notes,
                 'resident_verified_at' => now(),
+                'rejection_reason' => null,
+                'rejected_by_role' => null,
+                'rejection_target' => null,
             ]);
             $project->update(['status' => self::S['VERIFICANDO_FINALIZACION']]);
         });
@@ -129,38 +133,47 @@ class ProjectClosureService
         return $report->refresh();
     }
 
-    /** Rechazo del residente (desde INFORME_ENVIADO) o de Auditoría (desde VERIFICANDO_FINALIZACION). */
-    public function reject(Project $project, User $user, string $reason): ProjectClosureReport
+    /**
+     * Rechazo del residente (desde INFORME_ENVIADO, siempre al contratista) o de
+     * Auditoría (desde VERIFICANDO_FINALIZACION, con destino CONTRATISTA o RESIDENTE).
+     */
+    public function reject(Project $project, User $user, string $reason, ?string $target = null): ProjectClosureReport
     {
         $byResident = $project->status === self::S['INFORME_ENVIADO'];
         ProjectStateMachine::assertStatusIn($project, [self::S['INFORME_ENVIADO'], self::S['VERIFICANDO_FINALIZACION']], 'El informe de cierre no está pendiente de revisión.');
         if ($byResident) {
             $this->assertCanActAsResident($project, $user);
+            $target = ProjectClosureReport::TARGET_CONTRACTOR;
         } else {
             abort_unless(in_array($user->role, ['AUDITORIA', 'ADMIN', 'SUPERADMIN'], true), 403, 'Solo Auditoría puede rechazar en esta etapa.');
+            abort_unless(in_array($target, [ProjectClosureReport::TARGET_CONTRACTOR, ProjectClosureReport::TARGET_RESIDENT], true), 422, 'Indique si el rechazo va al contratista o al residente.');
         }
+        $toResident = $target === ProjectClosureReport::TARGET_RESIDENT;
 
         $report = $project->closureReport;
-        DB::transaction(function () use ($project, $report, $reason, $byResident) {
+        DB::transaction(function () use ($project, $report, $reason, $byResident, $target, $toResident) {
             $report->update([
-                'status' => ProjectClosureReport::STATUS_REJECTED,
+                'status' => $toResident ? ProjectClosureReport::STATUS_SENT : ProjectClosureReport::STATUS_REJECTED,
                 'revision' => $report->revision + 1,
                 'rejection_reason' => $reason,
                 'rejected_by_role' => $byResident ? 'RESIDENTE' : 'AUDITORIA',
+                'rejection_target' => $target,
                 'resident_verified_at' => null,
             ]);
             $this->measurements->reset($report);
-            $project->update(['status' => self::S['EN_EJECUCION']]);
+            $project->update(['status' => self::S[$toResident ? 'INFORME_ENVIADO' : 'EN_EJECUCION']]);
         });
 
         AuditLog::record(
             $project,
             $byResident ? 'RESIDENTE' : 'AUDITORIA',
             $byResident ? 'Rechazo de informe de cierre por residente' : 'Rechazo de informe de cierre por Auditoria',
-            'El contratista debe corregir y reenviar el informe.',
+            $toResident ? 'El residente debe repetir la medición y dar de nuevo su visto bueno.' : 'El contratista debe corregir y reenviar el informe.',
             $reason
         );
-        $this->links->send($report, $project, $reason);
+        if (! $toResident) {
+            $this->links->send($report, $project, $reason);
+        }
 
         return $report->refresh();
     }

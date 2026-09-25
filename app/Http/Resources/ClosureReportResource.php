@@ -25,6 +25,7 @@ class ClosureReportResource extends JsonResource
             'submittedAt' => optional($this->submitted_at)->toIso8601String(),
             'rejectionReason' => $this->rejection_reason,
             'rejectedByRole' => $this->rejected_by_role,
+            'rejectionTarget' => $this->rejection_target,
             'items' => $this->items->map(fn ($i) => [
                 'id' => $i->id,
                 'name' => $i->name,

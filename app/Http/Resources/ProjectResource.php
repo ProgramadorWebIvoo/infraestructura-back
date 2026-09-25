@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Http\Resources\MissingValue;
 
 class ProjectResource extends JsonResource
 {
@@ -105,8 +106,11 @@ class ProjectResource extends JsonResource
             'advancePaidDate' => optional($advance?->paid_date)->format('Y-m-d'),
             'finalPaidAmount' => $final?->amount,
             'finalPaidDate' => optional($final?->paid_date)->format('Y-m-d'),
-            'residentUserId' => $this->resident_user_id,
-            'residentName' => $this->whenLoaded('resident', fn () => $this->resident?->name),
+            'localizationId' => $this->localization_id,
+            'localizationTitle' => $this->whenLoaded('localization', fn () => $this->localization?->locationLabel()),
+            // Residente efectivo: el de la ubicación registrada o, si es personalizada, el que eligió Auditoría.
+            'residentUserId' => $this->effectiveResidentId(),
+            'residentName' => $this->relationLoaded('resident') ? $this->effectiveResident()?->name : new MissingValue,
             'closureReportStatus' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->status),
             'closureReportRevision' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->revision),
             'finiquitoAmount' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->finiquito_amount),

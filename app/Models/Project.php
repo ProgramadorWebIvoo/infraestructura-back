@@ -114,7 +114,35 @@ class Project extends Model
 
     public function isVisibleTo(User $user): bool
     {
-        return $user->role !== 'INFRAESTRUCTURA' || (int) $this->requested_by_user_id === (int) $user->id;
+        return match ($user->role) {
+            'INFRAESTRUCTURA' => (int) $this->requested_by_user_id === (int) $user->id,
+            'RESIDENTE' => $this->effectiveResidentId() === $user->id,
+            default => true,
+        };
+    }
+
+    /**
+     * Residente efectivo (F2-R D11): el de la ubicación registrada, en vivo,
+     * o el elegido por Auditoría si la ubicación es personalizada.
+     */
+    public function effectiveResidentId(): ?int
+    {
+        $id = $this->localization_id ? $this->localization?->resident_user_id : $this->resident_user_id;
+
+        return $id === null ? null : (int) $id;
+    }
+
+    public function effectiveResident(): ?User
+    {
+        return $this->localization_id ? $this->localization?->resident : $this->resident;
+    }
+
+    /** Obras cuyo residente efectivo es `$userId`. */
+    public function scopeWhereEffectiveResident($query, int $userId)
+    {
+        return $query->where(fn ($q) => $q
+            ->where(fn ($p) => $p->whereNull('localization_id')->where('resident_user_id', $userId))
+            ->orWhereHas('localization', fn ($l) => $l->where('resident_user_id', $userId)));
     }
 
     public function localization()
@@ -163,6 +191,7 @@ class Project extends Model
             'payments',
             'rateFreezes.frozenByUser:id,name',
             'resident:id,name',
+            'localization.resident:id,name',
             'closureReport:id,project_id,status,revision,finiquito_amount',
             'documents' => fn ($q) => $q->latestVersionOnly(),
         ];
@@ -187,6 +216,8 @@ class Project extends Model
             'proposals.creator:id,name',
             'proposals.contractor:code,rating',
             'payments',
+            'resident:id,name',
+            'localization.resident:id,name',
         ];
     }
 

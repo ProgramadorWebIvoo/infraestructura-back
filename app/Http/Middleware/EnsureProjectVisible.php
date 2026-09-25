@@ -14,7 +14,8 @@ use Illuminate\Http\Request;
  *   revelar que existen). Cubre rutas con {project}, `project_id` en la
  *   petición y las imágenes internas de propuestas (token de invitación).
  * - RESIDENTE: lista blanca deny-by-default. Solo sesión, acceso, notificaciones,
- *   push tokens y lectura de configuración del shell; sus endpoints propios (`/resident/*`) llegan en R3.
+ *   push tokens y lectura de configuración del shell; sus endpoints propios (`/resident/*`) llegan en R3
+ *   y solo alcanzan las obras donde es el residente efectivo (R7b; 404 en otro caso).
  * - Cualquier otro rol pasa sin cambios.
  */
 class EnsureProjectVisible
@@ -41,7 +42,7 @@ class EnsureProjectVisible
             return response()->json(['message' => 'Acceso no autorizado.'], 403);
         }
 
-        if ($user?->role === 'INFRAESTRUCTURA' && ! $this->ownsRequestedProjects($request, $user)) {
+        if (in_array($user?->role, ['INFRAESTRUCTURA', 'RESIDENTE'], true) && ! $this->ownsRequestedProjects($request, $user)) {
             return response()->json(['message' => 'No encontrado.'], 404);
         }
 

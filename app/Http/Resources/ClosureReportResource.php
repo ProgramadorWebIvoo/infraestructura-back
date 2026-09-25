@@ -44,7 +44,10 @@ class ClosureReportResource extends JsonResource
         ];
 
         if ($public) {
-            return $data;
+            return $data + [
+                'project' => ['id' => $this->project->id, 'title' => $this->project->title, 'location' => $this->project->location],
+                'editable' => $this->isEditableByContractor() && $this->project->status === 'EN_EJECUCION',
+            ];
         }
 
         return $data + [

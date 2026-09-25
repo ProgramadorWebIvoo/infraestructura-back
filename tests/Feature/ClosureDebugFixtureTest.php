@@ -40,7 +40,7 @@ class ClosureDebugFixtureTest extends TestCase
 
         $token = basename($this->actingAs($admin)->postJson('/api/debug/closure-fixtures', ['targetStatus' => 'EN_EJECUCION'])->assertStatus(201)->json('publicUrl'));
 
-        $this->getJson("/api/public/closures/{$token}")->assertOk()->assertJsonPath('editable', true);
+        $this->getJson("/api/public/closures/{$token}")->assertOk()->assertJsonPath('data.editable', true);
     }
 
     public function test_only_admins_and_only_with_debug_enabled(): void

@@ -24,10 +24,7 @@ class PublicClosureReportController extends Controller
         $report = $this->findReport($token);
         $this->logPublicAccess($request, 'closure.view', "Informe: {$token}", $report->project);
 
-        return $this->resource($request, $report)->additional([
-            'project' => ['id' => $report->project->id, 'title' => $report->project->title, 'location' => $report->project->location],
-            'editable' => $this->isEditable($report),
-        ]);
+        return $this->resource($request, $report);
     }
 
     public function uploadPhoto(StoreSupplierProposalImageRequest $request, string $token, ClosurePhotoService $photos)

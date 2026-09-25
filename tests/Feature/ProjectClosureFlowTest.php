@@ -93,7 +93,7 @@ class ProjectClosureFlowTest extends TestCase
     {
         $response = $this->getJson("/api/public/closures/{$this->report->id}")->assertOk();
 
-        $response->assertJsonPath('data.status', 'ABIERTO')->assertJsonPath('editable', true);
+        $response->assertJsonPath('data.status', 'ABIERTO')->assertJsonPath('data.editable', true);
         $response->assertJsonMissingPath('data.auditNotes');
         $response->assertJsonPath('data.items.0.unitPriceUsd', null);
         $this->getJson('/api/public/closures/no-existe')->assertStatus(404);
@@ -182,7 +182,7 @@ class ProjectClosureFlowTest extends TestCase
         $this->assertEquals('Faltan tomacorrientes', $report->rejection_reason);
         $this->assertTrue($report->isEditableByContractor());
 
-        $this->getJson("/api/public/closures/{$this->report->id}")->assertJsonPath('editable', true)->assertJsonPath('data.rejectionReason', 'Faltan tomacorrientes');
+        $this->getJson("/api/public/closures/{$this->report->id}")->assertJsonPath('data.editable', true)->assertJsonPath('data.rejectionReason', 'Faltan tomacorrientes');
         $this->postJson("/api/public/closures/{$this->report->id}/submit", ['items' => $this->fullItems()])->assertOk();
         $this->assertEquals('INFORME_ENVIADO', $this->project->fresh()->status);
     }

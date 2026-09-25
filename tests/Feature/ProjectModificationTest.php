@@ -278,6 +278,18 @@ class ProjectModificationTest extends TestCase
         $this->assertDatabaseMissing('app_notifications', ['user_id' => $presidencia->id]);
     }
 
+    public function test_history_detail_lists_modifications_and_timeline_events(): void
+    {
+        $this->approve($this->create());
+
+        $detail = app(\App\Services\ProjectHistoryDetailBuilder::class)->build($this->project->fresh());
+
+        $this->assertCount(1, $detail['modifications']);
+        $this->assertSame('APROBADA', $detail['modifications'][0]['status']);
+        $this->assertEquals(400, $detail['modifications'][0]['netAmountUsd']);
+        $this->assertContains('Aprobacion de modificacion de obra', array_column($detail['timeline'], 'action'));
+    }
+
     public function test_actions_notify_configured_roles(): void
     {
         $this->assertDatabaseHas('notification_rules', ['action' => 'Solicitud de modificacion de obra', 'role' => 'AUDITORIA', 'channel' => 'app']);

@@ -57,6 +57,7 @@ class ProjectHistoryDetailBuilder
             'payments' => $this->payments($project, $figures['awarded']),
             'drawings' => $drawings,
             'closure' => $this->closure($project),
+            'modifications' => $this->modifications($project),
             'timeline' => $auditLogs->map(fn ($log) => [
                 'id' => $log->id,
                 'at' => optional($log->logged_at)->toIso8601String(),
@@ -227,6 +228,29 @@ class ProjectHistoryDetailBuilder
                     'uploadedBy' => $d->uploader?->name,
                     'uploadedAt' => optional($d->created_at)->toIso8601String(),
                     'isDeleted' => $d->trashed(),
+                ])->values()->all(),
+            ])->values()->all();
+    }
+
+    /** Modificaciones de obra (aumentos/disminuciones) con su impacto neto en USD. */
+    private function modifications(Project $project): array
+    {
+        return $project->modificationRequests()
+            ->with(['items.material', 'reviewer:id,name'])
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn ($m) => [
+                'id' => $m->id,
+                'status' => $m->status,
+                'reason' => $m->reason,
+                'netAmountUsd' => $m->netAmountUsd(),
+                'reviewedBy' => $m->reviewer?->name,
+                'reviewedAt' => optional($m->reviewed_at)->toIso8601String(),
+                'items' => $m->items->map(fn ($i) => [
+                    'name' => $i->material?->name,
+                    'unit' => $i->material?->unit,
+                    'type' => $i->type,
+                    'quantity' => $i->quantity,
                 ])->values()->all(),
             ])->values()->all();
     }

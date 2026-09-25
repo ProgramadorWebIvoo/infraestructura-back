@@ -104,15 +104,14 @@ class ProjectClosureService
         return $report->refresh();
     }
 
-    /** @param array<int, array<string, mixed>>|null $items ajustes de Auditoría (por defecto rige la medición del residente) */
-    public function approveByAudit(Project $project, User $user, ?string $notes, ?array $items = null): ProjectClosureReport
+    /** Auditoría solo aprueba: rige la medición del residente. */
+    public function approveByAudit(Project $project, User $user, ?string $notes): ProjectClosureReport
     {
         ProjectStateMachine::assertStatus($project, self::S['VERIFICANDO_FINALIZACION'], 'Solo se puede verificar una obra con visto bueno del residente (VERIFICANDO_FINALIZACION).');
 
         $report = $project->closureReport->load('items');
 
-        DB::transaction(function () use ($project, $report, $user, $notes, $items, &$amount) {
-            $this->measurements->recordAudit($report, $items);
+        DB::transaction(function () use ($project, $report, $user, $notes, &$amount) {
             $amount = $this->computeFiniquitoAmount($project, $report->load('items'));
             $report->update([
                 'status' => ProjectClosureReport::STATUS_AUDIT_APPROVED,

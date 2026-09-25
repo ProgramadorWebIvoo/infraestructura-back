@@ -37,8 +37,6 @@ class ClosureReportResource extends JsonResource
             ] + ($public ? [] : [
                 'residentQuantity' => $i->resident_quantity,
                 'residentNote' => $i->resident_note,
-                'auditQuantity' => $i->audit_quantity,
-                'auditNote' => $i->audit_note,
                 'finalQuantity' => $i->final_quantity,
             ]))->values(),
             'photos' => $this->photos->map(fn ($p) => [

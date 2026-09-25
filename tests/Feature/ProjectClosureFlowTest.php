@@ -396,31 +396,15 @@ class ProjectClosureFlowTest extends TestCase
         $this->assertEquals(90, $cable->resident_quantity);
     }
 
-    public function test_audit_defaults_to_resident_measurement_and_can_override_with_note(): void
+    public function test_audit_approval_uses_resident_measurement_and_ignores_adjustments(): void
     {
         $this->toResidentStage();
         $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/approval", $this->residentPayload(fn ($i, $row) => $i->name === 'Cable' ? [...$row, 'residentQuantity' => 90, 'note' => 'Faltan 10 m'] : $row))->assertOk();
-
-        $audit = "/api/projects/{$this->project->id}/closure-report/audit-approval";
         $cable = $this->report->fresh()->items->firstWhere('name', 'Cable');
 
-        $this->actingAs($this->auditoria)->postJson($audit, ['items' => [['id' => $cable->id, 'auditQuantity' => 95]]])->assertStatus(422);
-        $this->assertEquals('VERIFICANDO_FINALIZACION', $this->project->fresh()->status);
-
-        $this->actingAs($this->auditoria)->postJson($audit, ['items' => [['id' => $cable->id, 'auditQuantity' => 95, 'note' => 'Se comprobó 95 m']]])->assertOk();
-        $this->assertEquals(95, $cable->fresh()->audit_quantity);
-        // 10000 − 3000 anticipo − (100−95)×2 = 6990
-        $this->assertEquals(6990.00, $this->report->fresh()->finiquito_amount);
-    }
-
-    public function test_audit_without_adjustments_uses_resident_quantity(): void
-    {
-        $this->toResidentStage();
-        $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/approval", $this->residentPayload(fn ($i, $row) => $i->name === 'Cable' ? [...$row, 'residentQuantity' => 90, 'note' => 'Faltan 10 m'] : $row))->assertOk();
-
-        $this->actingAs($this->auditoria)->postJson("/api/projects/{$this->project->id}/closure-report/audit-approval")->assertOk();
-
-        // 10000 − 3000 − (100−90)×2 = 6980 sobre la medición del residente, no la del contratista
+        $this->actingAs($this->auditoria)->postJson("/api/projects/{$this->project->id}/closure-report/audit-approval", ['items' => [['id' => $cable->id, 'auditQuantity' => 95]]])->assertOk();
+        $this->assertEquals(90, $cable->fresh()->final_quantity);
+        // 10000 − 3000 anticipo − (100−90)×2 = 6980
         $this->assertEquals(6980.00, $this->report->fresh()->finiquito_amount);
     }
 
@@ -470,7 +454,6 @@ class ProjectClosureFlowTest extends TestCase
 
         foreach ($this->report->fresh()->items as $item) {
             $this->assertNull($item->resident_quantity);
-            $this->assertNull($item->audit_quantity);
         }
     }
 

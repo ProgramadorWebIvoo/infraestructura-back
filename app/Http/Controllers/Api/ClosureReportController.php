@@ -71,7 +71,7 @@ class ClosureReportController extends Controller
     public function auditApproval(AuditApprovalRequest $request, Project $project)
     {
         $data = $request->validated();
-        $this->service->approveByAudit($project, auth()->user(), $data['notes'] ?? null, $data['items'] ?? null);
+        $this->service->approveByAudit($project, auth()->user(), $data['notes'] ?? null);
 
         return $this->projectResponse($project);
     }

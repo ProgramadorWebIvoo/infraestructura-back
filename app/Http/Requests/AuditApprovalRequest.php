@@ -15,10 +15,6 @@ class AuditApprovalRequest extends FormRequest
     {
         return [
             'notes' => ['nullable', 'string', 'max:1000'],
-            'items' => ['nullable', 'array'],
-            'items.*.id' => ['required', 'integer'],
-            'items.*.auditQuantity' => ['required', 'numeric', 'min:0'],
-            'items.*.note' => ['nullable', 'string', 'max:500'],
         ];
     }
 }

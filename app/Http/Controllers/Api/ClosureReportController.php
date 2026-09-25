@@ -49,9 +49,7 @@ class ClosureReportController extends Controller
 
     public function photo(Project $project, ProjectClosurePhoto $photo, ClosurePhotoService $photos): StreamedResponse
     {
-        abort_unless($project->closureReport && $photo->report_id === $project->closureReport->id, 404);
-
-        return $photos->stream($photo);
+        return $photos->streamForProject($project, $photo);
     }
 
     public function residentApproval(ResidentApprovalRequest $request, Project $project)

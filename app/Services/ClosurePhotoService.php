@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Project;
 use App\Models\ProjectClosurePhoto;
 use App\Models\ProjectClosureReport;
 use Illuminate\Http\UploadedFile;
@@ -36,6 +37,14 @@ class ClosurePhotoService
     {
         Storage::disk('local')->delete($photo->stored_path);
         $photo->delete();
+    }
+
+    /** Sirve la foto solo si pertenece al informe de la obra indicada. */
+    public function streamForProject(Project $project, ProjectClosurePhoto $photo): StreamedResponse
+    {
+        abort_unless($project->closureReport && $photo->report_id === $project->closureReport->id, 404);
+
+        return $this->stream($photo);
     }
 
     public function stream(ProjectClosurePhoto $photo): StreamedResponse

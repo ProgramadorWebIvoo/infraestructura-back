@@ -1128,12 +1128,10 @@ class ProjectLifecycleTest extends TestCase
         $this->postJson("/api/public/closures/{$token}/submit", ['notes' => 'Trabajo terminado', 'items' => $items])->assertOk();
         $this->assertEquals('INFORME_ENVIADO', Project::find($projectId)->status);
 
-        // Transitorio hasta R3: las acciones del residente aún las opera INFRAESTRUCTURA (sin residente asignado).
-        Project::whereKey($projectId)->update(['resident_user_id' => null]);
-        $this->actingAs($this->infra)
-            ->post("/api/projects/{$projectId}/closure-report/photos", ['image' => \Illuminate\Http\UploadedFile::fake()->image('verif.jpg')])->assertStatus(201);
-        $this->actingAs($this->infra)
-            ->postJson("/api/projects/{$projectId}/closure-report/resident-approval", [
+        $this->actingAs($this->resident)
+            ->post("/api/resident/projects/{$projectId}/photos", ['image' => \Illuminate\Http\UploadedFile::fake()->image('verif.jpg')])->assertStatus(201);
+        $this->actingAs($this->resident)
+            ->postJson("/api/resident/projects/{$projectId}/approval", [
                 'notes' => 'Corroborado',
                 'items' => \App\Models\ProjectClosureReport::find($token)->items->map(fn ($i) => ['id' => $i->id, 'residentQuantity' => $i->contracted_quantity])->all(),
             ])

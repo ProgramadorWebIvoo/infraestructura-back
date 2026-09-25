@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\ClosureReportController;
 use App\Http\Controllers\Api\ContractorController;
 use App\Http\Controllers\Api\DebugClosureFixtureController;
 use App\Http\Controllers\Api\PublicClosureReportController;
+use App\Http\Controllers\Api\ResidentClosureController;
+use App\Http\Controllers\Api\ResidentDocumentController;
 use App\Http\Controllers\Api\MarketingProjectController;
 use App\Http\Controllers\Api\MarketingProjectAttachmentController;
 use App\Http\Controllers\Api\ModuleController;
@@ -332,13 +334,30 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
     Route::get('/projects/{project}/closure-report/photos/{photo}', [ClosureReportController::class, 'photo'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::post('/projects/{project}/closure-report/photos', [ClosureReportController::class, 'uploadPhoto'])
-        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+        ->middleware('role:ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/closure-report/resend-link', [ClosureReportController::class, 'resendLink'])
-        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+        ->middleware('role:AUDITORIA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/closure-report/resident-approval', [ClosureReportController::class, 'residentApproval'])
-        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+        ->middleware('role:ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/closure-report/rejection', [ClosureReportController::class, 'reject'])
-        ->middleware('role:INFRAESTRUCTURA,AUDITORIA,ADMIN,SUPERADMIN');
+        ->middleware('role:AUDITORIA,ADMIN,SUPERADMIN');
+
+    // Módulo del residente (F2-R R3): solo sus obras (EnsureProjectVisible); ADMIN/SUPERADMIN pueden actuar como residente.
+    Route::middleware('role:RESIDENTE,ADMIN,SUPERADMIN')->prefix('resident/projects')->group(function () {
+        Route::get('/', [ResidentClosureController::class, 'index']);
+        Route::get('/{project}', [ResidentClosureController::class, 'show']);
+        Route::post('/{project}/photos', [ResidentClosureController::class, 'uploadPhoto']);
+        Route::get('/{project}/closure-report/photos/{photo}', [ResidentClosureController::class, 'photo'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+        Route::post('/{project}/approval', [ResidentClosureController::class, 'approve']);
+        Route::post('/{project}/rejection', [ResidentClosureController::class, 'reject']);
+        Route::get('/{project}/documents', [ResidentDocumentController::class, 'index'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+        Route::get('/{project}/documents/{document}/download', [ResidentDocumentController::class, 'download'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+        Route::get('/{project}/documents/{document}/preview', [ResidentDocumentController::class, 'preview'])
+            ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+    });
     Route::post('/projects/{project}/closure-report/audit-approval', [ClosureReportController::class, 'auditApproval'])
         ->middleware('role:AUDITORIA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/closure-report/finiquito-request', [ClosureReportController::class, 'requestFiniquito'])

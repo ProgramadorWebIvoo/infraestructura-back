@@ -32,6 +32,7 @@ class ProjectClosureService
         $project = $report->project;
         ProjectStateMachine::assertStatus($project, self::S['EN_EJECUCION'], 'Solo se puede enviar el informe de una obra en ejecución.');
         abort_unless($report->isEditableByContractor(), 422, 'El informe ya fue enviado y está en revisión.');
+        abort_if($project->effectiveResidentId() === null, 422, 'La obra no tiene ingeniero residente asignado; Auditoría debe asignarlo antes de enviar el informe.');
         abort_unless($report->photos()->exists(), 422, 'Adjunte al menos una foto de evidencia antes de enviar el informe.');
 
         $incoming = collect($data['items'] ?? [])->keyBy('id');
@@ -145,7 +146,7 @@ class ProjectClosureService
                 'status' => ProjectClosureReport::STATUS_REJECTED,
                 'revision' => $report->revision + 1,
                 'rejection_reason' => $reason,
-                'rejected_by_role' => $byResident ? 'INFRAESTRUCTURA' : 'AUDITORIA',
+                'rejected_by_role' => $byResident ? 'RESIDENTE' : 'AUDITORIA',
                 'resident_verified_at' => null,
             ]);
             $this->measurements->reset($report);
@@ -154,7 +155,7 @@ class ProjectClosureService
 
         AuditLog::record(
             $project,
-            $byResident ? 'INFRAESTRUCTURA' : 'AUDITORIA',
+            $byResident ? 'RESIDENTE' : 'AUDITORIA',
             $byResident ? 'Rechazo de informe de cierre por residente' : 'Rechazo de informe de cierre por Auditoria',
             'El contratista debe corregir y reenviar el informe.',
             $reason
@@ -187,15 +188,14 @@ class ProjectClosureService
         return $project;
     }
 
-    /** Residente asignado; sin asignar, cualquier INFRAESTRUCTURA/ADMIN puede corroborar. */
+    /** Solo el residente efectivo de la obra (F2-R D11) o ADMIN/SUPERADMIN pueden actuar como residente. */
     public function assertCanActAsResident(Project $project, User $user): void
     {
         if (in_array($user->role, ['ADMIN', 'SUPERADMIN'], true)) {
             return;
         }
 
-        abort_unless($user->role === 'INFRAESTRUCTURA', 403, 'Solo Infraestructura puede corroborar la ejecución.');
-        abort_if($project->resident_user_id !== null && $project->resident_user_id !== $user->id, 403, 'Esta obra tiene otro ingeniero residente asignado.');
+        abort_unless($user->role === 'RESIDENTE' && $project->effectiveResidentId() === $user->id, 403, 'Solo el ingeniero residente de la obra puede corroborar la ejecución.');
     }
 
     /** Contratado − anticipo − Σ(disminuciones × precio unitario), sobre la cantidad final, nunca negativo. */

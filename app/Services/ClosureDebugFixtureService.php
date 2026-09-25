@@ -10,7 +10,9 @@ use App\Models\ProjectPayment;
 use App\Models\ProjectProposal;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Herramienta de DEBUG-MODE (solo con APP_DEBUG, ADMIN/SUPERADMIN): crea una
@@ -52,6 +54,7 @@ class ClosureDebugFixtureService
                 'approved_investment_amount' => 1000,
                 'selected_contractor_code' => $contractor->code,
                 'requested_by_user_id' => $actor->id,
+                'resident_user_id' => $this->debugResident()->id,
             ]);
 
             foreach ([['Tomacorriente', 12, 'und', 50], ['Cable', 100, 'm', 2]] as $i => [$name, $qty, $unit, $price]) {
@@ -78,6 +81,16 @@ class ClosureDebugFixtureService
         $this->links->open($project->refresh());
 
         return $this->advanceTo($project, $actor, $target);
+    }
+
+    /** Residente de la obra de prueba: el primer RESIDENTE activo o uno de depuración (el cierre exige residente efectivo). */
+    private function debugResident(): User
+    {
+        return User::where('role', 'RESIDENTE')->active()->orderBy('id')->first()
+            ?? User::firstOrCreate(
+                ['email' => 'residente.debug@ivoo.local'],
+                ['name' => 'Residente de Prueba (debug)', 'password' => Hash::make(Str::random(32)), 'role' => 'RESIDENTE', 'status' => 'Active']
+            );
     }
 
     /** Avanza la obra, un paso a la vez con los servicios reales, hasta el estado objetivo. */

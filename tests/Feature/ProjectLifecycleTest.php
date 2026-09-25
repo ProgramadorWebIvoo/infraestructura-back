@@ -1127,7 +1127,10 @@ class ProjectLifecycleTest extends TestCase
         $this->actingAs($this->infra)
             ->post("/api/projects/{$projectId}/closure-report/photos", ['image' => \Illuminate\Http\UploadedFile::fake()->image('verif.jpg')])->assertStatus(201);
         $this->actingAs($this->infra)
-            ->postJson("/api/projects/{$projectId}/closure-report/resident-approval", ['notes' => 'Corroborado'])
+            ->postJson("/api/projects/{$projectId}/closure-report/resident-approval", [
+                'notes' => 'Corroborado',
+                'items' => \App\Models\ProjectClosureReport::find($token)->items->map(fn ($i) => ['id' => $i->id, 'residentQuantity' => $i->contracted_quantity])->all(),
+            ])
             ->assertJsonPath('data.status', 'VERIFICANDO_FINALIZACION');
         $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$projectId}/closure-report/audit-approval", ['notes' => 'Verificado'])

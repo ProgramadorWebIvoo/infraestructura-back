@@ -22,7 +22,7 @@ class ProjectClosureService
 {
     private const S = ProjectStateMachine::STATUSES;
 
-    public function __construct(private ClosureReportLinkService $links)
+    public function __construct(private ClosureReportLinkService $links, private ClosureMeasurementService $measurements)
     {
     }
 
@@ -74,7 +74,8 @@ class ProjectClosureService
         return $report->refresh();
     }
 
-    public function approveByResident(Project $project, User $user, ?string $notes): ProjectClosureReport
+    /** @param array<int, array<string, mixed>> $items mediciones del residente por partida */
+    public function approveByResident(Project $project, User $user, ?string $notes, array $items): ProjectClosureReport
     {
         ProjectStateMachine::assertStatus($project, self::S['INFORME_ENVIADO'], 'Solo se puede corroborar un informe enviado por el contratista (INFORME_ENVIADO).');
         $this->assertCanActAsResident($project, $user);
@@ -82,7 +83,8 @@ class ProjectClosureService
         $report = $project->closureReport;
         abort_unless($report->photos()->where('uploaded_by_type', 'RESIDENTE')->exists(), 422, 'Adjunte al menos una foto de verificación en obra antes de dar el visto bueno.');
 
-        DB::transaction(function () use ($project, $report, $user, $notes) {
+        DB::transaction(function () use ($project, $report, $user, $notes, $items) {
+            $this->measurements->recordResident($report->load('items'), $items);
             $report->update([
                 'status' => ProjectClosureReport::STATUS_RESIDENT_APPROVED,
                 'resident_user_id' => $user->id,
@@ -97,14 +99,16 @@ class ProjectClosureService
         return $report->refresh();
     }
 
-    public function approveByAudit(Project $project, User $user, ?string $notes): ProjectClosureReport
+    /** @param array<int, array<string, mixed>>|null $items ajustes de Auditoría (por defecto rige la medición del residente) */
+    public function approveByAudit(Project $project, User $user, ?string $notes, ?array $items = null): ProjectClosureReport
     {
         ProjectStateMachine::assertStatus($project, self::S['VERIFICANDO_FINALIZACION'], 'Solo se puede verificar una obra con visto bueno del residente (VERIFICANDO_FINALIZACION).');
 
         $report = $project->closureReport->load('items');
-        $amount = $this->computeFiniquitoAmount($project, $report);
 
-        DB::transaction(function () use ($project, $report, $user, $notes, $amount) {
+        DB::transaction(function () use ($project, $report, $user, $notes, $items, &$amount) {
+            $this->measurements->recordAudit($report, $items);
+            $amount = $this->computeFiniquitoAmount($project, $report->load('items'));
             $report->update([
                 'status' => ProjectClosureReport::STATUS_AUDIT_APPROVED,
                 'audit_user_id' => $user->id,
@@ -144,6 +148,7 @@ class ProjectClosureService
                 'rejected_by_role' => $byResident ? 'INFRAESTRUCTURA' : 'AUDITORIA',
                 'resident_verified_at' => null,
             ]);
+            $this->measurements->reset($report);
             $project->update(['status' => self::S['EN_EJECUCION']]);
         });
 
@@ -193,13 +198,13 @@ class ProjectClosureService
         abort_if($project->resident_user_id !== null && $project->resident_user_id !== $user->id, 403, 'Esta obra tiene otro ingeniero residente asignado.');
     }
 
-    /** Contratado − anticipo − Σ(disminuciones × precio unitario), nunca negativo. */
+    /** Contratado − anticipo − Σ(disminuciones × precio unitario), sobre la cantidad final, nunca negativo. */
     private function computeFiniquitoAmount(Project $project, ProjectClosureReport $report): float
     {
         $proposal = $project->proposals()->whereKey($project->selected_proposal_id)->first();
         $contracted = (float) ($proposal?->total_cost ?? 0);
         $advance = (float) ProjectPayment::where('project_id', $project->id)->where('payment_type', 'ADVANCE')->value('amount');
-        $reductions = $report->items->sum(fn ($i) => max(0, $i->contracted_quantity - $i->executed_quantity) * $i->unit_price_usd);
+        $reductions = $report->items->sum(fn ($i) => max(0, $i->contracted_quantity - $i->final_quantity) * $i->unit_price_usd);
 
         return round(max(0, $contracted - $advance - $reductions), 2);
     }

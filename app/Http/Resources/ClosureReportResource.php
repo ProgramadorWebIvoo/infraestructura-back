@@ -33,7 +33,13 @@ class ClosureReportResource extends JsonResource
                 'executedQuantity' => $i->executed_quantity,
                 'unitPriceUsd' => $public ? null : $i->unit_price_usd,
                 'note' => $i->note,
-            ])->values(),
+            ] + ($public ? [] : [
+                'residentQuantity' => $i->resident_quantity,
+                'residentNote' => $i->resident_note,
+                'auditQuantity' => $i->audit_quantity,
+                'auditNote' => $i->audit_note,
+                'finalQuantity' => $i->final_quantity,
+            ]))->values(),
             'photos' => $this->photos->map(fn ($p) => [
                 'id' => $p->id,
                 'itemId' => $p->item_id,

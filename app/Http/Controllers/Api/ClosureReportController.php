@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AssignResidentRequest;
+use App\Http\Requests\AuditApprovalRequest;
+use App\Http\Requests\ResidentApprovalRequest;
 use App\Http\Requests\ClosureNotesRequest;
 use App\Http\Requests\ClosureReasonRequest;
 use App\Http\Requests\StoreSupplierProposalImageRequest;
@@ -51,9 +53,10 @@ class ClosureReportController extends Controller
         return $photos->stream($photo);
     }
 
-    public function residentApproval(ClosureNotesRequest $request, Project $project)
+    public function residentApproval(ResidentApprovalRequest $request, Project $project)
     {
-        $this->service->approveByResident($project, auth()->user(), $request->validated('notes'));
+        $data = $request->validated();
+        $this->service->approveByResident($project, auth()->user(), $data['notes'] ?? null, $data['items']);
 
         return $this->projectResponse($project);
     }
@@ -65,9 +68,10 @@ class ClosureReportController extends Controller
         return $this->projectResponse($project);
     }
 
-    public function auditApproval(ClosureNotesRequest $request, Project $project)
+    public function auditApproval(AuditApprovalRequest $request, Project $project)
     {
-        $this->service->approveByAudit($project, auth()->user(), $request->validated('notes'));
+        $data = $request->validated();
+        $this->service->approveByAudit($project, auth()->user(), $data['notes'] ?? null, $data['items'] ?? null);
 
         return $this->projectResponse($project);
     }

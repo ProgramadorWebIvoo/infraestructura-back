@@ -114,7 +114,8 @@ class ClosureDebugFixtureService
     private function approveResident(Project $project, ProjectClosureReport $report, User $actor): void
     {
         $this->addPhoto($report, ProjectClosurePhoto::BY_RESIDENT, $actor->id);
-        $this->closure->approveByResident($project, $actor, 'Corroborado (debug)');
+        $items = $report->items->map(fn ($i) => ['id' => $i->id, 'residentQuantity' => $i->executed_quantity])->all();
+        $this->closure->approveByResident($project, $actor, 'Corroborado (debug)', $items);
     }
 
     private function addPhoto(ProjectClosureReport $report, string $byType, ?int $userId): void

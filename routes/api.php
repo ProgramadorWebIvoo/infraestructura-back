@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\AccessAdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClosureReportController;
 use App\Http\Controllers\Api\ContractorController;
+use App\Http\Controllers\Api\DebugClosureFixtureController;
 use App\Http\Controllers\Api\PublicClosureReportController;
 use App\Http\Controllers\Api\MarketingProjectController;
 use App\Http\Controllers\Api\MarketingProjectAttachmentController;
@@ -341,6 +342,13 @@ Route::middleware(['auth:sanctum', 'refresh.token'])->group(function () {
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/closure-report/finiquito-return', [ClosureReportController::class, 'returnToAudit'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
+
+    // DEBUG-MODE: fixtures del cierre (404 si APP_DEBUG=false)
+    Route::middleware('role:ADMIN,SUPERADMIN')->prefix('debug/closure-fixtures')->group(function () {
+        Route::get('/', [DebugClosureFixtureController::class, 'index']);
+        Route::post('/', [DebugClosureFixtureController::class, 'store']);
+        Route::post('/{project}/advance', [DebugClosureFixtureController::class, 'advance']);
+    });
 
     // AI Evaluation — mismo endpoint sirve a Procura (evaluación oficial del
     // cuadro comparativo) y a Analistas (vista previa antes de enviar a

@@ -49,6 +49,7 @@ class Project extends Model
         'approved_investment_amount',
         'selected_contractor_code',
         'selected_proposal_id',
+        'localization_id',
         'resident_user_id',
         'requested_by_user_id',
         'quality_verified',
@@ -114,6 +115,17 @@ class Project extends Model
     public function isVisibleTo(User $user): bool
     {
         return $user->role !== 'INFRAESTRUCTURA' || (int) $this->requested_by_user_id === (int) $user->id;
+    }
+
+    public function localization()
+    {
+        return $this->belongsTo(Localization::class);
+    }
+
+    /** Obras que aún no terminaron su ciclo (ni pagadas ni rechazadas). */
+    public function scopeOpen($query)
+    {
+        return $query->whereNotIn('status', ['COMPLETADO_PAGADO', 'RECHAZADO_AUDITORIA']);
     }
 
     public function resident()

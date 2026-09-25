@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\ProjectLocation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +18,7 @@ class ResubmitProjectRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:220'],
             'description' => ['required', 'string'],
-            'location' => ['required', 'string', 'max:180'],
+            ...ProjectLocation::rules(),
             'materials' => ['required', 'array', 'min:1'],
             'materials.*.id' => ['nullable', 'string', 'max:40'],
             'materials.*.materialCatalogId' => ['nullable', 'integer', 'exists:material_catalog,id'],

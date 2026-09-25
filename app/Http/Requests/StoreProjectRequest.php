@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\ProjectLocation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,7 +19,7 @@ class StoreProjectRequest extends FormRequest
             'title' => ['required', 'string', 'max:220'],
             'type' => ['required', Rule::exists('project_types', 'key')->where('is_active', true)],
             'description' => ['required', 'string'],
-            'location' => ['required', 'string', 'max:180'],
+            ...ProjectLocation::rules(),
             'materials' => ['required', 'array', 'min:1'],
             'materials.*.id' => ['nullable', 'string', 'max:40'],
             'materials.*.materialCatalogId' => ['nullable', 'integer', 'exists:material_catalog,id'],
@@ -34,7 +35,6 @@ class StoreProjectRequest extends FormRequest
             'materials.*.specifications' => ['sometimes', 'nullable', 'string'],
             'materials.*.observations' => ['sometimes', 'nullable', 'string'],
             'estimatedTotal' => ['nullable', 'numeric', 'min:0'],
-            'residentUserId' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', 'INFRAESTRUCTURA')],
         ];
     }
 }

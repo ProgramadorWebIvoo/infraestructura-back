@@ -28,6 +28,7 @@ use App\Services\AiFeatureGate;
 use App\Services\DossierEvaluationService;
 use App\Services\ClosureReportLinkService;
 use App\Services\ProjectStateMachine;
+use App\Support\ProjectLocation;
 use App\Services\ProposalRenegotiationService;
 use App\Services\RateFreezeService;
 use App\Services\RejectionService;
@@ -73,11 +74,10 @@ class ProjectController extends Controller
                 'title' => $data['title'],
                 'type' => $data['type'],
                 'description' => $data['description'],
-                'location' => $data['location'],
+                ...ProjectLocation::attributes($data),
                 'created_date' => now()->toDateString(),
                 'status' => self::STATUSES['CREADO'],
                 'estimated_total' => $data['estimatedTotal'] ?? $this->materialsTotal($data['materials']),
-                'resident_user_id' => $data['residentUserId'] ?? null,
                 'requested_by_user_id' => $requesterId,
             ]);
 
@@ -184,7 +184,7 @@ class ProjectController extends Controller
             $project->update([
                 'title' => $data['title'],
                 'description' => $data['description'],
-                'location' => $data['location'],
+                ...ProjectLocation::attributes($data),
                 'status' => self::STATUSES['CREADO'],
                 'estimated_total' => $data['estimatedTotal'] ?? $this->materialsTotal($data['materials']),
                 // El análisis de IA previo describe un expediente que ya no

@@ -218,11 +218,11 @@ class ProjectModificationTest extends TestCase
 
         $this->actingAs($this->infra)->getJson("/api/projects/{$this->project->id}/modifications")
             ->assertOk()
-            ->assertJsonPath('hasPending', true)
-            ->assertJsonPath('canRequest', true)
-            ->assertJsonPath('canReview', false)
-            ->assertJsonPath("effectiveQuantities.{$this->outlets->id}.final", 20)
-            ->assertJsonCount(2, 'data');
+            ->assertJsonPath('data.hasPending', true)
+            ->assertJsonPath('data.canRequest', true)
+            ->assertJsonPath('data.canReview', false)
+            ->assertJsonPath("data.effectiveQuantities.{$this->outlets->id}.final", 20)
+            ->assertJsonCount(2, 'data.requests');
     }
 
     public function test_inbox_lists_only_visible_projects_and_hides_it_from_other_roles(): void

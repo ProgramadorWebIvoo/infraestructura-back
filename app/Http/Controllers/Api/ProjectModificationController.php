@@ -42,13 +42,14 @@ class ProjectModificationController extends Controller
     {
         $requests = $project->modificationRequests()->with(['items.material', 'requester', 'reviewer'])->latest()->get();
 
-        return response()->json([
-            'data' => ProjectModificationRequestResource::collection($requests),
+        // Todo bajo `data`: el cliente desenvuelve `response.data` y perdería las claves hermanas.
+        return response()->json(['data' => [
+            'requests' => ProjectModificationRequestResource::collection($requests)->resolve(),
             'effectiveQuantities' => $this->service->effectiveQuantities($project),
             'hasPending' => $requests->contains('status', ProjectModificationRequest::STATUS_PENDING),
             'canRequest' => $this->access->canRequest(auth()->user()),
             'canReview' => $this->access->canReview(auth()->user()),
-        ]);
+        ]]);
     }
 
     public function store(StoreProjectModificationRequest $request, Project $project)

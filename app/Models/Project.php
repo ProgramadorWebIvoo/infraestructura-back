@@ -166,6 +166,11 @@ class Project extends Model
         return $this->hasOne(ProjectClosureReport::class);
     }
 
+    public function modificationRequests()
+    {
+        return $this->hasMany(ProjectModificationRequest::class);
+    }
+
     public function documents()
     {
         return $this->hasMany(ProjectDocument::class);

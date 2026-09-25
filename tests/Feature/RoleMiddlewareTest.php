@@ -229,9 +229,9 @@ class RoleMiddlewareTest extends TestCase
             ->getJson('/api/users');
         $response->assertStatus(200);
 
-        // ADMIN cannot access users list
+        // ADMIN accede a la lista de usuarios solo para gestionar RESIDENTE (F2-R R7a); el catálogo de roles sigue siendo exclusivo SUPERADMIN
         $response = $this->actingAs($this->admin)
-            ->getJson('/api/users');
+            ->getJson('/api/roles');
         $response->assertStatus(403);
 
         // ANALISTA cannot access users list

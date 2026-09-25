@@ -107,11 +107,11 @@ class TokenExpirationIntegrationTest extends TestCase
             ->update(['created_at' => now()->subMinutes(1410)]);
 
         // refresh.token runs BEFORE role middleware, so token gets refreshed
-        $response = $this->getJson('/api/users', [
+        $response = $this->getJson('/api/roles', [
             'Authorization' => 'Bearer '.$token->plainTextToken,
         ]);
 
-        // ADMIN ya no tiene acceso a /api/users (exclusivo SUPERADMIN) —
+        // ADMIN no tiene acceso a /api/roles (exclusivo SUPERADMIN) —
         // el punto del test es que el refresh ocurre de todos modos.
         $response->assertStatus(403);
         $response->assertHeader('X-Refresh-Token');

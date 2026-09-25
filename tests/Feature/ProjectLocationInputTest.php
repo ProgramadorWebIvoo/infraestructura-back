@@ -96,7 +96,7 @@ class ProjectLocationInputTest extends TestCase
         $this->actingAs($this->creator)->postJson("/api/projects/{$project->id}/resubmit", $this->body(['localizationId' => $this->localization->id]))
             ->assertOk()->assertJsonPath('data.localizationId', $this->localization->id)->assertJsonPath('data.location', 'Tienda Sur — Valencia');
 
-        $project->update(['status' => 'RECHAZADO_AUDITORIA']);
+        Project::whereKey($project->id)->update(['status' => 'RECHAZADO_AUDITORIA']);
         $this->actingAs($this->creator)->postJson("/api/projects/{$project->id}/resubmit", $this->body(['location' => 'Sitio propio']))
             ->assertOk()->assertJsonPath('data.localizationId', null)->assertJsonPath('data.location', 'Sitio propio');
     }

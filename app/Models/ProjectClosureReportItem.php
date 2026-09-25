@@ -8,12 +8,13 @@ class ProjectClosureReportItem extends Model
 {
     protected $fillable = [
         'report_id', 'project_material_id', 'name', 'unit',
-        'contracted_quantity', 'executed_quantity', 'resident_quantity',
+        'contracted_quantity', 'original_quantity', 'executed_quantity', 'resident_quantity',
         'unit_price_usd', 'note', 'resident_note',
     ];
 
     protected $casts = [
         'contracted_quantity' => 'float',
+        'original_quantity' => 'float',
         'executed_quantity' => 'float',
         'resident_quantity' => 'float',
         'unit_price_usd' => 'float',

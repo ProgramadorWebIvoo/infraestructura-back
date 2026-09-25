@@ -39,6 +39,7 @@ class ClosureReportLinkService
                         'name' => $material->name,
                         'unit' => $material->unit,
                         'contracted_quantity' => $material->quantity,
+                        'original_quantity' => $material->quantity,
                         'executed_quantity' => $material->quantity,
                         'unit_price_usd' => $unitPrices->get($material->name, 0),
                     ]);

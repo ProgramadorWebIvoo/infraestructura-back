@@ -22,7 +22,7 @@ class ProjectModificationService
     private const OPEN_STATUS = 'EN_EJECUCION';
     private const OVER_EXECUTION_ACTION = 'Sobre-ejecucion de presupuesto';
 
-    public function __construct(private ModificationAccess $access)
+    public function __construct(private ModificationAccess $access, private ClosureMeasurementService $closure)
     {
     }
 
@@ -94,6 +94,9 @@ class ProjectModificationService
                 'rejection_reason' => null,
             ]);
             $this->applyBudgetImpact($project, $request);
+            if ($project->closureReport) {
+                $this->closure->syncContracted($project->closureReport->load('items'), $this->effectiveQuantities($project->load('materials')));
+            }
         });
 
         AuditLog::record($project, $user->role, 'Aprobacion de modificacion de obra', $this->summary($request), $notes);

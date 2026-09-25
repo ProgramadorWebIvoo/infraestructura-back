@@ -40,6 +40,27 @@ class ClosureMeasurementService
         $this->failIfAny($errors);
     }
 
+    /**
+     * Alinea lo contratado del informe con la cantidad vigente (contratado + modificaciones
+     * aprobadas). Lo que el contratista aún no editó (ejecutado = contratado anterior) sigue
+     * a la nueva cantidad; lo ya declarado se conserva y se valida al enviar.
+     *
+     * @param array<string, array{final: float}> $effective indexado por project_material_id
+     */
+    public function syncContracted(ProjectClosureReport $report, array $effective): void
+    {
+        foreach ($report->items as $item) {
+            $final = $effective[$item->project_material_id]['final'] ?? null;
+            if ($final === null) {
+                continue;
+            }
+            $item->update([
+                'contracted_quantity' => $final,
+                'executed_quantity' => $item->executed_quantity === $item->contracted_quantity ? $final : $item->executed_quantity,
+            ]);
+        }
+    }
+
     /** Un rechazo obliga a medir de nuevo: se descarta la medición del residente. */
     public function reset(ProjectClosureReport $report): void
     {

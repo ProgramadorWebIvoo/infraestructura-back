@@ -106,6 +106,47 @@ class ProjectClosureFlowTest extends TestCase
         Notification::assertSentOnDemand(\App\Notifications\SupplierClosureReportLink::class);
     }
 
+    public function test_pending_modification_blocks_contractor_submission(): void
+    {
+        $this->actingAs($this->infra)->postJson("/api/projects/{$this->project->id}/modifications", [
+            'reason' => 'Más tomacorrientes',
+            'items' => [['materialId' => $this->project->materials->firstWhere('name', 'Tomacorriente')->id, 'type' => 'AUMENTO', 'quantity' => 8]],
+        ])->assertCreated();
+
+        $this->post("/api/public/closures/{$this->report->id}/photos", ['image' => $this->photo()])->assertStatus(201);
+        $this->postJson("/api/public/closures/{$this->report->id}/submit", ['items' => $this->fullItems()])
+            ->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Hay modificaciones de obra pendientes de aprobación; deben resolverse antes de enviar el informe de cierre.']);
+    }
+
+    public function test_approved_modification_preloads_closure_format_and_drives_final_quantities(): void
+    {
+        $outlets = $this->project->materials->firstWhere('name', 'Tomacorriente');
+        $cable = $this->project->materials->firstWhere('name', 'Cable');
+        $id = $this->actingAs($this->infra)->postJson("/api/projects/{$this->project->id}/modifications", [
+            'reason' => 'Cambio de arquitectura',
+            'items' => [
+                ['materialId' => $outlets->id, 'type' => 'AUMENTO', 'quantity' => 8],
+                ['materialId' => $cable->id, 'type' => 'DISMINUCION', 'quantity' => 40],
+            ],
+        ])->assertCreated()->json('data.id');
+        $this->actingAs($this->auditoria)->postJson("/api/projects/{$this->project->id}/modifications/{$id}/approval")->assertOk();
+
+        $items = $this->report->fresh()->items;
+        $outletItem = $items->firstWhere('name', 'Tomacorriente');
+        $this->assertEquals(20, $outletItem->contracted_quantity);
+        $this->assertEquals(12, $outletItem->original_quantity);
+        $this->assertEquals(20, $outletItem->executed_quantity);
+        $this->assertEquals(60, $items->firstWhere('name', 'Cable')->contracted_quantity);
+
+        $this->getJson("/api/public/closures/{$this->report->id}")
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'Tomacorriente', 'contractedQuantity' => 20, 'originalQuantity' => 12, 'modificationQuantity' => 8]);
+
+        $this->post("/api/public/closures/{$this->report->id}/photos", ['image' => $this->photo()])->assertStatus(201);
+        $this->postJson("/api/public/closures/{$this->report->id}/submit", ['items' => $this->fullItems()])->assertOk();
+    }
+
     public function test_public_link_shows_report_without_internal_data(): void
     {
         $response = $this->getJson("/api/public/closures/{$this->report->id}")->assertOk();

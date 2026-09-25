@@ -31,6 +31,8 @@ class ClosureReportResource extends JsonResource
                 'name' => $i->name,
                 'unit' => $i->unit,
                 'contractedQuantity' => $i->contracted_quantity,
+                'originalQuantity' => $i->original_quantity ?? $i->contracted_quantity,
+                'modificationQuantity' => round($i->contracted_quantity - ($i->original_quantity ?? $i->contracted_quantity), 2),
                 'executedQuantity' => $i->executed_quantity,
                 'unitPriceUsd' => $public ? null : $i->unit_price_usd,
                 'note' => $i->note,

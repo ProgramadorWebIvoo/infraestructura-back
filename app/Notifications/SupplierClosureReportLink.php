@@ -2,19 +2,17 @@
 
 namespace App\Notifications;
 
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
  * Enlace público para que el contratista envíe su informe de cierre; se
- * reenvía con el motivo cuando el residente o Auditoría lo rechazan.
+ * reenvía con el motivo cuando el residente o Auditoría lo rechazan. Se envía
+ * en línea (sin cola) para que un fallo de SMTP se detecte en la misma petición
+ * y `mailSent` refleje la realidad aunque no haya worker corriendo.
  */
-class SupplierClosureReportLink extends Notification implements ShouldQueue
+class SupplierClosureReportLink extends Notification
 {
-    use Queueable;
-
     public function __construct(
         protected string $projectTitle,
         protected string $token,

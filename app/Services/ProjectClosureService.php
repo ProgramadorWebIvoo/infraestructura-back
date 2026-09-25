@@ -166,7 +166,11 @@ class ProjectClosureService
         AuditLog::record(
             $project,
             $byResident ? 'RESIDENTE' : 'AUDITORIA',
-            $byResident ? 'Rechazo de informe de cierre por residente' : 'Rechazo de informe de cierre por Auditoria',
+            match (true) {
+                $byResident => 'Rechazo de informe de cierre por residente',
+                $toResident => 'Devolucion de informe de cierre al residente',
+                default => 'Rechazo de informe de cierre por Auditoria',
+            },
             $toResident ? 'El residente debe repetir la medición y dar de nuevo su visto bueno.' : 'El contratista debe corregir y reenviar el informe.',
             $reason
         );

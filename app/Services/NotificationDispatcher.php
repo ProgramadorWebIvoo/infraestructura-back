@@ -62,7 +62,7 @@ class NotificationDispatcher
         // mismo) — se excluye de ambos canales, no solo de "app".
         $actorId = auth()->id();
 
-        $appRecipients = NotificationRuleResolver::recipientsFor($action, 'app')
+        $appRecipients = NotificationRuleResolver::recipientsFor($action, 'app', $project)
             ->reject(fn (User $user) => $user->id === $actorId);
         $type = NotificationCatalog::exists($action) ? NotificationCatalog::type($action) : NotificationType::INFORMACION;
 
@@ -109,7 +109,7 @@ class NotificationDispatcher
             return;
         }
 
-        $mailRecipients = NotificationRuleResolver::recipientsFor($action, 'mail')
+        $mailRecipients = NotificationRuleResolver::recipientsFor($action, 'mail', $project)
             ->reject(fn (User $user) => $user->id === $actorId);
 
         foreach ($mailRecipients as $user) {

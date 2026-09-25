@@ -7,7 +7,6 @@ use App\Models\ConfigAuditLog;
 use App\Models\NotificationRule;
 use App\Services\NotificationRuleResolver;
 use App\Support\NotificationCatalog;
-use App\Support\Roles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +27,7 @@ class NotificationRuleController extends Controller
     {
         return response()->json(['data' => [
             'actions' => NotificationCatalog::toDetailedOptions(),
-            'roles' => Roles::valid(),
+            'roles' => NotificationRuleResolver::assignableRoles(),
             'rules' => NotificationRuleResolver::matrix(),
             'unconfigured' => NotificationRuleResolver::unconfiguredActions(),
         ]]);
@@ -39,9 +38,9 @@ class NotificationRuleController extends Controller
         $data = $request->validate([
             'action' => ['required', 'string'],
             'app' => ['array'],
-            'app.*' => [Rule::in(Roles::valid())],
+            'app.*' => [Rule::in(NotificationRuleResolver::assignableRoles())],
             'mail' => ['array'],
-            'mail.*' => [Rule::in(Roles::valid())],
+            'mail.*' => [Rule::in(NotificationRuleResolver::assignableRoles())],
         ]);
 
         $action = $data['action'];

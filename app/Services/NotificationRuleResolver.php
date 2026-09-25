@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\NotificationRule;
+use App\Models\Project;
 use App\Models\User;
 use App\Support\NotificationCatalog;
+use App\Support\Roles;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +20,11 @@ use Illuminate\Support\Facades\Log;
  */
 class NotificationRuleResolver
 {
+    /** Pseudo-roles dirigidos (F2-R R5): se resuelven contra la obra, no contra `users.role`. */
+    public const SOLICITANTE = 'SOLICITANTE';
+    public const RESIDENTE_ASIGNADO = 'RESIDENTE_ASIGNADO';
+    public const DIRECTED_ROLES = [self::SOLICITANTE, self::RESIDENTE_ASIGNADO];
+
     private const CACHE_KEY = 'notification_rules.all';
     private const CACHE_TTL_SECONDS = 300;
 
@@ -59,7 +66,17 @@ class NotificationRuleResolver
         return $rules[$action][$channel] ?? [];
     }
 
-    public static function recipientsFor(string $action, string $channel): Collection
+    /** Roles reales activos más los pseudo-roles dirigidos que admite la matriz. */
+    public static function assignableRoles(): array
+    {
+        return [...Roles::valid(), ...self::DIRECTED_ROLES];
+    }
+
+    /**
+     * Sin proyecto, los pseudo-roles dirigidos no resuelven a nadie; un
+     * SOLICITANTE sin creador (obras previas a F2-R) simplemente se omite.
+     */
+    public static function recipientsFor(string $action, string $channel, ?Project $project = null): Collection
     {
         $roles = self::rolesFor($action, $channel);
 
@@ -67,7 +84,21 @@ class NotificationRuleResolver
             return collect();
         }
 
-        return User::whereIn('role', $roles)->where('status', 'Active')->get();
+        $recipients = User::whereIn('role', array_diff($roles, self::DIRECTED_ROLES))->where('status', 'Active')->get();
+
+        $directedIds = [];
+        if ($project !== null) {
+            if (in_array(self::SOLICITANTE, $roles, true)) {
+                $directedIds[] = $project->requested_by_user_id;
+            }
+            if (in_array(self::RESIDENTE_ASIGNADO, $roles, true)) {
+                $directedIds[] = $project->effectiveResidentId();
+            }
+        }
+
+        $directed = User::whereIn('id', array_filter($directedIds))->where('status', 'Active')->get();
+
+        return $recipients->concat($directed)->unique('id')->values();
     }
 
     /** Acciones del catálogo sin ninguna fila configurada — para el banner de la UI. */

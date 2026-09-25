@@ -362,19 +362,50 @@ class NotificationDispatcherTest extends TestCase
         Notification::assertNotSentTo($procura, ProjectActionNotification::class);
     }
 
-    public function test_project_rejection_notifies_infraestructura_via_app_and_mail(): void
+    public function test_project_rejection_notifies_only_the_requester_via_app_and_mail(): void
     {
         Notification::fake();
 
         $infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $otroInfra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
         $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
-        $project = Project::factory()->create(['status' => 'CREADO']);
+        $project = Project::factory()->create(['status' => 'CREADO', 'requested_by_user_id' => $infra->id]);
 
         AuditLog::record($project, 'AUDITORIA', 'Rechazo de petición de obra', 'Descripción insuficiente.');
 
         Notification::assertSentTo($infra, ProjectActionNotification::class);
         Notification::assertSentTo($infra, ProjectActionMail::class);
         Notification::assertNotSentTo($auditoria, ProjectActionNotification::class);
+        Notification::assertNotSentTo($otroInfra, ProjectActionNotification::class);
+    }
+
+    public function test_closure_submission_notifies_only_assigned_resident_and_requester(): void
+    {
+        Notification::fake();
+
+        $resident = User::factory()->create(['role' => 'RESIDENTE']);
+        $otherResident = User::factory()->create(['role' => 'RESIDENTE']);
+        $requester = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $otherInfra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $project = Project::factory()->create(['status' => 'INFORME_ENVIADO', 'resident_user_id' => $resident->id, 'requested_by_user_id' => $requester->id]);
+
+        AuditLog::record($project, 'PROVEEDOR', 'Envio de informe de cierre del contratista', 'detalle');
+
+        Notification::assertSentTo($resident, ProjectActionNotification::class);
+        Notification::assertSentTo($resident, ProjectActionMail::class);
+        Notification::assertSentTo($requester, ProjectActionNotification::class);
+        Notification::assertNotSentTo($requester, ProjectActionMail::class);
+        Notification::assertNotSentTo($otherResident, ProjectActionNotification::class);
+        Notification::assertNotSentTo($otherInfra, ProjectActionNotification::class);
+    }
+
+    public function test_directed_roles_without_requester_are_skipped_and_matrix_accepts_them(): void
+    {
+        $project = Project::factory()->create(['requested_by_user_id' => null, 'resident_user_id' => null]);
+
+        $this->assertCount(0, NotificationRuleResolver::recipientsFor('Envio de informe de cierre del contratista', 'mail', $project));
+        $this->assertContains('SOLICITANTE', NotificationRuleResolver::assignableRoles());
+        $this->assertContains('RESIDENTE_ASIGNADO', NotificationRuleResolver::assignableRoles());
     }
 
     public function test_project_resubmission_notifies_auditoria_via_app(): void

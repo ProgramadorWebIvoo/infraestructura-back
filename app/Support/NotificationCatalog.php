@@ -45,6 +45,7 @@ class NotificationCatalog
         'Rechazo de petición de obra' => NotificationType::ACCION_REQUERIDA,
         'Rechazo de informe de cierre por residente' => NotificationType::ACCION_REQUERIDA,
         'Rechazo de informe de cierre por Auditoria' => NotificationType::ACCION_REQUERIDA,
+        'Devolucion de informe de cierre al residente' => NotificationType::ACCION_REQUERIDA,
         'Devolucion de finiquito a Auditoria' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de pago de finiquito' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de reevaluación a Auditoría' => NotificationType::ACCION_REQUERIDA,

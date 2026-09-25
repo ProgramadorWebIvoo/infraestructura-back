@@ -20,6 +20,7 @@ use Illuminate\Validation\ValidationException;
 class ProjectModificationService
 {
     private const OPEN_STATUS = 'EN_EJECUCION';
+    private const OVER_EXECUTION_ACTION = 'Sobre-ejecucion de presupuesto';
 
     public function __construct(private ModificationAccess $access)
     {
@@ -92,9 +93,11 @@ class ProjectModificationService
                 'review_notes' => $notes,
                 'rejection_reason' => null,
             ]);
+            $this->applyBudgetImpact($project, $request);
         });
 
         AuditLog::record($project, $user->role, 'Aprobacion de modificacion de obra', $this->summary($request), $notes);
+        $this->alertIfOverBudget($project->refresh());
 
         return $request->load('items.material');
     }
@@ -141,6 +144,37 @@ class ProjectModificationService
     public function hasPending(Project $project): bool
     {
         return $project->modificationRequests()->where('status', ProjectModificationRequest::STATUS_PENDING)->exists();
+    }
+
+    /**
+     * El monto adjudicado (total de la propuesta ganadora) sube con los aumentos y
+     * baja con las disminuciones. El tope aprobado por Presidencia NO cambia: si
+     * lo adjudicado lo supera, el semáforo de sobre-ejecución lo marca.
+     */
+    private function applyBudgetImpact(Project $project, ProjectModificationRequest $request): void
+    {
+        $proposal = $project->proposals()->whereKey($project->selected_proposal_id)->lockForUpdate()->first();
+        if ($proposal === null) {
+            return;
+        }
+
+        $proposal->update(['total_cost' => max(0, round((float) $proposal->total_cost + $request->netAmountUsd(), 2))]);
+    }
+
+    private function alertIfOverBudget(Project $project): void
+    {
+        $approved = $project->approved_investment_amount;
+        $awarded = (float) $project->proposals()->whereKey($project->selected_proposal_id)->value('total_cost');
+        if ($approved === null || $awarded <= (float) $approved) {
+            return;
+        }
+
+        NotificationDispatcher::notify(
+            $project,
+            'SISTEMA',
+            self::OVER_EXECUTION_ACTION,
+            sprintf('Con las modificaciones aprobadas lo adjudicado ($%s) supera lo aprobado ($%s) por $%s.', number_format($awarded, 2), number_format((float) $approved, 2), number_format($awarded - (float) $approved, 2)),
+        );
     }
 
     private function assertProjectOpen(Project $project): void

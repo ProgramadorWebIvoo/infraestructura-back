@@ -236,6 +236,48 @@ class ProjectModificationTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'FINANZAS']))->getJson('/api/modification-requests')->assertForbidden();
     }
 
+    public function test_approval_adjusts_awarded_total_but_not_the_approved_ceiling(): void
+    {
+        $this->project->update(['approved_investment_amount' => 20000]);
+
+        $this->approve($this->create(null, [
+            ['materialId' => $this->outlets->id, 'type' => 'AUMENTO', 'quantity' => 8],
+            ['materialId' => $this->points->id, 'type' => 'DISMINUCION', 'quantity' => 4],
+        ]));
+
+        $proposal = ProjectProposal::find($this->project->fresh()->selected_proposal_id);
+        $this->assertEquals(10000 + 400 - 120, $proposal->total_cost);
+        $this->assertEquals(20000, $this->project->fresh()->approved_investment_amount);
+    }
+
+    public function test_pending_or_rejected_requests_do_not_touch_the_budget(): void
+    {
+        $request = $this->create();
+        $this->actingAs($this->auditoria)->postJson("/api/projects/{$this->project->id}/modifications/{$request->id}/rejection", ['reason' => 'No'])->assertOk();
+
+        $this->assertEquals(10000, ProjectProposal::find($this->project->fresh()->selected_proposal_id)->total_cost);
+    }
+
+    public function test_alerts_presidencia_when_awarded_exceeds_the_ceiling(): void
+    {
+        $presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
+        $this->project->update(['approved_investment_amount' => 10200]);
+
+        $this->approve($this->create());
+
+        $this->assertDatabaseHas('app_notifications', ['user_id' => $presidencia->id]);
+    }
+
+    public function test_no_alert_when_awarded_stays_within_the_ceiling(): void
+    {
+        $presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
+        $this->project->update(['approved_investment_amount' => 20000]);
+
+        $this->approve($this->create());
+
+        $this->assertDatabaseMissing('app_notifications', ['user_id' => $presidencia->id]);
+    }
+
     public function test_actions_notify_configured_roles(): void
     {
         $this->assertDatabaseHas('notification_rules', ['action' => 'Solicitud de modificacion de obra', 'role' => 'AUDITORIA', 'channel' => 'app']);

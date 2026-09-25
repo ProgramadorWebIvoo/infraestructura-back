@@ -13,8 +13,8 @@ use Illuminate\Http\Request;
  * - INFRAESTRUCTURA solo accede a los proyectos que creó (404, no 403, para no
  *   revelar que existen). Cubre rutas con {project}, `project_id` en la
  *   petición y las imágenes internas de propuestas (token de invitación).
- * - RESIDENTE: lista blanca deny-by-default. Solo sesión, acceso, notificaciones
- *   y push tokens; sus endpoints propios (`/resident/*`) llegan en R3.
+ * - RESIDENTE: lista blanca deny-by-default. Solo sesión, acceso, notificaciones,
+ *   push tokens y lectura de configuración del shell; sus endpoints propios (`/resident/*`) llegan en R3.
  * - Cualquier otro rol pasa sin cambios.
  */
 class EnsureProjectVisible
@@ -30,11 +30,14 @@ class EnsureProjectVisible
         'api/resident/*',
     ];
 
+    /** Lecturas de configuración que el shell de la app pide a cualquier rol. */
+    private const RESIDENT_READ_ONLY = ['api/settings', 'api/ai/feature-toggles'];
+
     public function handle(Request $request, Closure $next): mixed
     {
         $user = $request->user();
 
-        if ($user?->role === 'RESIDENTE' && ! $request->is(...self::RESIDENT_ALLOWED)) {
+        if ($user?->role === 'RESIDENTE' && ! $this->residentMayAccess($request)) {
             return response()->json(['message' => 'Acceso no autorizado.'], 403);
         }
 
@@ -43,6 +46,12 @@ class EnsureProjectVisible
         }
 
         return $next($request);
+    }
+
+    private function residentMayAccess(Request $request): bool
+    {
+        return $request->is(...self::RESIDENT_ALLOWED)
+            || ($request->isMethod('GET') && $request->is(...self::RESIDENT_READ_ONLY));
     }
 
     private function ownsRequestedProjects(Request $request, $user): bool

@@ -133,6 +133,9 @@ class ProjectOwnershipTest extends TestCase
         $this->actingAs($resident)->getJson('/api/user')->assertOk();
         $this->actingAs($resident)->getJson('/api/auth/permissions')->assertOk();
         $this->actingAs($resident)->getJson('/api/notifications')->assertOk();
+        $this->actingAs($resident)->getJson('/api/settings')->assertOk();
+        $this->actingAs($resident)->getJson('/api/ai/feature-toggles')->assertOk();
+        $this->actingAs($resident)->putJson('/api/ai/feature-toggles')->assertForbidden();
         $this->actingAs($resident)->getJson('/api/projects')->assertForbidden();
         $this->actingAs($resident)->getJson("/api/projects/{$this->mine->id}")->assertForbidden();
         $this->actingAs($resident)->getJson("/api/projects/{$this->mine->id}/closure-report")->assertForbidden();

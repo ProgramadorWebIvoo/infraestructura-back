@@ -7,6 +7,7 @@ use App\Http\Resources\UserResource;
 use App\Models\ConfigAuditLog;
 use App\Models\User;
 use App\Rules\StrongPassword;
+use App\Services\ResidentAssignmentService;
 use App\Support\Roles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -16,6 +17,17 @@ use Illuminate\Validation\Rule;
 class UserController extends Controller
 {
     private const VALID_STATUSES = ['Active', 'Inactive'];
+
+    public function __construct(private readonly ResidentAssignmentService $residents) {}
+
+    /**
+     * ADMIN solo gestiona usuarios RESIDENTE (F2-R R7a); SUPERADMIN todos.
+     * 404 para no revelar la existencia de otros usuarios.
+     */
+    private function authorizeTarget(User $target): void
+    {
+        abort_if(auth()->user()->role === 'ADMIN' && $target->role !== 'RESIDENTE', 404);
+    }
 
     public function roles(Request $request)
     {
@@ -27,6 +39,7 @@ class UserController extends Controller
         $perPage = min((int) ($request->get('per_page', 20)), 100);
 
         $users = User::select('id', 'name', 'email', 'role', 'status', 'created_at')
+            ->when($request->user()->role === 'ADMIN', fn ($q) => $q->where('role', 'RESIDENTE'))
             ->orderByDesc('created_at')
             ->paginate($perPage);
 
@@ -39,7 +52,7 @@ class UserController extends Controller
             'name'                  => ['required', 'string', 'max:255'],
             'email'                 => ['required', 'email', 'unique:users,email'],
             'password'              => ['required', 'string', 'confirmed', StrongPassword::rule()],
-            'role'                  => ['required', Rule::in(Roles::valid())],
+            'role'                  => ['required', Rule::in($request->user()->role === 'ADMIN' ? ['RESIDENTE'] : Roles::valid())],
             'status'                => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);
 
@@ -61,14 +74,22 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
+        $this->authorizeTarget($user);
+
         $data = $request->validate([
             'name'   => ['sometimes', 'string', 'max:255'],
             'email'  => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'role'   => ['sometimes', Rule::in(Roles::valid())],
+            'role'   => ['sometimes', Rule::in($request->user()->role === 'ADMIN' ? ['RESIDENTE'] : Roles::valid())],
             'status' => ['sometimes', Rule::in(self::VALID_STATUSES)],
         ]);
 
         $previousRole = $user->role;
+
+        // S7: un residente con ubicaciones u obras pendientes no puede irse (desactivarse o cambiar de rol).
+        if ((isset($data['role']) && $data['role'] !== $previousRole)
+            || (isset($data['status']) && $data['status'] === 'Inactive' && $user->isActive())) {
+            $this->residents->assertCanLeaveRole($user);
+        }
 
         if (isset($data['name']))   $user->name  = $data['name'];
         if (isset($data['email']))  $user->email = $data['email'];
@@ -100,6 +121,12 @@ class UserController extends Controller
 
     public function toggleStatus(User $user)
     {
+        $this->authorizeTarget($user);
+
+        if ($user->isActive()) {
+            $this->residents->assertCanLeaveRole($user);
+        }
+
         $user->status = $user->isActive() ? 'Inactive' : 'Active';
         $user->save();
 
@@ -120,6 +147,8 @@ class UserController extends Controller
 
     public function sendResetLink(Request $request, User $user)
     {
+        $this->authorizeTarget($user);
+
         $status = Password::sendResetLink(['email' => $user->email]);
 
         if ($status === Password::RESET_LINK_SENT) {
@@ -127,5 +156,22 @@ class UserController extends Controller
         }
 
         return response()->json(['message' => 'No se pudo enviar el link. Intente de nuevo.'], 500);
+    }
+
+    /** GET /residents — residentes activos asignables (F2-R R7a). */
+    public function residents()
+    {
+        return User::where('role', 'RESIDENTE')->where('status', 'Active')->orderBy('name')->get(['id', 'name']);
+    }
+
+    /** POST /residents/{user}/transfer — Traspaso D17: mueve ubicaciones y obras personalizadas abiertas a otro residente. */
+    public function transferResident(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'toUserId' => ['required', 'integer', 'exists:users,id'],
+            'reason'   => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+
+        return response()->json($this->residents->transfer($user, User::findOrFail($data['toUserId']), $data['reason']));
     }
 }

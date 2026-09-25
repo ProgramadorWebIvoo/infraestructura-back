@@ -105,11 +105,6 @@ class ClosureReportController extends Controller
         return $this->projectResponse($project);
     }
 
-    public function residents()
-    {
-        return User::where('role', 'INFRAESTRUCTURA')->where('status', 'Active')->orderBy('name')->get(['id', 'name']);
-    }
-
     private function projectResponse(Project $project): ProjectResource
     {
         return new ProjectResource($project->refresh()->load(Project::detailRelations()));

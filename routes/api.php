@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AIEvaluationController;
 use App\Http\Controllers\Api\AiConfigController;
 use App\Http\Controllers\Api\MaterialController;
+use App\Http\Controllers\Api\LocalizationController;
 use App\Http\Controllers\Api\ProjectTypeController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\NotificationActionController;
@@ -321,8 +322,10 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
     Route::post('/projects/{project}/rate-freezes', [ProjectRateFreezeController::class, 'store'])
         ->middleware('role:SUPERADMIN');
     // Cierre posterior a la ejecución (finiquito): residente → Auditoría → Procura → Finanzas
-    Route::get('/residents', [ClosureReportController::class, 'residents'])
-        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+    Route::get('/residents', [UserController::class, 'residents'])
+        ->middleware('role:INFRAESTRUCTURA,AUDITORIA,ADMIN,SUPERADMIN');
+    Route::get('/localizations/active', [LocalizationController::class, 'activeList'])
+        ->middleware('role:INFRAESTRUCTURA,AUDITORIA,ADMIN,SUPERADMIN');
     Route::patch('/projects/{project}/resident', [ClosureReportController::class, 'assignResident'])
         ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
     Route::get('/projects/{project}/closure-report', [ClosureReportController::class, 'show']);
@@ -387,13 +390,26 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
     // Gestión de usuarios, roles y permisos de acceso — exclusivo SUPERADMIN:
     // un ADMIN no debe poder asignarse (ni asignarle a otro) el rol SUPERADMIN
     // ni controlar qué vistas puede ver cada usuario (role_view_access).
-    Route::middleware('role:SUPERADMIN')->group(function () {
-        Route::get('/roles', [UserController::class, 'roles']);
+    // Excepción (F2-R R7a): ADMIN gestiona solo usuarios RESIDENTE (lo aplica
+    // UserController::authorizeTarget) y traspasa sus pendientes (D17).
+    Route::middleware('role:SUPERADMIN,ADMIN')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
         Route::patch('/users/{user}', [UserController::class, 'update']);
         Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus']);
         Route::post('/users/{user}/send-reset-link', [UserController::class, 'sendResetLink']);
+        Route::post('/residents/{user}/transfer', [UserController::class, 'transferResident']);
+
+        // Ubicaciones registradas (D13): administración en Configuración.
+        Route::get('/localizations', [LocalizationController::class, 'index']);
+        Route::post('/localizations', [LocalizationController::class, 'store']);
+        Route::patch('/localizations/{localization}', [LocalizationController::class, 'update']);
+        Route::post('/localizations/{localization}/toggle-status', [LocalizationController::class, 'toggleStatus']);
+        Route::delete('/localizations/{localization}', [LocalizationController::class, 'destroy']);
+    });
+
+    Route::middleware('role:SUPERADMIN')->group(function () {
+        Route::get('/roles', [UserController::class, 'roles']);
         Route::get('/users/{user}/access', [AccessAdminController::class, 'show']);
         Route::put('/users/{user}/access', [AccessAdminController::class, 'update']);
 

@@ -327,7 +327,7 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
     Route::get('/localizations/active', [LocalizationController::class, 'activeList'])
         ->middleware('role:INFRAESTRUCTURA,AUDITORIA,ADMIN,SUPERADMIN');
     Route::patch('/projects/{project}/resident', [ClosureReportController::class, 'assignResident'])
-        ->middleware('role:INFRAESTRUCTURA,ADMIN,SUPERADMIN');
+        ->middleware('role:AUDITORIA,ADMIN,SUPERADMIN');
     Route::get('/projects/{project}/closure-report', [ClosureReportController::class, 'show']);
     Route::get('/projects/{project}/closure-report/photos/{photo}', [ClosureReportController::class, 'photo'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

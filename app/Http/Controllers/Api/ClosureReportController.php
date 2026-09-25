@@ -19,6 +19,7 @@ use App\Services\ClosurePhotoService;
 use App\Services\ClosureReportLinkService;
 use App\Services\ProjectClosureService;
 use App\Services\ProjectStateMachine;
+use App\Services\ResidentAssignmentService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** Acciones internas del cierre: residente, Auditoría y Procura (el contratista usa PublicClosureReportController). */
@@ -95,12 +96,9 @@ class ClosureReportController extends Controller
         return response()->json(['mailSent' => $links->resend($project)]);
     }
 
-    public function assignResident(AssignResidentRequest $request, Project $project)
+    public function assignResident(AssignResidentRequest $request, Project $project, ResidentAssignmentService $residents)
     {
-        $residentId = $request->validated('residentUserId');
-        $project->update(['resident_user_id' => $residentId]);
-        $name = $residentId ? User::whereKey($residentId)->value('name') : 'sin asignar';
-        AuditLog::record($project, auth()->user()->role, 'Asignacion de residente', "Residente: {$name}.");
+        $residents->changeProjectResident($project, User::findOrFail($request->validated('residentUserId')), $request->validated('reason'));
 
         return $this->projectResponse($project);
     }

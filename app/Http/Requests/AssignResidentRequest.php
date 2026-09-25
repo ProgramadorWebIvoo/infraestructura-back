@@ -15,7 +15,8 @@ class AssignResidentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'residentUserId' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', 'INFRAESTRUCTURA')],
+            'residentUserId' => ['required', 'integer', Rule::exists('users', 'id')->where('role', 'RESIDENTE')->where('status', 'Active')],
+            'reason' => ['required', 'string', 'min:3', 'max:1000'],
         ];
     }
 }

@@ -113,6 +113,62 @@ class ResidentAssignmentService
         });
     }
 
+    /**
+     * Auditoría fija el residente de una obra de ubicación personalizada al
+     * revisarla (D14). En obra registrada no aplica: lo hereda de la ubicación.
+     */
+    public function assignOnReview(Project $project, ?int $residentUserId): void
+    {
+        if ($project->localization_id !== null) {
+            if ($residentUserId !== null) {
+                throw ValidationException::withMessages(['residentUserId' => ['Esta obra usa una ubicación registrada: su residente es el de la ubicación.']])->status(422);
+            }
+
+            return;
+        }
+
+        if ($residentUserId === null) {
+            throw ValidationException::withMessages(['residentUserId' => ['Elija el residente de esta obra (ubicación personalizada).']])->status(422);
+        }
+
+        $resident = User::findOrFail($residentUserId);
+        $this->assertValidResident($resident);
+        $project->update(['resident_user_id' => $resident->id]);
+        AuditLog::record($project, auth()->user()->role, 'Asignacion de residente', "Residente: {$resident->name}.");
+    }
+
+    /**
+     * Cambio posterior del residente de una obra personalizada (D14, S3): solo
+     * Auditoría/ADMIN, con motivo, hasta INFORME_ENVIADO.
+     */
+    public function changeProjectResident(Project $project, User $to, string $reason): void
+    {
+        if ($project->localization_id !== null) {
+            throw ValidationException::withMessages(['residentUserId' => ['El residente de una ubicación registrada se cambia desde la ubicación.']])->status(422);
+        }
+
+        $order = ProjectStateMachine::STATUS_ORDER[$project->status] ?? null;
+        if ($order === null || $order > ProjectStateMachine::STATUS_ORDER['INFORME_ENVIADO']) {
+            throw ValidationException::withMessages(['residentUserId' => ['El residente solo puede cambiarse hasta que el informe de cierre esté enviado.']])->status(422);
+        }
+
+        $this->assertValidResident($to);
+        $from = $project->resident;
+        if ($from?->is($to)) {
+            throw ValidationException::withMessages(['residentUserId' => ['La obra ya tiene a ese residente.']])->status(422);
+        }
+
+        DB::transaction(function () use ($project, $from, $to, $reason) {
+            $project->update(['resident_user_id' => $to->id]);
+
+            if ($from === null) {
+                AuditLog::record($project, auth()->user()->role, 'Asignacion de residente', "Residente: {$to->name}.", $reason);
+            } else {
+                AuditLog::record($project, auth()->user()->role, 'Cambio de residente de obra', "de {$from->name} a {$to->name}.", $reason);
+            }
+        });
+    }
+
     /** Un residente asignable es un usuario activo con rol RESIDENTE. */
     public function assertValidResident(User $user): void
     {

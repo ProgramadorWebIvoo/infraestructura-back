@@ -19,6 +19,7 @@ class ProjectLifecycleTest extends TestCase
     use RefreshDatabase;
 
     private User $infra;
+    private User $resident;
     private User $auditoria;
     private User $procura;
     private User $analista;
@@ -30,6 +31,7 @@ class ProjectLifecycleTest extends TestCase
     {
         parent::setUp();
         $this->infra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
+        $this->resident = User::factory()->create(['role' => 'RESIDENTE']);
         $this->auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $this->procura = User::factory()->create(['role' => 'PROCURA']);
         $this->analista = User::factory()->create(['role' => 'ANALISTA']);
@@ -145,6 +147,7 @@ class ProjectLifecycleTest extends TestCase
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/review", [
                 'notes' => 'Planos aprobados con correcciones menores',
+                'residentUserId' => $this->resident->id,
             ]);
 
         $response->assertStatus(200);
@@ -164,7 +167,7 @@ class ProjectLifecycleTest extends TestCase
         $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CREADO']);
 
         $response = $this->actingAs($this->auditoria)
-            ->postJson("/api/projects/{$project->id}/review", []);
+            ->postJson("/api/projects/{$project->id}/review", ['residentUserId' => $this->resident->id]);
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.status', 'REVISADO_AUDITORIA');
@@ -838,6 +841,7 @@ class ProjectLifecycleTest extends TestCase
         $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$projectId}/review", [
                 'notes' => 'Revisión completa',
+                'residentUserId' => $this->resident->id,
             ])
             ->assertJsonPath('data.status', 'REVISADO_AUDITORIA');
 
@@ -1124,6 +1128,8 @@ class ProjectLifecycleTest extends TestCase
         $this->postJson("/api/public/closures/{$token}/submit", ['notes' => 'Trabajo terminado', 'items' => $items])->assertOk();
         $this->assertEquals('INFORME_ENVIADO', Project::find($projectId)->status);
 
+        // Transitorio hasta R3: las acciones del residente aún las opera INFRAESTRUCTURA (sin residente asignado).
+        Project::whereKey($projectId)->update(['resident_user_id' => null]);
         $this->actingAs($this->infra)
             ->post("/api/projects/{$projectId}/closure-report/photos", ['image' => \Illuminate\Http\UploadedFile::fake()->image('verif.jpg')])->assertStatus(201);
         $this->actingAs($this->infra)

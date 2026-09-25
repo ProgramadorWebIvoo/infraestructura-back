@@ -28,6 +28,7 @@ use App\Services\AiFeatureGate;
 use App\Services\DossierEvaluationService;
 use App\Services\ClosureReportLinkService;
 use App\Services\ProjectStateMachine;
+use App\Services\ResidentAssignmentService;
 use App\Support\ProjectLocation;
 use App\Services\ProposalRenegotiationService;
 use App\Services\RateFreezeService;
@@ -98,14 +99,18 @@ class ProjectController extends Controller
      * los mantiene sincronizados ProjectDocumentController::syncProjectCounts()
      * desde que Infraestructura cargó sus archivos.
      */
-    public function review(ReviewProjectRequest $request, Project $project)
+    public function review(ReviewProjectRequest $request, Project $project, ResidentAssignmentService $residents)
     {
         $data = $request->validated();
 
-        $project->update([
-            'status' => self::STATUSES['REVISADO_AUDITORIA'],
-            'audit_notes' => $data['notes'] ?? null,
-        ]);
+        DB::transaction(function () use ($project, $data, $residents) {
+            $residents->assignOnReview($project, $data['residentUserId'] ?? null);
+
+            $project->update([
+                'status' => self::STATUSES['REVISADO_AUDITORIA'],
+                'audit_notes' => $data['notes'] ?? null,
+            ]);
+        });
 
         AuditLog::record($project, 'AUDITORIA', 'Revision tecnica de calculos y planos', $data['notes'] ?? null);
 

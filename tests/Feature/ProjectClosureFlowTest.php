@@ -232,13 +232,6 @@ class ProjectClosureFlowTest extends TestCase
         $this->assertTrue((bool) $this->project->fresh()->quality_verified);
     }
 
-    public function test_assign_resident_only_accepts_infrastructure_users(): void
-    {
-        $this->actingAs($this->infra)->patchJson("/api/projects/{$this->project->id}/resident", ['residentUserId' => $this->auditoria->id])->assertStatus(422);
-        $this->actingAs($this->infra)->patchJson("/api/projects/{$this->project->id}/resident", ['residentUserId' => $this->infra->id])->assertOk();
-        $this->assertEquals($this->infra->id, $this->project->fresh()->resident_user_id);
-    }
-
     public function test_final_payment_requires_procura_request(): void
     {
         $finanzas = User::factory()->create(['role' => 'FINANZAS']);

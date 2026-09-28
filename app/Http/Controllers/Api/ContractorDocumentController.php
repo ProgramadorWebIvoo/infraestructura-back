@@ -28,8 +28,10 @@ class ContractorDocumentController extends Controller
         }
 
         return response()->json([
-            'data' => ContractorDocumentResource::collection($query->orderBy('document_type_id')->orderBy('version_number')->get()),
-            'completeness' => $this->documents->completeness($contractor),
+            'data' => [
+                'documents' => ContractorDocumentResource::collection($query->orderBy('document_type_id')->orderBy('version_number')->get())->resolve(),
+                'completeness' => $this->documents->completeness($contractor),
+            ],
         ]);
     }
 
@@ -46,7 +48,7 @@ class ContractorDocumentController extends Controller
         $action = $document->version_number > 1 ? 'Reemplazo de documento de proveedor' : 'Carga de documento de proveedor';
         AuditLog::record(null, auth()->user()->role, $action, "Proveedor: {$contractor->code} / {$document->type->label} / V{$document->version_number}: {$document->original_name}");
 
-        return response()->json(['data' => new ContractorDocumentResource($document)], 201);
+        return response()->json(['data' => (new ContractorDocumentResource($document))->resolve()], 201);
     }
 
     public function destroy(Contractor $contractor, ContractorDocument $document)

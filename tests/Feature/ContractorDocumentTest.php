@@ -53,8 +53,8 @@ class ContractorDocumentTest extends TestCase
 
         $this->getJson('/api/contractors/CON-1/documents', $this->headers('PROCURA'))
             ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.documentTypeKey', 'rif');
+            ->assertJsonCount(1, 'data.documents')
+            ->assertJsonPath('data.documents.0.documentTypeKey', 'rif');
 
         $this->assertCount(1, Storage::disk('local')->allFiles('contractor-documents/CON-1'));
     }
@@ -69,8 +69,8 @@ class ContractorDocumentTest extends TestCase
         $this->postJson('/api/contractors/CON-1/documents', ['document_type_id' => $type->id, 'file' => $this->pdf('v2.pdf')], $headers)
             ->assertCreated()->assertJsonPath('data.versionNumber', 2);
 
-        $this->getJson('/api/contractors/CON-1/documents', $headers)->assertJsonCount(1, 'data')->assertJsonPath('data.0.originalName', 'v2.pdf');
-        $this->getJson('/api/contractors/CON-1/documents?all_versions=1', $headers)->assertJsonCount(2, 'data');
+        $this->getJson('/api/contractors/CON-1/documents', $headers)->assertJsonCount(1, 'data.documents')->assertJsonPath('data.documents.0.originalName', 'v2.pdf');
+        $this->getJson('/api/contractors/CON-1/documents?all_versions=1', $headers)->assertJsonCount(2, 'data.documents');
     }
 
     public function test_disallowed_file_type_is_rejected(): void
@@ -142,8 +142,8 @@ class ContractorDocumentTest extends TestCase
 
         $response = $this->getJson('/api/contractors/CON-1/documents', $this->headers('ADMIN'))->assertOk();
 
-        $response->assertJsonCount(0, 'data')->assertJsonPath('completeness.complete', false);
-        $this->assertCount(5, $response->json('completeness.missing'));
+        $response->assertJsonCount(0, 'data.documents')->assertJsonPath('data.completeness.complete', false);
+        $this->assertCount(5, $response->json('data.completeness.missing'));
     }
 
     public function test_completeness_is_complete_when_all_required_types_are_present(): void

@@ -22,6 +22,8 @@ use Pusher\PusherException;
  */
 class SystemKeyConfigService
 {
+    public function __construct(private SmtpErrorDiagnostic $smtpDiagnostic) {}
+
     /** Campos por grupo — fuente única para validar, guardar y aplicar al runtime. */
     public const SCHEMAS = [
         'smtp' => ['host', 'port', 'encryption', 'username', 'password', 'from_address', 'from_name'],
@@ -154,15 +156,28 @@ class SystemKeyConfigService
     /** Envía un correo de prueba al email indicado usando la config recién guardada. */
     public function testSmtp(string $toEmail): array
     {
+        $this->applyRuntimeConfig();
+        $cfg = [
+            'host' => config('mail.mailers.smtp.host'),
+            'port' => config('mail.mailers.smtp.port'),
+            'encryption' => config('mail.mailers.smtp.encryption'),
+            'username' => config('mail.mailers.smtp.username'),
+            'password' => config('mail.mailers.smtp.password'),
+            'from' => config('mail.from.address'),
+        ];
+
+        if ($problem = $this->smtpDiagnostic->preflight($cfg)) {
+            return ['success' => false, 'message' => $problem];
+        }
+
         try {
-            $this->applyRuntimeConfig();
             Mail::raw('Este es un correo de prueba de configuración SMTP de IVOO Gestión.', function ($message) use ($toEmail) {
                 $message->to($toEmail)->subject('IVOO Gestión — Prueba de configuración SMTP');
             });
 
             return ['success' => true, 'message' => "Correo de prueba enviado a {$toEmail}."];
         } catch (\Throwable $e) {
-            return ['success' => false, 'message' => 'No se pudo enviar el correo de prueba: ' . $e->getMessage()];
+            return ['success' => false, 'message' => $this->smtpDiagnostic->diagnose($e, $cfg)];
         }
     }
 

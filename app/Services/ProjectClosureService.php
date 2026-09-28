@@ -12,11 +12,12 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Cierre posterior a la ejecución (finiquito):
- * EN_EJECUCION → contratista envía informe (INFORME_ENVIADO) → residente lo
- * corrobora (VERIFICANDO_FINALIZACION = pendiente de Auditoría) → Auditoría
- * verifica (PENDIENTE_SOLICITUD_FINIQUITO) → Procura solicita el pago
- * (LISTO_PAGO_FINAL) → Finanzas paga. Cualquier rechazo vuelve a
- * EN_EJECUCION con motivo; ningún paso se salta.
+ * Contratista y residente cargan cada uno su propio informe, en cualquier orden
+ * e independientes entre sí: EN_EJECUCION → INFORME_ENVIADO (llegó uno, falta el
+ * otro) → VERIFICANDO_FINALIZACION (ambos; Auditoría compara) → Auditoría verifica
+ * (PENDIENTE_SOLICITUD_FINIQUITO) → Procura solicita el pago (LISTO_PAGO_FINAL) →
+ * Finanzas paga. Auditoría puede devolver el informe del contratista o el del
+ * residente; el otro se conserva. Ningún paso se salta.
  */
 class ProjectClosureService
 {
@@ -30,7 +31,7 @@ class ProjectClosureService
     public function submit(ProjectClosureReport $report, array $data): ProjectClosureReport
     {
         $project = $report->project;
-        ProjectStateMachine::assertStatus($project, self::S['EN_EJECUCION'], 'Solo se puede enviar el informe de una obra en ejecución.');
+        ProjectStateMachine::assertStatusIn($project, [self::S['EN_EJECUCION'], self::S['INFORME_ENVIADO']], 'Solo se puede enviar el informe de una obra en ejecución.');
         abort_unless($report->isEditableByContractor(), 422, 'El informe ya fue enviado y está en revisión.');
         abort_if($this->modifications->hasPending($project), 422, 'Hay modificaciones de obra pendientes de aprobación; deben resolverse antes de enviar el informe de cierre.');
         abort_if($project->effectiveResidentId() === null, 422, 'La obra no tiene ingeniero residente asignado; Auditoría debe asignarlo antes de enviar el informe.');
@@ -48,10 +49,9 @@ class ProjectClosureService
                 $executed = (float) $row['executedQuantity'];
                 $note = $row['note'] ?? null;
 
-                if ($executed > $item->contracted_quantity) {
-                    $errors["items.{$item->id}"] = "La cantidad ejecutada de «{$item->name}» no puede superar lo contratado; las obras extras se gestionan como modificación de obra.";
-                } elseif ($executed < $item->contracted_quantity && blank($note)) {
-                    $errors["items.{$item->id}"] = "Justifique la disminución de «{$item->name}».";
+                if ($executed !== (float) $item->contracted_quantity && blank($note)) {
+                    $kind = $executed > $item->contracted_quantity ? 'el aumento' : 'la disminución';
+                    $errors["items.{$item->id}"] = "Justifique {$kind} de «{$item->name}».";
                 }
 
                 $item->update(['executed_quantity' => $executed, 'note' => $note]);
@@ -69,7 +69,7 @@ class ProjectClosureService
                 'rejected_by_role' => null,
                 'rejection_target' => null,
             ]);
-            $project->update(['status' => self::S['INFORME_ENVIADO']]);
+            $this->advance($project, $report->refresh());
         });
 
         AuditLog::record($project, 'PROVEEDOR', 'Envio de informe de cierre del contratista', "Informe revisión {$report->revision} enviado por {$report->contractor_code}.");
@@ -77,19 +77,18 @@ class ProjectClosureService
         return $report->refresh();
     }
 
-    /** @param array<int, array<string, mixed>> $items mediciones del residente por partida */
+    /** Informe propio del residente: su medición por partida + fotos + notas, sin depender del contratista. */
     public function approveByResident(Project $project, User $user, ?string $notes, array $items): ProjectClosureReport
     {
-        ProjectStateMachine::assertStatus($project, self::S['INFORME_ENVIADO'], 'Solo se puede corroborar un informe enviado por el contratista (INFORME_ENVIADO).');
-        $this->assertCanActAsResident($project, $user);
+        $this->assertResidentMayReport($project, $user);
 
         $report = $project->closureReport;
+        abort_if($this->modifications->hasPending($project), 422, 'Hay modificaciones de obra pendientes de aprobación; deben resolverse antes de enviar el informe.');
         abort_unless($report->photos()->where('uploaded_by_type', 'RESIDENTE')->exists(), 422, 'Adjunte al menos una foto de verificación en obra antes de dar el visto bueno.');
 
         DB::transaction(function () use ($project, $report, $user, $notes, $items) {
             $this->measurements->recordResident($report->load('items'), $items);
             $report->update([
-                'status' => ProjectClosureReport::STATUS_RESIDENT_APPROVED,
                 'resident_user_id' => $user->id,
                 'resident_notes' => $notes,
                 'resident_verified_at' => now(),
@@ -97,10 +96,10 @@ class ProjectClosureService
                 'rejected_by_role' => null,
                 'rejection_target' => null,
             ]);
-            $project->update(['status' => self::S['VERIFICANDO_FINALIZACION']]);
+            $this->advance($project, $report->refresh());
         });
 
-        AuditLog::record($project, $user->role, 'Visto bueno de residente al informe de cierre', "Corroborado por {$user->name}.", $notes);
+        AuditLog::record($project, $user->role, 'Informe de verificación del residente', "Informe enviado por {$user->name}.", $notes);
 
         return $report->refresh();
     }
@@ -134,45 +133,37 @@ class ProjectClosureService
     }
 
     /**
-     * Rechazo del residente (desde INFORME_ENVIADO, siempre al contratista) o de
-     * Auditoría (desde VERIFICANDO_FINALIZACION, con destino CONTRATISTA o RESIDENTE).
+     * Auditoría devuelve el informe del CONTRATISTA o el del RESIDENTE (con motivo); el otro se conserva.
+     * Desde VERIFICANDO_FINALIZACION, cuando ya llegaron ambos.
      */
     public function reject(Project $project, User $user, string $reason, ?string $target = null): ProjectClosureReport
     {
-        $byResident = $project->status === self::S['INFORME_ENVIADO'];
-        ProjectStateMachine::assertStatusIn($project, [self::S['INFORME_ENVIADO'], self::S['VERIFICANDO_FINALIZACION']], 'El informe de cierre no está pendiente de revisión.');
-        if ($byResident) {
-            $this->assertCanActAsResident($project, $user);
-            $target = ProjectClosureReport::TARGET_CONTRACTOR;
-        } else {
-            abort_unless(in_array($user->role, ['AUDITORIA', 'ADMIN', 'SUPERADMIN'], true), 403, 'Solo Auditoría puede rechazar en esta etapa.');
-            abort_unless(in_array($target, [ProjectClosureReport::TARGET_CONTRACTOR, ProjectClosureReport::TARGET_RESIDENT], true), 422, 'Indique si el rechazo va al contratista o al residente.');
-        }
+        ProjectStateMachine::assertStatus($project, self::S['VERIFICANDO_FINALIZACION'], 'El informe de cierre no está pendiente de revisión de Auditoría.');
+        abort_unless(in_array($user->role, ['AUDITORIA', 'ADMIN', 'SUPERADMIN'], true), 403, 'Solo Auditoría puede rechazar en esta etapa.');
+        abort_unless(in_array($target, [ProjectClosureReport::TARGET_CONTRACTOR, ProjectClosureReport::TARGET_RESIDENT], true), 422, 'Indique si el rechazo va al contratista o al residente.');
         $toResident = $target === ProjectClosureReport::TARGET_RESIDENT;
 
         $report = $project->closureReport;
-        DB::transaction(function () use ($project, $report, $reason, $byResident, $target, $toResident) {
+        DB::transaction(function () use ($project, $report, $reason, $target, $toResident) {
             $report->update([
                 'status' => $toResident ? ProjectClosureReport::STATUS_SENT : ProjectClosureReport::STATUS_REJECTED,
                 'revision' => $report->revision + 1,
                 'rejection_reason' => $reason,
-                'rejected_by_role' => $byResident ? 'RESIDENTE' : 'AUDITORIA',
+                'rejected_by_role' => 'AUDITORIA',
                 'rejection_target' => $target,
-                'resident_verified_at' => null,
+                'resident_verified_at' => $toResident ? null : $report->resident_verified_at,
             ]);
-            $this->measurements->reset($report);
-            $project->update(['status' => self::S[$toResident ? 'INFORME_ENVIADO' : 'EN_EJECUCION']]);
+            if ($toResident) {
+                $this->measurements->reset($report);
+            }
+            $project->update(['status' => self::S['INFORME_ENVIADO']]);
         });
 
         AuditLog::record(
             $project,
-            $byResident ? 'RESIDENTE' : 'AUDITORIA',
-            match (true) {
-                $byResident => 'Rechazo de informe de cierre por residente',
-                $toResident => 'Devolucion de informe de cierre al residente',
-                default => 'Rechazo de informe de cierre por Auditoria',
-            },
-            $toResident ? 'El residente debe repetir la medición y dar de nuevo su visto bueno.' : 'El contratista debe corregir y reenviar el informe.',
+            'AUDITORIA',
+            $toResident ? 'Devolucion de informe de cierre al residente' : 'Rechazo de informe de cierre por Auditoria',
+            $toResident ? 'El residente debe repetir su informe y enviarlo de nuevo.' : 'El contratista debe corregir y reenviar el informe.',
             $reason
         );
         if (! $toResident) {
@@ -205,6 +196,29 @@ class ProjectClosureService
         return $project;
     }
 
+    /** El residente reporta mientras la obra está en ejecución o esperando el informe del contratista. */
+    public function assertResidentMayReport(Project $project, User $user): void
+    {
+        ProjectStateMachine::assertStatusIn($project, [self::S['EN_EJECUCION'], self::S['INFORME_ENVIADO']], 'El informe del residente solo se carga mientras la obra está en ejecución.');
+        abort_unless($project->closureReport, 404, 'La obra aún no tiene informe de cierre.');
+        abort_if($project->closureReport->residentSubmitted(), 422, 'Su informe ya fue enviado y está en revisión.');
+        $this->assertCanActAsResident($project, $user);
+    }
+
+    /** Con ambos informes recibidos la obra pasa a Auditoría; con uno solo queda esperando al otro. */
+    private function advance(Project $project, ProjectClosureReport $report): void
+    {
+        $ready = $report->contractorSubmitted() && $report->residentSubmitted();
+        if ($ready) {
+            $report->update(['status' => ProjectClosureReport::STATUS_RESIDENT_APPROVED]);
+        }
+        $project->update(['status' => self::S[$ready ? 'VERIFICANDO_FINALIZACION' : 'INFORME_ENVIADO']]);
+
+        if ($ready) {
+            AuditLog::record($project, 'SISTEMA', 'Informes de cierre listos para Auditoria', 'Contratista y residente enviaron su informe; Auditoría puede compararlos.');
+        }
+    }
+
     /** Solo el residente efectivo de la obra (F2-R D11) o ADMIN/SUPERADMIN pueden actuar como residente. */
     public function assertCanActAsResident(Project $project, User $user): void
     {
@@ -221,7 +235,7 @@ class ProjectClosureService
         $proposal = $project->proposals()->whereKey($project->selected_proposal_id)->first();
         $contracted = (float) ($proposal?->total_cost ?? 0);
         $advance = (float) ProjectPayment::where('project_id', $project->id)->where('payment_type', 'ADVANCE')->value('amount');
-        $reductions = $report->items->sum(fn ($i) => max(0, $i->contracted_quantity - $i->final_quantity) * $i->unit_price_usd);
+        $reductions = $report->items->sum(fn ($i) => ($i->contracted_quantity - $i->final_quantity) * $i->unit_price_usd);
 
         return round(max(0, $contracted - $advance - $reductions), 2);
     }

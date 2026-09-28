@@ -48,6 +48,16 @@ class ProjectClosureReport extends Model
         return $this->hasMany(ProjectClosurePhoto::class, 'report_id');
     }
 
+    public function contractorSubmitted(): bool
+    {
+        return in_array($this->status, [self::STATUS_SENT, self::STATUS_RESIDENT_APPROVED, self::STATUS_AUDIT_APPROVED], true);
+    }
+
+    public function residentSubmitted(): bool
+    {
+        return $this->resident_verified_at !== null;
+    }
+
     /** El contratista solo puede editar/enviar mientras el informe está abierto o rechazado. */
     public function isEditableByContractor(): bool
     {

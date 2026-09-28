@@ -47,7 +47,7 @@ class PublicClosureReportController extends Controller
     public function photo(string $token, ProjectClosurePhoto $photo, ClosurePhotoService $photos): StreamedResponse
     {
         $report = $this->findReport($token);
-        abort_unless($photo->report_id === $report->id, 404);
+        abort_unless($photo->report_id === $report->id && $photo->uploaded_by_type === ProjectClosurePhoto::BY_CONTRACTOR, 404);
 
         return $photos->stream($photo);
     }
@@ -78,7 +78,7 @@ class PublicClosureReportController extends Controller
 
     private function isEditable(ProjectClosureReport $report): bool
     {
-        return $report->isEditableByContractor() && $report->project->status === 'EN_EJECUCION';
+        return $report->isEditableByContractor() && in_array($report->project->status, ['EN_EJECUCION', 'INFORME_ENVIADO'], true);
     }
 
     private function resource(Request $request, ProjectClosureReport $report): ClosureReportResource

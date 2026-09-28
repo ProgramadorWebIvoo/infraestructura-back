@@ -40,8 +40,7 @@ class ClosureReportController extends Controller
 
     public function uploadPhoto(StoreSupplierProposalImageRequest $request, Project $project, ClosurePhotoService $photos)
     {
-        ProjectStateMachine::assertStatus($project, 'INFORME_ENVIADO', 'Las fotos de verificación se adjuntan mientras el informe está en revisión del residente.');
-        $this->service->assertCanActAsResident($project, auth()->user());
+        $this->service->assertResidentMayReport($project, auth()->user());
 
         $photo = $photos->store($project->closureReport, $request->file('image'), ProjectClosurePhoto::BY_RESIDENT, auth()->id(), $request->integer('itemId') ?: null);
 

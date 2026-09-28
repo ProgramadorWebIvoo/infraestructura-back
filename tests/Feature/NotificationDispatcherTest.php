@@ -379,24 +379,61 @@ class NotificationDispatcherTest extends TestCase
         Notification::assertNotSentTo($otroInfra, ProjectActionNotification::class);
     }
 
-    public function test_closure_submission_notifies_only_assigned_resident_and_requester(): void
+    public function test_contractor_submission_notifies_requester_but_not_the_resident(): void
     {
         Notification::fake();
 
         $resident = User::factory()->create(['role' => 'RESIDENTE']);
-        $otherResident = User::factory()->create(['role' => 'RESIDENTE']);
         $requester = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
         $otherInfra = User::factory()->create(['role' => 'INFRAESTRUCTURA']);
         $project = Project::factory()->create(['status' => 'INFORME_ENVIADO', 'resident_user_id' => $resident->id, 'requested_by_user_id' => $requester->id]);
 
         AuditLog::record($project, 'PROVEEDOR', 'Envio de informe de cierre del contratista', 'detalle');
 
-        Notification::assertSentTo($resident, ProjectActionNotification::class);
-        Notification::assertSentTo($resident, ProjectActionMail::class);
         Notification::assertSentTo($requester, ProjectActionNotification::class);
         Notification::assertNotSentTo($requester, ProjectActionMail::class);
-        Notification::assertNotSentTo($otherResident, ProjectActionNotification::class);
+        Notification::assertNotSentTo($resident, ProjectActionNotification::class);
         Notification::assertNotSentTo($otherInfra, ProjectActionNotification::class);
+    }
+
+    public function test_advance_release_tells_the_assigned_resident_to_load_their_report(): void
+    {
+        Notification::fake();
+
+        $resident = User::factory()->create(['role' => 'RESIDENTE']);
+        $otherResident = User::factory()->create(['role' => 'RESIDENTE']);
+        $project = Project::factory()->create(['status' => 'EN_EJECUCION', 'resident_user_id' => $resident->id]);
+
+        AuditLog::record($project, 'FINANZAS', 'Liberacion de anticipo', 'detalle');
+
+        Notification::assertSentTo($resident, ProjectActionNotification::class);
+        Notification::assertSentTo($resident, ProjectActionMail::class);
+        Notification::assertNotSentTo($otherResident, ProjectActionNotification::class);
+    }
+
+    public function test_both_closure_reports_ready_notify_auditoria_via_app_and_mail(): void
+    {
+        Notification::fake();
+
+        $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
+        $resident = User::factory()->create(['role' => 'RESIDENTE']);
+        $project = Project::factory()->create(['status' => 'VERIFICANDO_FINALIZACION', 'resident_user_id' => $resident->id]);
+
+        AuditLog::record($project, 'SISTEMA', 'Informes de cierre listos para Auditoria', 'detalle');
+
+        Notification::assertSentTo($auditoria, ProjectActionNotification::class);
+        Notification::assertSentTo($auditoria, ProjectActionMail::class);
+        Notification::assertNotSentTo($resident, ProjectActionNotification::class);
+    }
+
+    public function test_new_closure_actions_appear_in_the_notification_matrix(): void
+    {
+        $matrix = NotificationRuleResolver::matrix();
+
+        $this->assertArrayHasKey('Informes de cierre listos para Auditoria', $matrix);
+        $this->assertArrayHasKey('Informe de verificación del residente', $matrix);
+        $this->assertArrayNotHasKey('Rechazo de informe de cierre por residente', $matrix);
+        $this->assertContains('RESIDENTE_ASIGNADO', $matrix['Liberacion de anticipo']['app']);
     }
 
     public function test_directed_roles_without_requester_are_skipped_and_matrix_accepts_them(): void

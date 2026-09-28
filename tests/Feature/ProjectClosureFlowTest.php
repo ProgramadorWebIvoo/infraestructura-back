@@ -85,6 +85,9 @@ class ProjectClosureFlowTest extends TestCase
     {
         $items = $this->report->fresh()->items->map(function ($item) use ($override) {
             $row = ['id' => $item->id, 'residentQuantity' => $item->executed_quantity];
+            if ((float) $item->executed_quantity !== (float) $item->contracted_quantity) {
+                $row['note'] = 'Diferencia verificada en obra';
+            }
 
             return $override ? $override($item, $row) : $row;
         })->all();
@@ -223,7 +226,6 @@ class ProjectClosureFlowTest extends TestCase
 
         $this->actingAs($this->infra)->post("/api/resident/projects/{$id}/photos", ['image' => $this->photo()])->assertForbidden();
         $this->actingAs($this->infra)->postJson("/api/resident/projects/{$id}/approval", $this->residentPayload())->assertForbidden();
-        $this->actingAs($this->infra)->postJson("/api/resident/projects/{$id}/rejection", ['reason' => 'x'])->assertForbidden();
         $this->actingAs($this->infra)->post("/api/projects/{$id}/closure-report/photos", ['image' => $this->photo()])->assertForbidden();
         $this->actingAs($this->infra)->postJson("/api/projects/{$id}/closure-report/resident-approval", $this->residentPayload())->assertForbidden();
         $this->actingAs($this->infra)->postJson("/api/projects/{$id}/closure-report/rejection", ['reason' => 'x'])->assertForbidden();
@@ -265,7 +267,6 @@ class ProjectClosureFlowTest extends TestCase
         $location->update(['resident_user_id' => $this->otherResident->id]);
 
         $this->actingAs($this->resident)->getJson($url)->assertNotFound();
-        $this->actingAs($this->resident)->postJson("{$url}/rejection", ['reason' => 'x'])->assertNotFound();
         $this->actingAs($this->otherResident)->getJson($url)->assertOk();
     }
 
@@ -283,11 +284,12 @@ class ProjectClosureFlowTest extends TestCase
     public function test_resident_resource_never_exposes_money_or_internal_notes(): void
     {
         $this->submitReport();
+        $this->actingAs($this->resident)->post("/api/resident/projects/{$this->project->id}/photos", ['image' => $this->photo()])->assertStatus(201);
 
         $response = $this->actingAs($this->resident)->getJson("/api/resident/projects/{$this->project->id}")->assertOk();
         $json = json_encode($response->json());
 
-        foreach (['unitPrice', 'unit_price', 'finiquito', 'auditNotes', 'auditQuantity', 'estimatedTotal', 'amount'] as $forbidden) {
+        foreach (['unitPrice', 'unit_price', 'finiquito', 'auditNotes', 'auditQuantity', 'estimatedTotal', 'amount', 'executedQuantity', 'contractorNotes'] as $forbidden) {
             $this->assertStringNotContainsStringIgnoringCase($forbidden, $json);
         }
         $response->assertJsonPath('data.closure.items.0.name', 'Tomacorriente');
@@ -317,13 +319,14 @@ class ProjectClosureFlowTest extends TestCase
         $this->actingAs($this->otherResident)->getJson($base)->assertNotFound();
     }
 
-    public function test_resident_cannot_reject_as_auditor_and_auditor_cannot_measure(): void
+    public function test_resident_cannot_resend_and_auditor_cannot_measure(): void
     {
         $this->toResidentStage();
         $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/approval", $this->residentPayload())->assertOk();
 
-        // En VERIFICANDO_FINALIZACION el residente no puede rechazar (eso es de Auditoría)
-        $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/rejection", ['reason' => 'x'])->assertForbidden();
+        // Su informe ya está enviado: no puede reenviarlo ni rechazar (eso es de Auditoría)
+        $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/approval", $this->residentPayload())->assertStatus(422);
+        $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/rejection", ['reason' => 'x'])->assertStatus(404);
         $this->assertEquals('VERIFICANDO_FINALIZACION', $this->project->fresh()->status);
 
         $this->actingAs($this->auditoria)->postJson("/api/resident/projects/{$this->project->id}/approval", $this->residentPayload())->assertForbidden();
@@ -349,23 +352,61 @@ class ProjectClosureFlowTest extends TestCase
             ->assertJsonPath('data.status', 'VERIFICANDO_FINALIZACION');
     }
 
-    public function test_resident_rejection_returns_to_execution_and_reopens_report(): void
+    public function test_resident_reports_independently_before_the_contractor(): void
+    {
+        $url = "/api/resident/projects/{$this->project->id}";
+        $this->assertTrue($this->actingAs($this->resident)->getJson($url)->json('data.pendingAction'));
+
+        $this->actingAs($this->resident)->post("{$url}/photos", ['image' => $this->photo()])->assertStatus(201);
+        $this->actingAs($this->resident)->postJson("{$url}/approval", $this->residentPayload(fn ($i, $row) => $i->name === 'Cable' ? [...$row, 'residentQuantity' => 90, 'note' => 'Faltan 10 m'] : $row))
+            ->assertOk()->assertJsonPath('data.status', 'INFORME_ENVIADO')->assertJsonPath('data.pendingAction', false);
+        $this->assertEquals('ABIERTO', $this->report->fresh()->status);
+
+        // Auditoría aún no puede verificar: falta el informe del contratista
+        $this->actingAs($this->auditoria)->postJson("/api/projects/{$this->project->id}/closure-report/audit-approval")->assertStatus(422);
+
+        $this->submitReport();
+        $this->assertEquals('VERIFICANDO_FINALIZACION', $this->project->fresh()->status);
+        $this->assertEquals('APROBADO_RESIDENTE', $this->report->fresh()->status);
+    }
+
+    public function test_resident_can_delete_own_draft_photos_only_before_sending(): void
+    {
+        $url = "/api/resident/projects/{$this->project->id}";
+        $id = $this->actingAs($this->resident)->post("{$url}/photos", ['image' => $this->photo()])->assertStatus(201)->json('id');
+        $this->post("/api/public/closures/{$this->report->id}/photos", ['image' => $this->photo()])->assertStatus(201);
+        $contractorPhoto = $this->report->fresh()->photos()->where('uploaded_by_type', 'CONTRATISTA')->value('id');
+
+        $this->actingAs($this->otherResident)->deleteJson("{$url}/photos/{$id}")->assertNotFound();
+        $this->actingAs($this->resident)->deleteJson("{$url}/photos/{$contractorPhoto}")->assertNotFound();
+        $this->actingAs($this->resident)->deleteJson("{$url}/photos/{$id}")->assertNoContent();
+        $this->assertDatabaseMissing('project_closure_photos', ['id' => $id]);
+
+        $this->actingAs($this->resident)->post("{$url}/photos", ['image' => $this->photo()])->assertStatus(201);
+        $this->actingAs($this->resident)->postJson("{$url}/approval", $this->residentPayload())->assertOk();
+        $sent = $this->report->fresh()->photos()->where('uploaded_by_type', 'RESIDENTE')->value('id');
+        $this->actingAs($this->resident)->deleteJson("{$url}/photos/{$sent}")->assertStatus(422);
+    }
+
+    public function test_contractor_link_never_shows_resident_photos(): void
+    {
+        $this->actingAs($this->resident)->post("/api/resident/projects/{$this->project->id}/photos", ['image' => $this->photo()])->assertStatus(201);
+        $residentPhoto = $this->report->fresh()->photos()->where('uploaded_by_type', 'RESIDENTE')->value('id');
+        $this->post("/api/public/closures/{$this->report->id}/photos", ['image' => $this->photo()])->assertStatus(201);
+
+        $photos = $this->getJson("/api/public/closures/{$this->report->id}")->assertOk()->json('data.photos');
+        $this->assertCount(1, $photos);
+        $this->assertSame('CONTRATISTA', $photos[0]['uploadedByType']);
+        $this->getJson("/api/public/closures/{$this->report->id}/photos/{$residentPhoto}")->assertNotFound();
+    }
+
+    public function test_resident_never_sees_what_the_contractor_declared(): void
     {
         $this->submitReport();
 
-        $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/rejection")->assertStatus(422);
-        $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/rejection", ['reason' => 'Faltan tomacorrientes'])
-            ->assertJsonPath('data.status', 'EN_EJECUCION');
-
-        $report = $this->report->fresh();
-        $this->assertEquals('RECHAZADO', $report->status);
-        $this->assertEquals(2, $report->revision);
-        $this->assertEquals('Faltan tomacorrientes', $report->rejection_reason);
-        $this->assertTrue($report->isEditableByContractor());
-
-        $this->getJson("/api/public/closures/{$this->report->id}")->assertJsonPath('data.editable', true)->assertJsonPath('data.rejectionReason', 'Faltan tomacorrientes');
-        $this->postJson("/api/public/closures/{$this->report->id}/submit", ['items' => $this->fullItems()])->assertOk();
-        $this->assertEquals('INFORME_ENVIADO', $this->project->fresh()->status);
+        $item = $this->actingAs($this->resident)->getJson("/api/resident/projects/{$this->project->id}")->assertOk()->json('data.closure.items.0');
+        $this->assertArrayNotHasKey('executedQuantity', $item);
+        $this->assertArrayNotHasKey('note', $item);
     }
 
     public function test_audit_rejection_and_procura_return_flow(): void
@@ -375,11 +416,15 @@ class ProjectClosureFlowTest extends TestCase
         $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/approval", $this->residentPayload());
 
         $this->actingAs($this->auditoria)->postJson("/api/projects/{$this->project->id}/closure-report/rejection", ['reason' => 'Materiales no coinciden', 'target' => 'CONTRATISTA'])
-            ->assertJsonPath('data.status', 'EN_EJECUCION');
+            ->assertJsonPath('data.status', 'INFORME_ENVIADO');
         $this->assertEquals('AUDITORIA', $this->report->fresh()->rejected_by_role);
+        $this->assertTrue($this->report->fresh()->isEditableByContractor());
 
+        // Auditoría devolvió solo el informe del contratista: el del residente se conserva
+        $this->assertNotNull($this->report->fresh()->resident_verified_at);
+        $this->assertEquals('INFORME_ENVIADO', $this->project->fresh()->status);
         $this->postJson("/api/public/closures/{$this->report->id}/submit", ['items' => $this->fullItems()])->assertOk();
-        $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/approval", $this->residentPayload())->assertOk();
+        $this->assertEquals('VERIFICANDO_FINALIZACION', $this->project->fresh()->status);
         $this->actingAs($this->auditoria)->postJson("/api/projects/{$this->project->id}/closure-report/audit-approval")
             ->assertJsonPath('data.status', 'PENDIENTE_SOLICITUD_FINIQUITO');
 
@@ -414,13 +459,13 @@ class ProjectClosureFlowTest extends TestCase
         $this->actingAs($this->resident)->post("/api/resident/projects/{$this->project->id}/photos", ['image' => $this->photo()]);
     }
 
-    public function test_resident_must_measure_every_item_within_contracted(): void
+    public function test_resident_must_measure_every_item_and_not_negative(): void
     {
         $this->toResidentStage();
         $url = "/api/resident/projects/{$this->project->id}/approval";
 
         $this->actingAs($this->resident)->postJson($url, ['items' => [['id' => $this->report->items->first()->id, 'residentQuantity' => 1]]])->assertStatus(422);
-        $this->actingAs($this->resident)->postJson($url, $this->residentPayload(fn ($i, $row) => $i->name === 'Cable' ? [...$row, 'residentQuantity' => 150, 'note' => 'x'] : $row))->assertStatus(422);
+        $this->actingAs($this->resident)->postJson($url, $this->residentPayload(fn ($i, $row) => $i->name === 'Cable' ? [...$row, 'residentQuantity' => -1, 'note' => 'x'] : $row))->assertStatus(422);
         $this->assertEquals('INFORME_ENVIADO', $this->project->fresh()->status);
     }
 
@@ -487,14 +532,14 @@ class ProjectClosureFlowTest extends TestCase
         $this->assertEquals('VERIFICANDO_FINALIZACION', $this->project->fresh()->status);
     }
 
-    public function test_rejection_clears_resident_and_audit_measurements(): void
+    public function test_audit_rejection_to_contractor_keeps_the_resident_measurement(): void
     {
         $this->toResidentStage();
         $this->actingAs($this->resident)->postJson("/api/resident/projects/{$this->project->id}/approval", $this->residentPayload())->assertOk();
         $this->actingAs($this->auditoria)->postJson("/api/projects/{$this->project->id}/closure-report/rejection", ['reason' => 'Revisar', 'target' => 'CONTRATISTA'])->assertOk();
 
         foreach ($this->report->fresh()->items as $item) {
-            $this->assertNull($item->resident_quantity);
+            $this->assertNotNull($item->resident_quantity);
         }
     }
 

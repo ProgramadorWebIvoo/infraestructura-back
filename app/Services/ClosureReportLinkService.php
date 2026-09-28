@@ -57,9 +57,18 @@ class ClosureReportLinkService
     /** Reenvía el enlace público sin cambiar de estado. */
     public function resend(Project $project): bool
     {
-        abort_unless($project->closureReport, 404, 'La obra no tiene informe de cierre.');
+        $report = $project->closureReport;
+        abort_unless($report, 404, 'La obra no tiene informe de cierre.');
 
-        return $this->send($project->closureReport, $project);
+        // El correo se copia al abrir el informe; se refresca por si se editó el contratista después.
+        $currentEmail = Contractor::where('code', $report->contractor_code)->value('email');
+        if ($currentEmail && $currentEmail !== $report->contractor_email) {
+            $report->update(['contractor_email' => $currentEmail]);
+        }
+
+        abort_unless($report->contractor_email, 422, 'El contratista no tiene correo registrado.');
+
+        return $this->send($report, $project);
     }
 
     public function send(ProjectClosureReport $report, Project $project, ?string $rejectionReason = null): bool

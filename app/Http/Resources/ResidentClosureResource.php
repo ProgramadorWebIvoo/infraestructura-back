@@ -6,7 +6,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * Obra vista por su ingeniero residente (F2-R S1): partidas, cantidades y
- * fotos. Nunca precios, montos, finiquito ni notas de Auditoría.
+ * fotos propias. Nunca lo declarado por el contratista (informe independiente),
+ * ni precios, montos, finiquito ni notas de Auditoría.
  *
  * @property \App\Models\Project $resource
  */
@@ -22,11 +23,10 @@ class ResidentClosureResource extends JsonResource
             'location' => $this->location,
             'description' => $this->description,
             'status' => $this->status,
-            'pendingAction' => $this->status === 'INFORME_ENVIADO',
+            'pendingAction' => in_array($this->status, ['EN_EJECUCION', 'INFORME_ENVIADO'], true) && $report && ! $report->residentSubmitted(),
             'closure' => $report ? [
                 'status' => $report->status,
                 'revision' => $report->revision,
-                'contractorNotes' => $report->contractor_notes,
                 'submittedAt' => optional($report->submitted_at)->toIso8601String(),
                 'rejectionReason' => $report->rejection_reason,
                 'rejectionTarget' => $report->rejection_target,
@@ -39,12 +39,10 @@ class ResidentClosureResource extends JsonResource
                     'contractedQuantity' => $i->contracted_quantity,
                     'originalQuantity' => $i->original_quantity ?? $i->contracted_quantity,
                     'modificationQuantity' => round($i->contracted_quantity - ($i->original_quantity ?? $i->contracted_quantity), 2),
-                    'executedQuantity' => $i->executed_quantity,
-                    'note' => $i->note,
                     'residentQuantity' => $i->resident_quantity,
                     'residentNote' => $i->resident_note,
                 ])->values(),
-                'photos' => $report->photos->map(fn ($p) => [
+                'photos' => $report->photos->where('uploaded_by_type', 'RESIDENTE')->map(fn ($p) => [
                     'id' => $p->id,
                     'itemId' => $p->item_id,
                     'uploadedByType' => $p->uploaded_by_type,

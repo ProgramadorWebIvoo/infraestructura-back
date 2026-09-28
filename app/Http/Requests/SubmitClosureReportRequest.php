@@ -17,7 +17,7 @@ class SubmitClosureReportRequest extends FormRequest
             'notes' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['required', 'integer'],
-            'items.*.executedQuantity' => ['required', 'numeric', 'min:0'],
+            'items.*.executedQuantity' => ['required', 'integer', 'min:0'],
             'items.*.note' => ['nullable', 'string', 'max:500'],
         ];
     }

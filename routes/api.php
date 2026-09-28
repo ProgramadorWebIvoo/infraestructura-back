@@ -348,10 +348,10 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
         Route::get('/', [ResidentClosureController::class, 'index']);
         Route::get('/{project}', [ResidentClosureController::class, 'show']);
         Route::post('/{project}/photos', [ResidentClosureController::class, 'uploadPhoto']);
+        Route::delete('/{project}/photos/{photo}', [ResidentClosureController::class, 'deletePhoto']);
         Route::get('/{project}/closure-report/photos/{photo}', [ResidentClosureController::class, 'photo'])
             ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
         Route::post('/{project}/approval', [ResidentClosureController::class, 'approve']);
-        Route::post('/{project}/rejection', [ResidentClosureController::class, 'reject']);
         Route::get('/{project}/documents', [ResidentDocumentController::class, 'index'])
             ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
         Route::get('/{project}/documents/{document}/download', [ResidentDocumentController::class, 'download'])

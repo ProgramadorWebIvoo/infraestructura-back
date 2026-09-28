@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ResidentApprovalRequest;
-use App\Http\Requests\ClosureReasonRequest;
 use App\Http\Requests\StoreSupplierProposalImageRequest;
 use App\Http\Resources\ResidentClosureResource;
 use App\Models\Project;
@@ -46,12 +45,21 @@ class ResidentClosureController extends Controller
 
     public function uploadPhoto(StoreSupplierProposalImageRequest $request, Project $project, ClosurePhotoService $photos)
     {
-        ProjectStateMachine::assertStatus($project, 'INFORME_ENVIADO', 'Las fotos de verificación se adjuntan mientras el informe está en revisión del residente.');
-        $this->service->assertCanActAsResident($project, auth()->user());
+        $this->service->assertResidentMayReport($project, auth()->user());
 
         $photo = $photos->store($project->closureReport, $request->file('image'), ProjectClosurePhoto::BY_RESIDENT, auth()->id(), $request->integer('itemId') ?: null);
 
         return response()->json(['id' => $photo->id], 201);
+    }
+
+    /** El residente puede quitar sus fotos mientras su informe sigue en borrador. */
+    public function deletePhoto(Project $project, ProjectClosurePhoto $photo, ClosurePhotoService $photos)
+    {
+        $this->service->assertResidentMayReport($project, auth()->user());
+        abort_unless($photo->report_id === $project->closureReport->id && $photo->uploaded_by_type === ProjectClosurePhoto::BY_RESIDENT, 404);
+        $photos->delete($photo);
+
+        return response()->noContent();
     }
 
     public function photo(Project $project, ProjectClosurePhoto $photo, ClosurePhotoService $photos): StreamedResponse
@@ -63,13 +71,6 @@ class ResidentClosureController extends Controller
     {
         $data = $request->validated();
         $this->service->approveByResident($project, auth()->user(), $data['notes'] ?? null, $data['items']);
-
-        return new ResidentClosureResource($this->withReport($project));
-    }
-
-    public function reject(ClosureReasonRequest $request, Project $project)
-    {
-        $this->service->reject($project, auth()->user(), $request->validated('reason'));
 
         return new ResidentClosureResource($this->withReport($project));
     }

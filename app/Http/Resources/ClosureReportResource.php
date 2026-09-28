@@ -23,7 +23,7 @@ class ClosureReportResource extends JsonResource
             'revision' => $this->revision,
             'contractorNotes' => $this->contractor_notes,
             'submittedAt' => optional($this->submitted_at)->toIso8601String(),
-            'rejectionReason' => $this->rejection_reason,
+            'rejectionReason' => ($public && $this->rejection_target === 'RESIDENTE') ? null : $this->rejection_reason,
             'rejectedByRole' => $this->rejected_by_role,
             'rejectionTarget' => $this->rejection_target,
             'items' => $this->items->map(fn ($i) => [
@@ -41,7 +41,7 @@ class ClosureReportResource extends JsonResource
                 'residentNote' => $i->resident_note,
                 'finalQuantity' => $i->final_quantity,
             ]))->values(),
-            'photos' => $this->photos->map(fn ($p) => [
+            'photos' => $this->photos->when($public, fn ($photos) => $photos->where('uploaded_by_type', 'CONTRATISTA'))->map(fn ($p) => [
                 'id' => $p->id,
                 'itemId' => $p->item_id,
                 'uploadedByType' => $p->uploaded_by_type,
@@ -53,7 +53,7 @@ class ClosureReportResource extends JsonResource
         if ($public) {
             return $data + [
                 'project' => ['id' => $this->project->id, 'title' => $this->project->title, 'location' => $this->project->location],
-                'editable' => $this->isEditableByContractor() && $this->project->status === 'EN_EJECUCION',
+                'editable' => $this->isEditableByContractor() && in_array($this->project->status, ['EN_EJECUCION', 'INFORME_ENVIADO'], true),
             ];
         }
 

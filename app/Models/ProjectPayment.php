@@ -19,6 +19,7 @@ class ProjectPayment extends Model
         'bank',
         'reference',
         'comprobante_document_id',
+        'payment_order_id',
     ];
 
     protected $casts = [
@@ -39,5 +40,10 @@ class ProjectPayment extends Model
     public function comprobante()
     {
         return $this->belongsTo(ProjectDocument::class, 'comprobante_document_id')->withTrashed();
+    }
+
+    public function paymentOrder()
+    {
+        return $this->belongsTo(PaymentOrder::class);
     }
 }

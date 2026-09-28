@@ -96,6 +96,11 @@ class Project extends Model
         return $this->hasMany(ProjectRateFreeze::class);
     }
 
+    public function paymentOrders()
+    {
+        return $this->hasMany(PaymentOrder::class);
+    }
+
     public function requestedBy()
     {
         return $this->belongsTo(User::class, 'requested_by_user_id');

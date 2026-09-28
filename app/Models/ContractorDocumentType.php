@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class ContractorDocumentType extends Model
 {
@@ -20,6 +21,14 @@ class ContractorDocumentType extends Model
         'is_active' => 'boolean',
         'sort_order' => 'integer',
     ];
+
+    public const CATALOG_CACHE_KEY = 'contractor_document_types:public';
+    public const CATALOG_CACHE_TTL = 300;
+
+    public static function forgetCatalogCache(): void
+    {
+        Cache::forget(self::CATALOG_CACHE_KEY);
+    }
 
     public function documents()
     {

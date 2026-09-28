@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\AccessAdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClosureReportController;
 use App\Http\Controllers\Api\ContractorController;
+use App\Http\Controllers\Api\ContractorDocumentController;
+use App\Http\Controllers\Api\ContractorDocumentTypeController;
 use App\Http\Controllers\Api\DebugClosureFixtureController;
 use App\Http\Controllers\Api\PublicClosureReportController;
 use App\Http\Controllers\Api\ResidentClosureController;
@@ -76,6 +78,7 @@ Route::post('/public/renegotiations/{token}/proposal', [RenegotiationInvitationC
 
 // Catálogos de referencia para el formulario público de propuesta de
 // materiales (sin auth, consumidos por el enlace de invitación).
+Route::get('/public/contractor-document-types', [ContractorDocumentTypeController::class, 'publicList'])->middleware('throttle:public-api');
 Route::get('/public/currencies', [CurrencyController::class, 'activePublicList'])->middleware('throttle:public-api');
 Route::get('/public/catalog-categories', [CatalogCategoryController::class, 'publicList'])->middleware('throttle:public-api');
 Route::get('/public/catalog-products/search', [CatalogProductController::class, 'publicSearch'])->middleware('throttle:public-api');
@@ -416,6 +419,18 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
     Route::get('/projects/{project}/documents/{document}/download', [ProjectDocumentController::class, 'download'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/projects/{project}/documents/{document}/preview', [ProjectDocumentController::class, 'preview'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     Route::get('/projects/{project}/documents/{document}/history', [ProjectDocumentController::class, 'history'])->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+
+    // Biblioteca documental del proveedor (F4): datos sensibles (RIF, registros,
+    // cédulas). Ver/descargar: quienes consultan proveedores; cargar/reemplazar/
+    // eliminar: administración y catálogos.
+    Route::middleware('role:ADMIN,SUPERADMIN,CATALOGOS,PROCURA,FINANZAS,PRESIDENCIA')->group(function () {
+        Route::get('/contractors/{contractor}/documents', [ContractorDocumentController::class, 'index']);
+        Route::get('/contractors/{contractor}/documents/{document}/download', [ContractorDocumentController::class, 'download']);
+    });
+    Route::middleware('role:ADMIN,SUPERADMIN,CATALOGOS')->group(function () {
+        Route::post('/contractors/{contractor}/documents', [ContractorDocumentController::class, 'store']);
+        Route::delete('/contractors/{contractor}/documents/{document}', [ContractorDocumentController::class, 'destroy']);
+    });
 
     // Gestión de usuarios, roles y permisos de acceso — exclusivo SUPERADMIN:
     // un ADMIN no debe poder asignarse (ni asignarle a otro) el rol SUPERADMIN

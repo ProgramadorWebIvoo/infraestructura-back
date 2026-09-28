@@ -44,10 +44,15 @@ class ProjectController extends Controller
     /** @deprecated Usar ProjectStateMachine::STATUSES — se mantiene como alias durante la transición. */
     private const STATUSES = ProjectStateMachine::STATUSES;
 
+    /**
+     * El frontend mantiene TODA la lista de proyectos en memoria (filtra por
+     * status/rol client-side en cada panel) y nunca lee meta/links de
+     * paginación — paginar acá los truncaba en silencio: con más de 20
+     * proyectos, los más antiguos (p.ej. en VERIFICANDO_FINALIZACION)
+     * desaparecían de todos los paneles sin error visible.
+     */
     public function index(Request $request)
     {
-        $perPage = min((int) ($request->get('per_page', 20)), 100);
-
         $query = Project::visibleTo($request->user())->with(Project::listRelations())->latest('created_date');
 
         if ($request->filled('status')) {
@@ -58,7 +63,7 @@ class ProjectController extends Controller
             $query->where('type', $request->type);
         }
 
-        return ProjectResource::collection($query->paginate($perPage));
+        return ProjectResource::collection($query->get());
     }
 
     public function show(Project $project)

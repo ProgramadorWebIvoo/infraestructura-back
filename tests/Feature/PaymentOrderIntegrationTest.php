@@ -139,6 +139,21 @@ class PaymentOrderIntegrationTest extends TestCase
         $this->assertDatabaseHas('project_payments', ['project_id' => $project->id, 'payment_order_id' => $order->id, 'amount' => 3000.00]);
     }
 
+    public function test_project_resource_exposes_the_current_advance_order(): void
+    {
+        [$project, $proposal] = $this->projectReadyToSelect();
+        $this->actingAs($this->procura)->postJson("/api/projects/{$project->id}/select-contractor", [
+            'contractorCode' => $this->contractor->code,
+            'proposalId' => $proposal->id,
+        ]);
+
+        $response = $this->actingAs($this->finanzas)->getJson("/api/projects/{$project->id}")->assertStatus(200);
+
+        $response->assertJsonPath('data.paymentOrders.advance.amount', 3000)
+            ->assertJsonPath('data.paymentOrders.advance.status', 'EN_FIRMA')
+            ->assertJsonPath('data.paymentOrders.final', null);
+    }
+
     public function test_pay_without_any_order_is_rejected(): void
     {
         $project = Project::factory()->create(['status' => 'CONTRATADO']);

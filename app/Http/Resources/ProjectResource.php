@@ -126,6 +126,12 @@ class ProjectResource extends JsonResource
             'rateFreezes' => $this->whenLoaded('rateFreezes', fn () =>
                 ProjectRateFreezeResource::collection($this->rateFreezes)
             ),
+            // Solo la orden VIGENTE de cada tipo (F4 Bloque B) — el
+            // historial de anuladas no lo necesita el frontend hoy.
+            'paymentOrders' => $this->whenLoaded('paymentOrders', fn () => [
+                'advance' => ($order = $this->currentPaymentOrder(\App\Models\PaymentOrder::TYPE_ADVANCE)) ? new PaymentOrderResource($order) : null,
+                'final' => ($order = $this->currentPaymentOrder(\App\Models\PaymentOrder::TYPE_FINAL)) ? new PaymentOrderResource($order) : null,
+            ]),
         ];
     }
 }

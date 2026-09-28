@@ -101,6 +101,15 @@ class Project extends Model
         return $this->hasMany(PaymentOrder::class);
     }
 
+    /** Orden vigente (no anulada) de un tipo — asume `paymentOrders` ya cargada, sin query extra. */
+    public function currentPaymentOrder(string $type): ?PaymentOrder
+    {
+        return $this->paymentOrders
+            ->where('payment_type', $type)
+            ->whereNotNull('current_key')
+            ->first();
+    }
+
     public function requestedBy()
     {
         return $this->belongsTo(User::class, 'requested_by_user_id');
@@ -199,6 +208,7 @@ class Project extends Model
             'proposals.creator:id,name',
             'proposals.contractor:code,rating',
             'payments',
+            'paymentOrders.elaboratedBy:id,name',
             'rateFreezes.frozenByUser:id,name',
             'resident:id,name',
             'localization.resident:id,name',
@@ -226,6 +236,7 @@ class Project extends Model
             'proposals.creator:id,name',
             'proposals.contractor:code,rating',
             'payments',
+            'paymentOrders.elaboratedBy:id,name',
             'resident:id,name',
             'localization.resident:id,name',
         ];

@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\ClosureReportController;
 use App\Http\Controllers\Api\ContractorController;
 use App\Http\Controllers\Api\ContractorDocumentController;
 use App\Http\Controllers\Api\ContractorDocumentTypeController;
+use App\Http\Controllers\Api\PaymentOrderController;
+use App\Http\Controllers\Api\PaymentSignatureStepController;
 use App\Http\Controllers\Api\DebugClosureFixtureController;
 use App\Http\Controllers\Api\PublicClosureReportController;
 use App\Http\Controllers\Api\ResidentClosureController;
@@ -432,6 +434,14 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
         Route::delete('/contractors/{contractor}/documents/{document}', [ContractorDocumentController::class, 'destroy']);
     });
 
+    // Orden de pago digital y firmas (F4 Bloque B/C): visible para quienes
+    // participan del circuito de adjudicación/pago; firmar exige además que
+    // sea el turno del usuario (validado en el servicio, no aquí).
+    Route::middleware('role:ADMIN,SUPERADMIN,PROCURA,PRESIDENCIA,FINANZAS')->group(function () {
+        Route::get('/payment-orders/{paymentOrder}', [PaymentOrderController::class, 'show']);
+        Route::post('/payment-orders/{paymentOrder}/sign', [PaymentOrderController::class, 'sign']);
+    });
+
     // Gestión de usuarios, roles y permisos de acceso — exclusivo SUPERADMIN:
     // un ADMIN no debe poder asignarse (ni asignarle a otro) el rol SUPERADMIN
     // ni controlar qué vistas puede ver cada usuario (role_view_access).
@@ -487,6 +497,12 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
         Route::patch('/contractor-document-types/config/{contractorDocumentType}', [ContractorDocumentTypeController::class, 'update']);
         Route::post('/contractor-document-types/config/{contractorDocumentType}/toggle-status', [ContractorDocumentTypeController::class, 'toggleStatus']);
         Route::delete('/contractor-document-types/config/{contractorDocumentType}', [ContractorDocumentTypeController::class, 'destroy']);
+
+        // Cadenas de firma por tipo de pago (F4 Bloque C, D2)
+        Route::get('/payment-signature-steps/config', [PaymentSignatureStepController::class, 'index']);
+        Route::post('/payment-signature-steps/config', [PaymentSignatureStepController::class, 'store']);
+        Route::patch('/payment-signature-steps/config/{paymentSignatureStep}', [PaymentSignatureStepController::class, 'update']);
+        Route::delete('/payment-signature-steps/config/{paymentSignatureStep}', [PaymentSignatureStepController::class, 'destroy']);
 
         // Materials catalog configuration
         Route::get('/materials/config', [MaterialController::class, 'index']);

@@ -109,6 +109,11 @@ class Contractor extends Model
         );
     }
 
+    public function documents()
+    {
+        return $this->hasMany(ContractorDocument::class, 'contractor_code', 'code');
+    }
+
     public function catalogProducts()
     {
         return $this->hasMany(CatalogProductSupplier::class, 'supplier_code', 'code');

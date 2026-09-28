@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\ProjectModificationRequest;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Http\Resources\MissingValue;
 
@@ -114,6 +115,9 @@ class ProjectResource extends JsonResource
             'closureReportStatus' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->status),
             'closureReportRevision' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->revision),
             'finiquitoAmount' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->finiquito_amount),
+            // F3: badge "Modificada" (aprobadas) y aviso de solicitudes pendientes.
+            'hasApprovedModifications' => $this->whenLoaded('modificationRequests', fn () => $this->modificationRequests->contains('status', ProjectModificationRequest::STATUS_APPROVED)),
+            'hasPendingModifications' => $this->whenLoaded('modificationRequests', fn () => $this->modificationRequests->contains('status', ProjectModificationRequest::STATUS_PENDING)),
             'qualityVerified' => $this->quality_verified,
             'completionVerifiedDate' => optional($this->completion_verified_date)->format('Y-m-d'),
             'documents' => $this->whenLoaded('documents', fn () =>

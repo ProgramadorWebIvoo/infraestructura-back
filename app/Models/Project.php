@@ -213,6 +213,7 @@ class Project extends Model
             'resident:id,name',
             'localization.resident:id,name',
             'closureReport:id,project_id,status,revision,finiquito_amount',
+            'modificationRequests:id,project_id,status',
             'documents' => fn ($q) => $q->latestVersionOnly(),
         ];
     }
@@ -239,6 +240,7 @@ class Project extends Model
             'paymentOrders.elaboratedBy:id,name',
             'resident:id,name',
             'localization.resident:id,name',
+            'modificationRequests:id,project_id,status',
         ];
     }
 

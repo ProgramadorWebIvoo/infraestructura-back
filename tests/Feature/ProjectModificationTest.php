@@ -211,6 +211,22 @@ class ProjectModificationTest extends TestCase
         $this->actingAs($this->procura)->postJson("/api/projects/{$this->project->id}/modifications/{$request->id}/approval")->assertOk();
     }
 
+    public function test_project_exposes_modification_flags_and_inbox_shows_title(): void
+    {
+        $this->approve($this->create());
+        $this->create();
+
+        $this->actingAs($this->auditoria)->getJson("/api/projects/{$this->project->id}")
+            ->assertOk()
+            ->assertJsonPath('data.hasApprovedModifications', true)
+            ->assertJsonPath('data.hasPendingModifications', true);
+
+        $this->actingAs($this->auditoria)->getJson('/api/modification-requests?status=PENDIENTE')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.projectTitle', $this->project->title);
+    }
+
     public function test_listing_exposes_effective_quantities_and_permissions(): void
     {
         $this->approve($this->create());

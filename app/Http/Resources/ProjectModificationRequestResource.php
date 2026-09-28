@@ -13,6 +13,7 @@ class ProjectModificationRequestResource extends JsonResource
         return [
             'id' => $this->id,
             'projectId' => $this->project_id,
+            'projectTitle' => $this->whenLoaded('project', fn () => $this->project?->title),
             'status' => $this->status,
             'reason' => $this->reason,
             'rejectionReason' => $this->rejection_reason,

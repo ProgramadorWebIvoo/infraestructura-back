@@ -63,6 +63,11 @@ class PaymentOrder extends Model
         return $this->hasOne(ProjectPayment::class, 'payment_order_id');
     }
 
+    public function signatures()
+    {
+        return $this->hasMany(PaymentOrderSignature::class);
+    }
+
     public static function currentKeyFor(string $projectId, string $paymentType): string
     {
         return "{$projectId}:{$paymentType}";

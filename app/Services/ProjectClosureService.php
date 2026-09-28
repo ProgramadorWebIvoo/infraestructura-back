@@ -28,6 +28,7 @@ class ProjectClosureService
         private ClosureMeasurementService $measurements,
         private ProjectModificationService $modifications,
         private PaymentOrderService $paymentOrders,
+        private PaymentSignatureService $signatures,
     ) {
     }
 
@@ -184,7 +185,8 @@ class ProjectClosureService
 
         DB::transaction(function () use ($project) {
             $project->update(['status' => self::S['LISTO_PAGO_FINAL']]);
-            $this->paymentOrders->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_FINAL);
+            $order = $this->paymentOrders->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_FINAL);
+            $this->signatures->trySign($order, auth()->user());
         });
 
         AuditLog::record($project, 'PROCURA', 'Solicitud de pago de finiquito', "Monto propuesto: {$project->closureReport->finiquito_amount} USD.", $notes);

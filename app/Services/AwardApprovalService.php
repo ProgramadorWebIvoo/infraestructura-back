@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use App\Models\Contractor;
+use App\Models\PaymentOrder;
 use App\Models\Project;
 use App\Models\ProjectRateFreeze;
 use App\Notifications\SupplierAwardNotice;
@@ -21,15 +22,28 @@ class AwardApprovalService
 {
     private const S = ProjectStateMachine::STATUSES;
 
-    public function __construct(private RateFreezeService $rateFreezeService, private PaymentOrderService $paymentOrders)
-    {
+    public function __construct(
+        private RateFreezeService $rateFreezeService,
+        private PaymentOrderService $paymentOrders,
+        private PaymentSignatureService $signatures,
+    ) {
     }
 
     public function approve(Project $project, ?string $observations = null): Project
     {
         ProjectStateMachine::assertStatus($project, self::S['PENDIENTE_PRESIDENCIA'], 'Solo se puede aprobar una adjudicación pendiente de Presidencia (PENDIENTE_PRESIDENCIA).');
 
-        $project->update(['status' => self::S['APROBADO_PRESIDENCIA']]);
+        DB::transaction(function () use ($project) {
+            $project->update(['status' => self::S['APROBADO_PRESIDENCIA']]);
+
+            $order = PaymentOrder::where('project_id', $project->id)
+                ->where('current_key', PaymentOrder::currentKeyFor($project->id, PaymentOrder::TYPE_ADVANCE))
+                ->first();
+            if ($order) {
+                $this->signatures->trySign($order, auth()->user());
+            }
+        });
+
         AuditLog::record($project, 'PRESIDENCIA', 'Aprobacion de adjudicacion por Presidencia', "Contratista {$project->selected_contractor_code} aprobado.", $observations);
 
         return $project;
@@ -85,6 +99,13 @@ class AwardApprovalService
                 ProjectRateFreeze::TRIGGER_CONTRATADO,
                 (float) $proposal->total_cost
             );
+
+            $order = PaymentOrder::where('project_id', $project->id)
+                ->where('current_key', PaymentOrder::currentKeyFor($project->id, PaymentOrder::TYPE_ADVANCE))
+                ->first();
+            if ($order) {
+                $this->signatures->trySign($order, auth()->user());
+            }
         });
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$project->selected_contractor_code} adjudicado y enviado a Finanzas.");

@@ -1,0 +1,164 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Contractor;
+use App\Models\PaymentOrder;
+use App\Models\PaymentSignatureStep;
+use App\Models\Project;
+use App\Models\ProjectProposal;
+use App\Models\User;
+use App\Services\PaymentOrderService;
+use App\Services\PaymentSignatureService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
+use Tests\TestCase;
+
+class PaymentSignatureServiceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function orderWithSteps(): PaymentOrder
+    {
+        PaymentSignatureStep::create(['payment_type' => 'ADVANCE', 'step_order' => 1, 'role' => 'PROCURA', 'label' => 'Elaboración']);
+        PaymentSignatureStep::create(['payment_type' => 'ADVANCE', 'step_order' => 2, 'role' => 'PRESIDENCIA', 'label' => 'Aprobación']);
+        PaymentSignatureStep::create(['payment_type' => 'ADVANCE', 'step_order' => 3, 'role' => 'FINANZAS', 'label' => 'Pago']);
+
+        $contractor = Contractor::factory()->create(['code' => 'CON-SIG']);
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $proposal = ProjectProposal::factory()->for($project)->create([
+            'contractor_code' => $contractor->code, 'total_cost' => 10000, 'negotiated_advance_percent' => 30,
+        ]);
+        $project->update(['selected_contractor_code' => $contractor->code, 'selected_proposal_id' => $proposal->id]);
+
+        return app(PaymentOrderService::class)->generate($project->fresh(), PaymentOrder::TYPE_ADVANCE);
+    }
+
+    public function test_signs_in_strict_order_and_marks_firmada_when_complete(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $procura = User::factory()->create(['role' => 'PROCURA']);
+        $presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+
+        $service->sign($order, $procura);
+        $this->assertSame('EN_FIRMA', $order->fresh()->status);
+
+        $service->sign($order, $presidencia);
+        $service->sign($order, $finanzas);
+
+        $this->assertSame('FIRMADA', $order->fresh()->status);
+        $this->assertSame(3, $order->signatures()->count());
+    }
+
+    public function test_rejects_signing_out_of_turn(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
+
+        $this->expectException(ValidationException::class);
+        $service->sign($order, $presidencia);
+    }
+
+    public function test_rejects_signing_by_wrong_role(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+
+        $this->expectException(ValidationException::class);
+        $service->sign($order, $finanzas);
+    }
+
+    public function test_try_sign_is_silent_when_not_the_turn(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $presidencia = User::factory()->create(['role' => 'PRESIDENCIA']);
+
+        $service->trySign($order, $presidencia);
+
+        $this->assertSame(0, $order->signatures()->count());
+    }
+
+    public function test_without_configured_steps_order_needs_no_signatures(): void
+    {
+        $contractor = Contractor::factory()->create(['code' => 'CON-NOSIG']);
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $proposal = ProjectProposal::factory()->for($project)->create([
+            'contractor_code' => $contractor->code, 'total_cost' => 5000, 'negotiated_advance_percent' => 20,
+        ]);
+        $project->update(['selected_contractor_code' => $contractor->code, 'selected_proposal_id' => $proposal->id]);
+        $order = app(PaymentOrderService::class)->generate($project->fresh(), PaymentOrder::TYPE_ADVANCE);
+
+        $service = app(PaymentSignatureService::class);
+        $service->assertReadyForPayment($order); // no lanza
+
+        $this->assertTrue($service->isFullySigned($order));
+    }
+
+    public function test_assert_ready_for_payment_allows_only_the_last_step_pending(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $service->sign($order, User::factory()->create(['role' => 'PROCURA']));
+
+        $this->expectException(ValidationException::class);
+        $service->assertReadyForPayment($order);
+    }
+
+    public function test_assert_ready_for_payment_passes_when_only_last_step_pending(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $service->sign($order, User::factory()->create(['role' => 'PROCURA']));
+        $service->sign($order, User::factory()->create(['role' => 'PRESIDENCIA']));
+
+        $service->assertReadyForPayment($order); // no lanza: solo falta FINANZAS
+        $this->assertTrue(true);
+    }
+
+    public function test_cannot_sign_a_voided_or_paid_order(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $order->update(['status' => PaymentOrder::STATUS_ANULADA]);
+
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $service->sign($order, User::factory()->create(['role' => 'PROCURA']));
+    }
+
+    public function test_signature_line_reflects_status_in_order(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $service->sign($order, User::factory()->create(['role' => 'PROCURA']));
+
+        $line = $service->signatureLine($order);
+
+        $this->assertSame('FIRMADO', $line[0]['status']);
+        $this->assertSame('PROXIMO', $line[1]['status']);
+        $this->assertSame('PENDIENTE', $line[2]['status']);
+    }
+
+    public function test_specific_user_step_only_signable_by_that_user(): void
+    {
+        $chosen = User::factory()->create(['role' => 'PROCURA']);
+        $other = User::factory()->create(['role' => 'PROCURA']);
+        PaymentSignatureStep::create(['payment_type' => 'ADVANCE', 'step_order' => 1, 'user_id' => $chosen->id, 'label' => 'Director de Procura']);
+
+        $contractor = Contractor::factory()->create(['code' => 'CON-USR']);
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $proposal = ProjectProposal::factory()->for($project)->create([
+            'contractor_code' => $contractor->code, 'total_cost' => 8000, 'negotiated_advance_percent' => 25,
+        ]);
+        $project->update(['selected_contractor_code' => $contractor->code, 'selected_proposal_id' => $proposal->id]);
+        $order = app(PaymentOrderService::class)->generate($project->fresh(), PaymentOrder::TYPE_ADVANCE);
+
+        $service = app(PaymentSignatureService::class);
+        $this->expectException(ValidationException::class);
+        $service->sign($order, $other);
+    }
+}

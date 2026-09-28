@@ -24,6 +24,7 @@ class PaymentOrderResource extends JsonResource
             'elaboratedByName' => $this->whenLoaded('elaboratedBy', fn () => $this->elaboratedBy?->name),
             'snapshot' => $this->snapshot,
             'createdAt' => optional($this->created_at)->toIso8601String(),
+            'signatures' => $this->whenLoaded('signatures', fn () => PaymentOrderSignatureResource::collection($this->signatures)),
         ];
     }
 }

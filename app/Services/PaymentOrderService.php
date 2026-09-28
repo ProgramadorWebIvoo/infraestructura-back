@@ -137,6 +137,12 @@ class PaymentOrderService
         return $order;
     }
 
+    /** Recalcula el hash sobre el snapshot guardado y lo compara con el fijado al crear — detecta alteración directa en BD. */
+    public function verifyIntegrity(PaymentOrder $order): bool
+    {
+        return hash_equals($order->content_hash, $this->canonicalHash($order->snapshot));
+    }
+
     private function advanceAmount(ProjectProposal $proposal): float
     {
         return round((float) $proposal->total_cost * ((float) $proposal->negotiated_advance_percent / 100), 2);

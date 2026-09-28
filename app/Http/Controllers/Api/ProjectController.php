@@ -29,6 +29,7 @@ use App\Services\DossierEvaluationService;
 use App\Services\ClosureReportLinkService;
 use App\Models\PaymentOrder;
 use App\Services\PaymentOrderService;
+use App\Services\PaymentSignatureService;
 use App\Services\ProjectStateMachine;
 use App\Services\ResidentAssignmentService;
 use App\Support\ProjectLocation;
@@ -472,7 +473,7 @@ class ProjectController extends Controller
         return new ProjectResource($project);
     }
 
-    public function selectContractor(SelectContractorRequest $request, Project $project, PaymentOrderService $paymentOrders)
+    public function selectContractor(SelectContractorRequest $request, Project $project, PaymentOrderService $paymentOrders, PaymentSignatureService $signatures)
     {
         ProjectStateMachine::assertStatus($project, self::STATUSES['COMPARATIVA_ENVIADA'], 'Solo se puede seleccionar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
 
@@ -481,7 +482,7 @@ class ProjectController extends Controller
         $selectedProposal = $project->proposals()->whereKey($data['proposalId'])->first();
         abort_unless($selectedProposal, 422, 'La propuesta no pertenece al proyecto.');
 
-        DB::transaction(function () use ($project, $data, $paymentOrders) {
+        DB::transaction(function () use ($project, $data, $paymentOrders, $signatures, $request) {
             $project->update([
                 'status' => self::STATUSES['PENDIENTE_PRESIDENCIA'],
                 'selected_contractor_code' => $data['contractorCode'],
@@ -490,7 +491,11 @@ class ProjectController extends Controller
 
             // La orden de anticipo nace aquí (D10): Presidencia debe firmar
             // una orden ya existente al aprobar la adjudicación.
-            $paymentOrders->generate($project->fresh(), PaymentOrder::TYPE_ADVANCE);
+            $order = $paymentOrders->generate($project->fresh(), PaymentOrder::TYPE_ADVANCE);
+
+            // Firma "silenciosa" del primer paso (Bloque C): si la cadena
+            // configurada empieza en PROCURA, queda firmado de una vez.
+            $signatures->trySign($order, auth()->user(), $request);
         });
 
         AuditLog::record($project, 'PROCURA', 'Seleccion de contratista pendiente de Presidencia', "Contratista {$data['contractorCode']} seleccionado; pendiente de aprobación de Presidencia.");
@@ -498,7 +503,7 @@ class ProjectController extends Controller
         return new ProjectResource($project->fresh()->load(Project::detailRelations()));
     }
 
-    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService, ClosureReportLinkService $closureLinks, PaymentOrderService $paymentOrders)
+    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService, ClosureReportLinkService $closureLinks, PaymentOrderService $paymentOrders, PaymentSignatureService $signatures)
     {
         $data = $request->validated();
 
@@ -513,10 +518,11 @@ class ProjectController extends Controller
 
         // El monto ya no lo decide quien paga: sale de la orden vigente
         // (F4 D10); si el que envía el cliente no coincide, se rechaza. Fuera
-        // de la transacción de escritura porque solo lee (regla 2.5). En el
-        // Bloque C esto también exigirá la cadena de firmas completa salvo
-        // el paso de Finanzas.
+        // de la transacción de escritura porque solo lee (regla 2.5).
         $order = $paymentOrders->assertReadyToPay($project, $data['paymentType'], (float) $data['amount']);
+        // La cadena debe estar completa salvo, a lo sumo, el último paso —
+        // que Finanzas firma dentro de la transacción de este método.
+        $signatures->assertReadyForPayment($order);
 
         // Todo movimiento contable requiere comprobante (Plan Maestro, Finanzas):
         // el cliente ya lo sube antes, pero la regla se garantiza aquí también.
@@ -528,7 +534,10 @@ class ProjectController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($project, $data, $rateFreezeService, $proof, $order) {
+        DB::transaction(function () use ($project, $data, $rateFreezeService, $proof, $order, $signatures, $request) {
+            // Firma "silenciosa" del paso de Finanzas, si es su turno.
+            $signatures->trySign($order, auth()->user(), $request);
+
             ProjectPayment::updateOrCreate(
                 ['project_id' => $project->id, 'payment_type' => $data['paymentType']],
                 [

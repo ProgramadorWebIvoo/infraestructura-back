@@ -15,6 +15,7 @@ class ContractorDocumentTypeResource extends JsonResource
             'isRequired' => $this->is_required,
             'isActive' => $this->is_active,
             'sortOrder' => $this->sort_order,
+            'documentsCount' => $this->whenCounted('documents'),
         ];
     }
 }

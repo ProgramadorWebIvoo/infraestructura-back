@@ -481,6 +481,13 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
         Route::patch('/contractors/config/{contractor}', [ContractorController::class, 'update']);
         Route::post('/contractors/config/{contractor}/toggle-status', [ContractorController::class, 'toggleStatus']);
 
+        // Catálogo de tipos de documento del proveedor (F4)
+        Route::get('/contractor-document-types/config', [ContractorDocumentTypeController::class, 'index']);
+        Route::post('/contractor-document-types/config', [ContractorDocumentTypeController::class, 'store']);
+        Route::patch('/contractor-document-types/config/{contractorDocumentType}', [ContractorDocumentTypeController::class, 'update']);
+        Route::post('/contractor-document-types/config/{contractorDocumentType}/toggle-status', [ContractorDocumentTypeController::class, 'toggleStatus']);
+        Route::delete('/contractor-document-types/config/{contractorDocumentType}', [ContractorDocumentTypeController::class, 'destroy']);
+
         // Materials catalog configuration
         Route::get('/materials/config', [MaterialController::class, 'index']);
         Route::post('/materials/config', [MaterialController::class, 'store']);

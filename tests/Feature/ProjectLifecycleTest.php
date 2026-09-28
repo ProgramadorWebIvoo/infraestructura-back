@@ -1060,6 +1060,14 @@ class ProjectLifecycleTest extends TestCase
     public function test_pay_rejects_payment_without_proof_document(): void
     {
         $project = Project::factory()->create(['requested_by_user_id' => $this->infra->id, 'status' => 'CONTRATADO']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $this->contractor->code,
+            'total_cost' => 1000,
+            'negotiated_advance_percent' => 10,
+        ]);
+        $project->update(['selected_contractor_code' => $this->contractor->code, 'selected_proposal_id' => $proposal->id]);
+        app(\App\Services\PaymentOrderService::class)->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_ADVANCE);
 
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100])

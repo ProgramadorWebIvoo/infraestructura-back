@@ -27,6 +27,8 @@ use App\Models\ProjectRateFreeze;
 use App\Services\AiFeatureGate;
 use App\Services\DossierEvaluationService;
 use App\Services\ClosureReportLinkService;
+use App\Models\PaymentOrder;
+use App\Services\PaymentOrderService;
 use App\Services\ProjectStateMachine;
 use App\Services\ResidentAssignmentService;
 use App\Support\ProjectLocation;
@@ -465,7 +467,7 @@ class ProjectController extends Controller
         return new ProjectResource($project);
     }
 
-    public function selectContractor(SelectContractorRequest $request, Project $project)
+    public function selectContractor(SelectContractorRequest $request, Project $project, PaymentOrderService $paymentOrders)
     {
         ProjectStateMachine::assertStatus($project, self::STATUSES['COMPARATIVA_ENVIADA'], 'Solo se puede seleccionar un contratista con el cuadro comparativo enviado (COMPARATIVA_ENVIADA).');
 
@@ -474,18 +476,24 @@ class ProjectController extends Controller
         $selectedProposal = $project->proposals()->whereKey($data['proposalId'])->first();
         abort_unless($selectedProposal, 422, 'La propuesta no pertenece al proyecto.');
 
-        $project->update([
-            'status' => self::STATUSES['PENDIENTE_PRESIDENCIA'],
-            'selected_contractor_code' => $data['contractorCode'],
-            'selected_proposal_id' => $data['proposalId'],
-        ]);
+        DB::transaction(function () use ($project, $data, $paymentOrders) {
+            $project->update([
+                'status' => self::STATUSES['PENDIENTE_PRESIDENCIA'],
+                'selected_contractor_code' => $data['contractorCode'],
+                'selected_proposal_id' => $data['proposalId'],
+            ]);
+
+            // La orden de anticipo nace aquí (D10): Presidencia debe firmar
+            // una orden ya existente al aprobar la adjudicación.
+            $paymentOrders->generate($project->fresh(), PaymentOrder::TYPE_ADVANCE);
+        });
 
         AuditLog::record($project, 'PROCURA', 'Seleccion de contratista pendiente de Presidencia', "Contratista {$data['contractorCode']} seleccionado; pendiente de aprobación de Presidencia.");
 
-        return new ProjectResource($project->load(Project::detailRelations()));
+        return new ProjectResource($project->fresh()->load(Project::detailRelations()));
     }
 
-    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService, ClosureReportLinkService $closureLinks)
+    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService, ClosureReportLinkService $closureLinks, PaymentOrderService $paymentOrders)
     {
         $data = $request->validated();
 
@@ -498,6 +506,13 @@ class ProjectController extends Controller
             ProjectStateMachine::assertStatus($project, self::STATUSES['LISTO_PAGO_FINAL'], 'El pago final solo se puede liberar tras la verificación de calidad (LISTO_PAGO_FINAL).');
         }
 
+        // El monto ya no lo decide quien paga: sale de la orden vigente
+        // (F4 D10); si el que envía el cliente no coincide, se rechaza. Fuera
+        // de la transacción de escritura porque solo lee (regla 2.5). En el
+        // Bloque C esto también exigirá la cadena de firmas completa salvo
+        // el paso de Finanzas.
+        $order = $paymentOrders->assertReadyToPay($project, $data['paymentType'], (float) $data['amount']);
+
         // Todo movimiento contable requiere comprobante (Plan Maestro, Finanzas):
         // el cliente ya lo sube antes, pero la regla se garantiza aquí también.
         $proofType = $data['paymentType'] === 'ADVANCE' ? 'COMPROBANTE_ANTICIPO' : 'COMPROBANTE_FINIQUITO';
@@ -508,12 +523,13 @@ class ProjectController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($project, $data, $rateFreezeService, $proof) {
+        DB::transaction(function () use ($project, $data, $rateFreezeService, $proof, $order) {
             ProjectPayment::updateOrCreate(
                 ['project_id' => $project->id, 'payment_type' => $data['paymentType']],
                 [
                     'proposal_id' => $project->selected_proposal_id,
-                    'amount' => $data['amount'],
+                    'payment_order_id' => $order->id,
+                    'amount' => $order->amount,
                     'paid_date' => $data['paidDate'] ?? now()->toDateString(),
                     'notes' => $data['notes'] ?? null,
                     'bank' => $data['bank'] ?? null,
@@ -522,6 +538,8 @@ class ProjectController extends Controller
                 ]
             );
 
+            $order->update(['status' => \App\Models\PaymentOrder::STATUS_PAGADA]);
+
             $project->update(['status' => $data['paymentType'] === 'ADVANCE' ? self::STATUSES['EN_EJECUCION'] : self::STATUSES['COMPLETADO_PAGADO']]);
 
             // Congela la tasa BCV vigente para el monto de este pago (si el
@@ -529,7 +547,7 @@ class ProjectController extends Controller
             $rateFreezeService->freezeForTrigger(
                 $project,
                 $data['paymentType'] === 'ADVANCE' ? ProjectRateFreeze::TRIGGER_PAGO_ANTICIPO : ProjectRateFreeze::TRIGGER_PAGO_FINIQUITO,
-                (float) $data['amount']
+                (float) $order->amount
             );
         });
 

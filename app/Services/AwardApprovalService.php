@@ -21,7 +21,7 @@ class AwardApprovalService
 {
     private const S = ProjectStateMachine::STATUSES;
 
-    public function __construct(private RateFreezeService $rateFreezeService)
+    public function __construct(private RateFreezeService $rateFreezeService, private PaymentOrderService $paymentOrders)
     {
     }
 
@@ -60,6 +60,10 @@ class AwardApprovalService
             'Rechazo de adjudicacion por Presidencia',
             $payload,
             function (Project $project) {
+                // La orden de anticipo nace en selectContractor (D10); si
+                // Presidencia rechaza, se anula — se regenera en la siguiente
+                // selección.
+                $this->paymentOrders->voidCurrent($project, \App\Models\PaymentOrder::TYPE_ADVANCE, 'Rechazo de la adjudicación por Presidencia.');
                 $project->selected_contractor_code = null;
                 $project->selected_proposal_id = null;
             }

@@ -23,8 +23,12 @@ class ProjectClosureService
 {
     private const S = ProjectStateMachine::STATUSES;
 
-    public function __construct(private ClosureReportLinkService $links, private ClosureMeasurementService $measurements, private ProjectModificationService $modifications)
-    {
+    public function __construct(
+        private ClosureReportLinkService $links,
+        private ClosureMeasurementService $measurements,
+        private ProjectModificationService $modifications,
+        private PaymentOrderService $paymentOrders,
+    ) {
     }
 
     /** Envío del contratista por el enlace público: partidas ejecutadas + notas + ≥1 foto. */
@@ -178,10 +182,14 @@ class ProjectClosureService
     {
         ProjectStateMachine::assertStatus($project, self::S['PENDIENTE_SOLICITUD_FINIQUITO'], 'Solo se puede solicitar el pago de una obra verificada por Auditoría (PENDIENTE_SOLICITUD_FINIQUITO).');
 
-        $project->update(['status' => self::S['LISTO_PAGO_FINAL']]);
+        DB::transaction(function () use ($project) {
+            $project->update(['status' => self::S['LISTO_PAGO_FINAL']]);
+            $this->paymentOrders->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_FINAL);
+        });
+
         AuditLog::record($project, 'PROCURA', 'Solicitud de pago de finiquito', "Monto propuesto: {$project->closureReport->finiquito_amount} USD.", $notes);
 
-        return $project;
+        return $project->fresh();
     }
 
     /** Procura devuelve a Auditoría cuando no está de acuerdo con lo verificado. */

@@ -149,6 +149,15 @@ class RateFreezeTest extends TestCase
     public function test_pay_advance_and_final_freeze_their_own_triggers(): void
     {
         $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $this->contractor->code,
+            'total_cost' => 20000.00,
+            'negotiated_advance_percent' => 30,
+        ]);
+        $project->update(['selected_contractor_code' => $this->contractor->code, 'selected_proposal_id' => $proposal->id]);
+        $paymentOrders = app(\App\Services\PaymentOrderService::class);
+        $paymentOrders->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_ADVANCE);
         $doc = \App\Models\ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)
@@ -165,7 +174,12 @@ class RateFreezeTest extends TestCase
             'source' => 'AUTO',
         ]);
 
+        \App\Models\ProjectClosureReport::updateOrCreate(
+            ['project_id' => $project->id],
+            ['id' => (string) \Illuminate\Support\Str::uuid(), 'status' => \App\Models\ProjectClosureReport::STATUS_AUDIT_APPROVED, 'finiquito_amount' => 14000.00]
+        );
         $project->update(['status' => 'LISTO_PAGO_FINAL']);
+        $paymentOrders->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_FINAL);
         $doc = \App\Models\ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_FINIQUITO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)

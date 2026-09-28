@@ -253,6 +253,7 @@ class RoleMiddlewareTest extends TestCase
         $response = $this->postJson('/api/contractors', [
             'name'      => 'Test Contractor',
             'rif'       => 'J-78901234-5',
+            ...\Tests\Support\ContractorDocumentFiles::payload(),
             'specialty' => 'General',
             'email'     => 'test@test.com',
         ]);

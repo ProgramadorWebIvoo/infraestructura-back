@@ -330,6 +330,7 @@ class NotificationDispatcherTest extends TestCase
         $response = $this->postJson('/api/contractors', [
             'name' => 'Constructora XYZ',
             'rif' => 'J-67890123-4',
+            ...\Tests\Support\ContractorDocumentFiles::payload(),
             'specialty' => 'Electricidad',
             'email' => 'contacto@xyz.com',
         ]);

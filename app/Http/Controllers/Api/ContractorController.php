@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Concerns\LogsPublicAccess;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RegisterContractorRequest;
 use App\Http\Requests\StoreContractorRequest;
 use App\Http\Requests\UpdateContractorRequest;
 use App\Http\Resources\ContractorResource;
 use App\Models\Contractor;
+use App\Models\ContractorDocument;
 use App\Models\ConfigAuditLog;
 use App\Services\AI\AIEvaluationService;
 use App\Services\AiFeatureGate;
+use App\Services\ContractorDocumentService;
 use App\Services\ContractorHistoryService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -21,6 +25,10 @@ class ContractorController extends Controller
     use LogsPublicAccess;
 
     public const CONTRACTOR_STATUSES = ['PENDING_REVIEW', 'ACTIVE', 'INACTIVE'];
+
+    public function __construct(private readonly ContractorDocumentService $documents)
+    {
+    }
 
     public function index()
     {
@@ -31,7 +39,7 @@ class ContractorController extends Controller
 
     public function store(StoreContractorRequest $request)
     {
-        $data = $request->validated();
+        $data = Arr::except($request->validated(), 'documents');
 
         $data['name'] = strip_tags($data['name']);
         $data['rif'] = strtoupper(strip_tags($data['rif']));
@@ -39,13 +47,16 @@ class ContractorController extends Controller
         if (isset($data['email'])) $data['email'] = strip_tags($data['email']);
         if (isset($data['phone'])) $data['phone'] = strip_tags($data['phone']);
 
-        $contractor = DB::transaction(function () use ($data) {
+        $contractor = DB::transaction(function () use ($data, $request) {
             $data['code'] ??= Contractor::nextCode();
             $data['rating'] ??= 4.0;
             $data['registration_source'] = 'INTERNAL';
             $data['status'] = $data['status'] ?? 'ACTIVE';
 
-            return Contractor::create($data);
+            $contractor = Contractor::create($data);
+            $this->documents->storeMany($contractor, $request->documentFiles(), ContractorDocument::SOURCE_INTERNAL);
+
+            return $contractor;
         });
 
         $details = "Proveedor: {$contractor->name} / Código: {$contractor->code}";
@@ -119,25 +130,9 @@ class ContractorController extends Controller
     /**
      * POST /api/contractors (público) — autoregistro de proveedor desde el portal público.
      */
-    public function registerPublic(Request $request)
+    public function registerPublic(RegisterContractorRequest $request)
     {
-        // Normalizar ANTES de validar: 'unique:contractors,rif' compara el
-        // string literal en BD, así que dos formatos de guiones distintos
-        // del mismo RIF (J123456789 vs J-12345678-9) no chocarían entre sí
-        // sin normalizar primero (ver Contractor::normalizeRif).
-        if ($request->has('rif')) {
-            $request->merge(['rif' => Contractor::normalizeRif($request->input('rif'))]);
-        }
-
-        $data = $request->validate([
-            'code' => ['nullable', 'string', 'max:30', 'unique:contractors,code'],
-            'name' => ['required', 'string', 'max:180'],
-            'rif' => ['required', 'string', 'max:15', 'regex:' . Contractor::RIF_REGEX, 'unique:contractors,rif'],
-            'specialty' => ['required', 'string', 'max:180'],
-            'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
-            'email' => ['required', 'email', 'max:180'],
-            'phone' => ['nullable', 'string', 'max:40'],
-        ]);
+        $data = Arr::except($request->validated(), 'documents');
 
         // Sanitización server-side: eliminar etiquetas HTML/XML de campos de texto
         $data['name'] = strip_tags($data['name']);
@@ -146,13 +141,16 @@ class ContractorController extends Controller
         $data['email'] = strip_tags($data['email']);
         if (isset($data['phone'])) $data['phone'] = strip_tags($data['phone']);
 
-        $contractor = DB::transaction(function () use ($data) {
+        $contractor = DB::transaction(function () use ($data, $request) {
             $data['code'] ??= Contractor::nextCode();
             $data['rating'] ??= 4.0;
             $data['registration_source'] = 'PUBLIC_PORTAL';
             $data['status'] = 'PENDING_REVIEW';
 
-            return Contractor::create($data);
+            $contractor = Contractor::create($data);
+            $this->documents->storeMany($contractor, $request->documentFiles(), ContractorDocument::SOURCE_PUBLIC_PORTAL);
+
+            return $contractor;
         });
 
         $this->logPublicAccess($request, 'contractor.register', "Proveedor: {$contractor->name} / Código: {$contractor->code}");

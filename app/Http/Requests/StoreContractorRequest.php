@@ -3,12 +3,15 @@
 namespace App\Http\Requests;
 
 use App\Http\Controllers\Api\ContractorController;
+use App\Http\Requests\Concerns\ValidatesContractorDocuments;
 use App\Models\Contractor;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreContractorRequest extends FormRequest
 {
+    use ValidatesContractorDocuments;
+
     public function authorize(): bool
     {
         return true;
@@ -37,6 +40,12 @@ class StoreContractorRequest extends FormRequest
             'phone'     => ['required_without:email', 'nullable', 'string', 'max:40'],
             'rating'    => ['nullable', 'numeric', 'min:0', 'max:5'],
             'status'    => ['sometimes', Rule::in(ContractorController::CONTRACTOR_STATUSES)],
+            ...$this->documentRules(),
         ];
+    }
+
+    public function attributes(): array
+    {
+        return $this->documentAttributes();
     }
 }

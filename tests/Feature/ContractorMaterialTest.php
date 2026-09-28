@@ -72,6 +72,7 @@ class ContractorMaterialTest extends TestCase
             ->postJson('/api/contractors/config', [
                 'name'      => 'Constructora del Sur',
                 'rif'       => 'J-12345678-9',
+                ...\Tests\Support\ContractorDocumentFiles::payload(),
                 'specialty' => 'Construcción Civil',
                 'email'     => 'contacto@constructorasur.com',
             ]);
@@ -95,6 +96,7 @@ class ContractorMaterialTest extends TestCase
             ->postJson('/api/contractors/config', [
                 'name'      => 'Constructora del Norte',
                 'rif'       => 'J-23456789-0',
+                ...\Tests\Support\ContractorDocumentFiles::payload(),
                 'specialty' => 'Plomería',
                 'phone'     => '+58 412-1234567',
             ]);
@@ -144,6 +146,7 @@ class ContractorMaterialTest extends TestCase
             ->postJson('/api/contractors/config', [
                 'name'      => '<script>alert("xss")</script>Constructora',
                 'rif'       => 'J-34567890-1',
+                ...\Tests\Support\ContractorDocumentFiles::payload(),
                 'specialty' => '<b>Especialidad</b>',
                 'email'     => 'test@test.com',
             ]);
@@ -212,6 +215,7 @@ class ContractorMaterialTest extends TestCase
         $response = $this->postJson('/api/contractors', [
             'name'      => 'Proveedor Público',
             'rif'       => 'J-45678901-2',
+            ...\Tests\Support\ContractorDocumentFiles::payload(),
             'specialty' => 'Electricidad',
             'email'     => 'proveedor@test.com',
         ]);

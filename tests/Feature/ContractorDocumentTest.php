@@ -10,6 +10,7 @@ use App\Services\ContractorDocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\ContractorDocumentFiles;
 use Tests\TestCase;
 
 class ContractorDocumentTest extends TestCase
@@ -165,5 +166,59 @@ class ContractorDocumentTest extends TestCase
             ->assertOk()
             ->assertJsonCount(4, 'data')
             ->assertJsonPath('data.0.key', 'rif');
+    }
+
+    private function registrationData(array $overrides = []): array
+    {
+        return array_merge([
+            'name' => 'Proveedor Nuevo',
+            'rif' => 'J-11111111-1',
+            'specialty' => 'Electricidad',
+            'email' => 'nuevo@test.com',
+        ], $overrides);
+    }
+
+    public function test_public_registration_stores_all_required_documents(): void
+    {
+        $this->postJson('/api/contractors', $this->registrationData(ContractorDocumentFiles::payload()))
+            ->assertCreated();
+
+        $contractor = Contractor::firstOrFail();
+        $this->assertSame(5, $contractor->documents()->count());
+        $this->assertSame('PUBLIC_PORTAL', $contractor->documents()->first()->source);
+        $this->assertTrue(app(ContractorDocumentService::class)->completeness($contractor)['complete']);
+    }
+
+    public function test_public_registration_without_a_required_document_is_rejected_and_creates_nothing(): void
+    {
+        $payload = ContractorDocumentFiles::payload();
+        $missingTypeId = ContractorDocumentType::where('key', 'rif')->value('id');
+        unset($payload['documents'][$missingTypeId]);
+
+        $this->postJson('/api/contractors', $this->registrationData($payload))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors("documents.{$missingTypeId}");
+
+        $this->assertSame(0, Contractor::count());
+    }
+
+    public function test_public_registration_rejects_invalid_file_type(): void
+    {
+        $payload = ContractorDocumentFiles::payload();
+        $typeId = ContractorDocumentType::where('key', 'rif')->value('id');
+        $payload['documents'][$typeId] = UploadedFile::fake()->create('rif.exe', 10);
+
+        $this->postJson('/api/contractors', $this->registrationData($payload))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors("documents.{$typeId}");
+    }
+
+    public function test_optional_type_does_not_block_registration(): void
+    {
+        ContractorDocumentType::where('key', 'rif_representante')->update(['is_required' => false]);
+        $payload = ContractorDocumentFiles::payload();
+        $this->assertCount(4, $payload['documents']);
+
+        $this->postJson('/api/contractors', $this->registrationData($payload))->assertCreated();
     }
 }

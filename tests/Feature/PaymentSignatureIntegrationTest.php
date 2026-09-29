@@ -91,8 +91,12 @@ class PaymentSignatureIntegrationTest extends TestCase
         $this->assertDatabaseMissing('project_payments', ['project_id' => $project->id]);
     }
 
-    /** Reproduce el bug real reportado: un SUPERADMIN no debe poder saltarse el paso configurado de otro rol solo por tener acceso a la acción. */
-    public function test_superadmin_cannot_bypass_a_configured_step_it_does_not_match(): void
+    /**
+     * Decisión del usuario 2026-09-29: la aprobación de Presidencia y la
+     * firma son cosas TOTALMENTE distintas — aprobar nunca exige ni bloquea
+     * por firma, sea quien sea el actor. Solo Finanzas (al pagar) bloquea.
+     */
+    public function test_award_approval_never_blocks_on_signature_even_for_a_mismatched_actor(): void
     {
         $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
         $project = Project::factory()->create(['status' => 'COMPARATIVA_ENVIADA']);
@@ -104,12 +108,37 @@ class PaymentSignatureIntegrationTest extends TestCase
             'contractorCode' => $this->contractor->code, 'proposalId' => $proposal->id,
         ])->assertStatus(200);
 
-        // El paso 1 (PROCURA) ya quedó firmado; el 2 (PRESIDENCIA) está pendiente.
-        $response = $this->actingAs($superadmin)->postJson("/api/projects/{$project->id}/award-approval");
+        // El paso 1 (PROCURA) ya quedó firmado; el 2 (PRESIDENCIA) está pendiente y
+        // SUPERADMIN no coincide con él — igual debe poder aprobar sin bloqueo.
+        $this->actingAs($superadmin)->postJson("/api/projects/{$project->id}/award-approval")->assertStatus(200);
+
+        $this->assertSame('APROBADO_PRESIDENCIA', $project->fresh()->status);
+        // El intento de firma es mejor esfuerzo: no coincidió, así que solo queda firmado el paso 1 (PROCURA).
+        $this->assertSame(1, PaymentOrder::where('project_id', $project->id)->firstOrFail()->signatures()->count());
+    }
+
+    /** El bloqueo real de "no saltarse el paso de otro rol" vive en pay(), no en award-approval. */
+    public function test_pay_blocks_a_superadmin_that_does_not_match_the_configured_signer(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $project = Project::factory()->create(['status' => 'COMPARATIVA_ENVIADA']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id, 'contractor_code' => $this->contractor->code,
+            'total_cost' => 10000, 'negotiated_advance_percent' => 30,
+        ]);
+        $this->actingAs($this->procura)->postJson("/api/projects/{$project->id}/select-contractor", [
+            'contractorCode' => $this->contractor->code, 'proposalId' => $proposal->id,
+        ]);
+        $this->actingAs($this->presidencia)->postJson("/api/projects/{$project->id}/award-approval");
+        $this->actingAs($this->procura)->postJson("/api/projects/{$project->id}/send-to-finance");
+        ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
+
+        $response = $this->actingAs($superadmin)->postJson("/api/projects/{$project->id}/payments", [
+            'paymentType' => 'ADVANCE', 'amount' => 3000.00,
+        ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors('signature');
-        $this->assertSame('PENDIENTE_PRESIDENCIA', $project->fresh()->status);
-        $this->assertSame(1, PaymentOrder::where('project_id', $project->id)->firstOrFail()->signatures()->count());
+        $this->assertDatabaseMissing('project_payments', ['project_id' => $project->id]);
     }
 
     /** El paso opcional (is_required=false) queda registrado si se firma en su turno, pero nunca bloquea a los pasos obligatorios siguientes. */

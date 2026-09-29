@@ -36,14 +36,16 @@ class AwardApprovalService
         DB::transaction(function () use ($project) {
             $project->update(['status' => self::S['APROBADO_PRESIDENCIA']]);
 
-            // Bloque C: Presidencia debe poder firmar su paso aquí mismo — si
-            // no le corresponde (rol distinto al configurado), la aprobación
-            // completa se revierte.
+            // La aprobación de Presidencia NUNCA exige firma (decisión del
+            // usuario 2026-09-29): solo Finanzas firma/bloquea, al pagar. Se
+            // mantiene el intento de firma en mejor esfuerzo — si algún día
+            // se configura un paso que coincida con quien aprueba, queda
+            // registrado, pero jamás revierte la aprobación si no coincide.
             $order = PaymentOrder::where('project_id', $project->id)
                 ->where('current_key', PaymentOrder::currentKeyFor($project->id, PaymentOrder::TYPE_ADVANCE))
                 ->first();
             if ($order) {
-                $this->signatures->signOrSkip($order, auth()->user());
+                $this->signatures->trySign($order, auth()->user());
             }
         });
 

@@ -13,7 +13,21 @@ use App\Support\ProjectFigures;
 class ProjectHistoryDetailBuilder
 {
     private const DRAWING_TYPES = ['PLANO', 'CALC', 'CORRECCION'];
+    private const REQUEST_DOCUMENT_TYPES = ['FOTO', 'REEVALUACION'];
     private const TIMELINE_LIMIT = 300;
+
+    /** Acciones de AuditLog que pertenecen a la etapa Presupuesto y Solicitud
+     *  (creación → revisión de Auditoría → rechazo/reenvío → reevaluación con
+     *  Procura), tal como las registra ProjectController. Se filtra sobre los
+     *  logs ya cargados para no duplicar la lectura de auditoría. */
+    private const REQUEST_STAGE_ACTIONS = [
+        'Creacion de peticion de obra',
+        'Rechazo de petición de obra',
+        'Reenvío de petición corregida',
+        'Revision tecnica de calculos y planos',
+        'Solicitud de reevaluación a Auditoría',
+        'Reevaluación resuelta, reenviado a Procura',
+    ];
 
     public function build(Project $project): array
     {
@@ -51,7 +65,7 @@ class ProjectHistoryDetailBuilder
             'figures' => $figures,
             'stages' => $this->stages($project, $drawings),
             'budget' => $this->budget($project),
-            'request' => $this->request($project, $auditLogs->first()),
+            'request' => $this->request($project, $auditLogs),
             'suppliers' => $this->suppliers($project),
             'award' => $this->award($project, $awardedProposal),
             'payments' => $this->payments($project, $figures['awarded']),
@@ -115,14 +129,24 @@ class ProjectHistoryDetailBuilder
         return ['lines' => $lines->all(), 'linesTotal' => round($lines->sum('estimatedSubtotal'), 2)];
     }
 
-    private function request(Project $project, $firstLog): array
+    private function request(Project $project, $auditLogs): array
     {
         return [
             'createdDate' => optional($project->created_date)->format('Y-m-d'),
-            'createdBy' => $firstLog?->user_name_snapshot,
+            'createdBy' => $auditLogs->first()?->user_name_snapshot,
             'reviewNotes' => $project->audit_notes,
             'procuraNotes' => $project->procura_review_notes,
             'dossierAiScore' => $project->dossier_ai_score,
+            'documents' => $this->documentsByGroup($project, self::REQUEST_DOCUMENT_TYPES),
+            'history' => $auditLogs->whereIn('action', self::REQUEST_STAGE_ACTIONS)->map(fn ($log) => [
+                'id' => $log->id,
+                'at' => optional($log->logged_at)->toIso8601String(),
+                'role' => $log->role,
+                'user' => $log->user_name_snapshot,
+                'action' => $log->action,
+                'details' => $log->details,
+                'observations' => $log->observations,
+            ])->values()->all(),
         ];
     }
 
@@ -209,9 +233,15 @@ class ProjectHistoryDetailBuilder
     /** Planos/cálculos/correcciones agrupados por documento lógico, con todas sus versiones. */
     private function drawings(Project $project): array
     {
+        return $this->documentsByGroup($project, self::DRAWING_TYPES);
+    }
+
+    /** Documentos de $types agrupados por documento lógico, con todas sus versiones (mismo esquema para drawings() y request.documents). */
+    private function documentsByGroup(Project $project, array $types): array
+    {
         return ProjectDocument::withTrashed()
             ->where('project_id', $project->id)
-            ->whereIn('document_type', self::DRAWING_TYPES)
+            ->whereIn('document_type', $types)
             ->with('uploader:id,name')
             ->orderBy('version_number')
             ->get()

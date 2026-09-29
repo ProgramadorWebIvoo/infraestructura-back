@@ -159,6 +159,56 @@ class PaymentSignatureService
     }
 
     /**
+     * Autoriza ver el detalle de una orden: los roles tradicionales del
+     * circuito (compatibilidad con el comportamiento previo, restringido por
+     * middleware de ruta) o cualquier usuario que tenga un paso a su
+     * nombre/rol en la cadena configurada para el tipo de pago de esta
+     * orden — así un rol nuevo (INFRAESTRUCTURA, AUDITORIA, etc.) agregado
+     * como firmante también puede ver "su" orden sin necesitar acceso a
+     * Finanzas/Procura/Presidencia.
+     */
+    public function canViewOrder(PaymentOrder $order, User $user): bool
+    {
+        if (in_array($user->role, ['ADMIN', 'SUPERADMIN', 'PROCURA', 'PRESIDENCIA', 'FINANZAS'], true)) {
+            return true;
+        }
+
+        return $this->stepsFor($order->payment_type)->contains(fn (PaymentSignatureStep $step) => $step->canBeSignedBy($user));
+    }
+
+    /**
+     * Si el usuario NO tiene ningún paso activo configurado a su nombre/rol,
+     * la bandeja de "Firmas pendientes" no debe ni aparecer en el sidebar
+     * (F4 Bloque C): sin esto, todo rol vería la pestaña vacía siempre.
+     */
+    public function hasConfiguredStepsFor(User $user): bool
+    {
+        return PaymentSignatureStep::where('is_active', true)
+            ->where(fn ($q) => $q->where('user_id', $user->id)->orWhere('role', $user->role))
+            ->exists();
+    }
+
+    /**
+     * Órdenes de pago vigentes (no pagadas/anuladas) donde AHORA le toca
+     * firmar a este usuario — mismo criterio que `canSign` en
+     * PaymentOrderController::show, pero across todas las órdenes en vez de
+     * una sola. Alimenta la bandeja "Firmas pendientes" del sidebar.
+     *
+     * @return \Illuminate\Support\Collection<int, PaymentOrder>
+     */
+    public function pendingSignaturesFor(User $user)
+    {
+        return PaymentOrder::whereNotNull('current_key')
+            ->whereNotIn('status', [PaymentOrder::STATUS_PAGADA, PaymentOrder::STATUS_ANULADA])
+            ->get()
+            ->filter(function (PaymentOrder $order) use ($user) {
+                $step = $this->nextPendingStep($order);
+                return $step !== null && $step->canBeSignedBy($user);
+            })
+            ->values();
+    }
+
+    /**
      * Línea de firmas para el frontend: cada paso configurado con su estado
      * (firmado / próximo / pendiente) y quién firmó, en orden.
      *

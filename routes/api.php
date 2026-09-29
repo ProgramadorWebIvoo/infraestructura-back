@@ -434,13 +434,22 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
         Route::delete('/contractors/{contractor}/documents/{document}', [ContractorDocumentController::class, 'destroy']);
     });
 
-    // Orden de pago digital y firmas (F4 Bloque B/C): visible para quienes
-    // participan del circuito de adjudicación/pago; firmar exige además que
-    // sea el turno del usuario (validado en el servicio, no aquí).
-    Route::middleware('role:ADMIN,SUPERADMIN,PROCURA,PRESIDENCIA,FINANZAS')->group(function () {
-        Route::get('/payment-orders/{paymentOrder}', [PaymentOrderController::class, 'show']);
-        Route::post('/payment-orders/{paymentOrder}/sign', [PaymentOrderController::class, 'sign']);
-    });
+    // Bandeja "Firmas pendientes" (F4 Bloque C): sin restricción de rol a
+    // propósito — la cadena de firmas es configurable con cualquier rol del
+    // sistema, así que un INFRAESTRUCTURA/AUDITORIA/etc. con un paso a su
+    // nombre también debe poder verla. El propio servicio autoescopa el
+    // resultado al usuario autenticado, nunca expone órdenes ajenas. Debe ir
+    // ANTES del wildcard /payment-orders/{paymentOrder} de abajo.
+    Route::get('/payment-orders/pending-signatures', [PaymentOrderController::class, 'pendingSignatures']);
+
+    // Orden de pago digital y firmas (F4 Bloque B/C): sin whitelist de rol a
+    // nivel de ruta — la cadena de firmas es configurable con cualquier rol
+    // del sistema (Roles::valid() es dinámico, ver app/Support/Roles.php),
+    // así que un rol fuera de la lista original de 5 también debe poder ver
+    // y firmar SU paso. La autorización real vive en el controller
+    // (canViewOrder) y en el servicio (canBeSignedBy dentro de sign()).
+    Route::get('/payment-orders/{paymentOrder}', [PaymentOrderController::class, 'show']);
+    Route::post('/payment-orders/{paymentOrder}/sign', [PaymentOrderController::class, 'sign']);
 
     // Gestión de usuarios, roles y permisos de acceso — exclusivo SUPERADMIN:
     // un ADMIN no debe poder asignarse (ni asignarle a otro) el rol SUPERADMIN

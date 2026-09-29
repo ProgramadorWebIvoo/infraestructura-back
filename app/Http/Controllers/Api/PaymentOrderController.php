@@ -17,11 +17,13 @@ class PaymentOrderController extends Controller
     ) {
     }
 
-    /** Detalle de una orden con su línea de firmas y verificación de integridad — sin enlace ni pantalla nueva (D11), consumida desde la orden en Finanzas/Procura. */
+    /** Detalle de una orden con su línea de firmas y verificación de integridad — sin enlace ni pantalla nueva (D11), consumida desde la orden en Finanzas/Procura/Presidencia y desde "Firmas pendientes". */
     public function show(PaymentOrder $paymentOrder)
     {
-        $paymentOrder->load(['elaboratedBy:id,name', 'signatures.user:id,name', 'signatures.step']);
         $user = auth()->user();
+        abort_unless($this->signatures->canViewOrder($paymentOrder, $user), 403);
+
+        $paymentOrder->load(['elaboratedBy:id,name', 'signatures.user:id,name', 'signatures.step']);
         $nextStep = $this->signatures->nextPendingStep($paymentOrder);
 
         return response()->json([
@@ -48,5 +50,24 @@ class PaymentOrderController extends Controller
         $signature = $this->signatures->sign($paymentOrder, auth()->user(), request());
 
         return response()->json(['data' => ['id' => $signature->id, 'signedAt' => $signature->signed_at->toIso8601String()]], 201);
+    }
+
+    /**
+     * Bandeja "Firmas pendientes" (F4 Bloque C): sin restricción de rol —
+     * cualquier usuario autenticado puede consultar si le corresponde firmar
+     * algo, sea cual sea su rol. El sidebar solo muestra la pestaña cuando
+     * hasConfiguredSteps es true, para no mostrarla vacía a todo el mundo.
+     */
+    public function pendingSignatures()
+    {
+        $user = auth()->user();
+        $orders = $this->signatures->pendingSignaturesFor($user)->load(['elaboratedBy:id,name', 'signatures.user:id,name', 'signatures.step']);
+
+        return response()->json([
+            'data' => [
+                'hasConfiguredSteps' => $this->signatures->hasConfiguredStepsFor($user),
+                'orders' => PaymentOrderResource::collection($orders)->resolve(),
+            ],
+        ]);
     }
 }

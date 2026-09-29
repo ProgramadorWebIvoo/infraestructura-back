@@ -17,12 +17,17 @@ use Illuminate\Validation\Rule;
  * autenticado (el frontend la necesita para ocultar botones de IA en
  * cualquier rol, no solo en el panel de administración); `update` es
  * exclusivo SUPERADMIN, igual que el resto de credenciales/config de IA.
+ *
+ * El interruptor GLOBAL (department = AiFeatureGate::GLOBAL_DEPARTMENT) usa
+ * el mismo endpoint con un valor reservado fuera del catálogo de
+ * departamentos de negocio — no se crea una ruta aparte.
  */
 class AiFeatureToggleController extends Controller
 {
     public function index(): JsonResponse
     {
         return response()->json(['data' => [
+            'global' => AiFeatureGate::isGlobalEnabled(),
             'departments' => AiFeatureCatalog::departments(),
             'actions' => AiFeatureCatalog::toOptions(),
             'matrix' => AiFeatureGate::matrix(),
@@ -32,13 +37,36 @@ class AiFeatureToggleController extends Controller
     public function update(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'department' => ['required', 'string', Rule::in(AiFeatureCatalog::departments())],
+            'department' => [
+                'required',
+                'string',
+                Rule::in([...AiFeatureCatalog::departments(), AiFeatureGate::GLOBAL_DEPARTMENT]),
+            ],
             'action' => ['nullable', 'string'],
             'enabled' => ['required', 'boolean'],
         ]);
 
         $department = $data['department'];
         $action = $data['action'] ?? null;
+
+        if ($department === AiFeatureGate::GLOBAL_DEPARTMENT) {
+            AiFeatureGate::setGlobalEnabled($data['enabled']);
+            ConfigAuditLog::recordAdminAction(
+                'ai_feature_toggle',
+                'Modificacion de disponibilidad de IA por departamento',
+                null,
+                null,
+                sprintf('Interruptor GLOBAL de IA: %s', $data['enabled'] ? 'Habilitado' : 'Deshabilitado'),
+            );
+
+            return response()->json(['data' => [
+                'department' => $department,
+                'action' => null,
+                'enabled' => $data['enabled'],
+                'global' => AiFeatureGate::isGlobalEnabled(),
+                'matrix' => AiFeatureGate::matrix(),
+            ]]);
+        }
 
         if ($action !== null) {
             abort_unless(
@@ -74,6 +102,7 @@ class AiFeatureToggleController extends Controller
             'department' => $department,
             'action' => $action,
             'enabled' => $data['enabled'],
+            'global' => AiFeatureGate::isGlobalEnabled(),
             'matrix' => AiFeatureGate::matrix(),
         ]]);
     }

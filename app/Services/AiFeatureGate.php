@@ -15,11 +15,22 @@ use Illuminate\Support\Facades\Cache;
  * Sin fila configurada = habilitado (fail-open a favor de las features que ya
  * existían antes de este sistema de toggles — Procura/Auditoría no
  * deben apagarse solas al desplegar esto).
+ *
+ * Interruptor GLOBAL: una fila reservada (departamento GLOBAL_DEPARTMENT,
+ * action null) que apaga TODA la IA del sistema de un solo golpe, sin
+ * importar el estado de los interruptores por departamento/acción. Vive en
+ * la misma tabla que el resto de toggles (no se crea un mecanismo aparte) y
+ * se resuelve primero en isDepartmentEnabled(), de modo que cualquier
+ * consumidor existente de isEnabled()/isDepartmentEnabled() ya respeta el
+ * apagado global sin cambios adicionales.
  */
 class AiFeatureGate
 {
     private const CACHE_KEY = 'ai_feature_toggles.all';
     private const CACHE_TTL_SECONDS = 300;
+
+    /** Clave reservada, fuera del catálogo de departamentos de negocio. */
+    public const GLOBAL_DEPARTMENT = '__GLOBAL__';
 
     /** @return array<string, array{master: bool, actions: array<string, bool>}> */
     public static function all(): array
@@ -42,8 +53,16 @@ class AiFeatureGate
         Cache::forget(self::CACHE_KEY);
     }
 
+    public static function isGlobalEnabled(): bool
+    {
+        return self::all()[self::GLOBAL_DEPARTMENT]['master'] ?? true;
+    }
+
     public static function isDepartmentEnabled(string $department): bool
     {
+        if (!self::isGlobalEnabled()) {
+            return false;
+        }
         return self::all()[$department]['master'] ?? true;
     }
 
@@ -56,6 +75,15 @@ class AiFeatureGate
     public static function isEnabled(string $department, string $action): bool
     {
         return self::isDepartmentEnabled($department) && self::isActionEnabled($department, $action);
+    }
+
+    public static function setGlobalEnabled(bool $enabled): void
+    {
+        AiFeatureToggle::updateOrCreate(
+            ['department' => self::GLOBAL_DEPARTMENT, 'action' => null],
+            ['enabled' => $enabled],
+        );
+        self::forget();
     }
 
     public static function setDepartmentEnabled(string $department, bool $enabled): void

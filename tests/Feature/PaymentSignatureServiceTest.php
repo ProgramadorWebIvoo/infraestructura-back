@@ -142,6 +142,31 @@ class PaymentSignatureServiceTest extends TestCase
         $this->assertTrue(true);
     }
 
+    /**
+     * SUPERADMIN es la cuenta de depuración: un paso configurado con
+     * role=SUPERADMIN no debe poder autosatisfacerse por coincidencia de rol
+     * — de lo contrario, probar el circuito completo con esa cuenta nunca
+     * muestra el bloqueo real (bug reportado por el usuario). Sigue
+     * pudiendo firmarse si se asigna por user_id a una persona puntual.
+     */
+    public function test_superadmin_cannot_satisfy_a_step_by_role_match(): void
+    {
+        $step = PaymentSignatureStep::create(['payment_type' => 'FINAL', 'step_order' => 1, 'role' => 'SUPERADMIN', 'label' => 'Paso mal configurado']);
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->assertFalse($step->canBeSignedBy($superadmin));
+    }
+
+    public function test_superadmin_can_still_sign_when_assigned_by_specific_user_id(): void
+    {
+        $chosen = User::factory()->create(['role' => 'SUPERADMIN']);
+        $other = User::factory()->create(['role' => 'SUPERADMIN']);
+        $step = PaymentSignatureStep::create(['payment_type' => 'FINAL', 'step_order' => 1, 'user_id' => $chosen->id, 'label' => 'Persona puntual']);
+
+        $this->assertTrue($step->canBeSignedBy($chosen));
+        $this->assertFalse($step->canBeSignedBy($other));
+    }
+
     public function test_cannot_sign_a_voided_or_paid_order(): void
     {
         $order = $this->orderWithSteps();

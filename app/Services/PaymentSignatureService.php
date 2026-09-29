@@ -102,9 +102,19 @@ class PaymentSignatureService
      * hay pasos configurados, o ya está completa), no hace nada — el paso
      * queda para la bandeja de la orden. NUNCA bloquea a quien la llama; para
      * eso está `assertCanProceed()`/`signOrSkip()`.
+     *
+     * SUPERADMIN nunca firma por esta vía, aunque `canBeSignedBy()` le dé
+     * permiso para firmar cualquier paso — ese permiso es para el acto
+     * EXPLÍCITO de entrar y hacer clic en "Firmar" (endpoint `sign()`), no
+     * para que quede firmado como efecto colateral de aprobar/pagar/etc. Así
+     * "puede hacer todo" nunca significa "en silencio" (decisión 2026-09-29).
      */
     public function trySign(PaymentOrder $order, User $user, ?Request $request = null): void
     {
+        if ($user->role === 'SUPERADMIN') {
+            return;
+        }
+
         try {
             $this->sign($order, $user, $request);
         } catch (ValidationException|\Symfony\Component\HttpKernel\Exception\HttpException) {
@@ -120,10 +130,15 @@ class PaymentSignatureService
      * firma anterior" (Req 2.5). Sin pasos obligatorios pendientes (no hay
      * cadena, todos firmados, o el que falta es opcional) no bloquea (D2).
      * Se usa en los puntos del circuito que SÍ son el lugar natural donde
-     * debe firmarse un paso (selectContractor, award-approval,
-     * finiquito-request, pay) — nunca en confirmaciones intermedias como
-     * send-to-finance, para no bloquear esperando una firma que solo puede
-     * darse más adelante en el circuito (evita un candado cruzado).
+     * debe firmarse un paso (selectContractor, finiquito-request, pay) —
+     * nunca en confirmaciones intermedias como send-to-finance, para no
+     * bloquear esperando una firma que solo puede darse más adelante en el
+     * circuito (evita un candado cruzado).
+     *
+     * SUPERADMIN nunca pasa gratis por su bypass de `canBeSignedBy()`: como
+     * `trySign()` nunca firma por él, dejarlo pasar aquí sería la misma
+     * firma silenciosa que se quiere evitar — debe firmar explícitamente
+     * primero (ver `sign()`) para que el paso deje de estar pendiente.
      */
     public function assertCanProceed(PaymentOrder $order, User $user): void
     {
@@ -132,7 +147,9 @@ class PaymentSignatureService
             return;
         }
 
-        if (!$step->canBeSignedBy($user)) {
+        $canProceed = $user->role === 'SUPERADMIN' ? false : $step->canBeSignedBy($user);
+
+        if (!$canProceed) {
             $signer = $step->user_id !== null ? ($step->user?->name ?? 'un usuario específico') : $step->role;
             throw ValidationException::withMessages([
                 'signature' => "Falta la firma de «{$step->label}» ({$signer}) antes de continuar.",
@@ -180,9 +197,17 @@ class PaymentSignatureService
      * Si el usuario NO tiene ningún paso activo configurado a su nombre/rol,
      * la bandeja de "Firmas pendientes" no debe ni aparecer en el sidebar
      * (F4 Bloque C): sin esto, todo rol vería la pestaña vacía siempre.
+     *
+     * SUPERADMIN puede firmar cualquier paso (bypass), así que para esa
+     * cuenta basta con que exista CUALQUIER paso activo, sin importar de qué
+     * rol — es su bandeja de supervisión de todo el circuito.
      */
     public function hasConfiguredStepsFor(User $user): bool
     {
+        if ($user->role === 'SUPERADMIN') {
+            return PaymentSignatureStep::where('is_active', true)->exists();
+        }
+
         return PaymentSignatureStep::where('is_active', true)
             ->where(fn ($q) => $q->where('user_id', $user->id)->orWhere('role', $user->role))
             ->exists();

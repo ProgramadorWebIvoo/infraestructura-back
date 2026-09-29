@@ -143,28 +143,58 @@ class PaymentSignatureServiceTest extends TestCase
     }
 
     /**
-     * SUPERADMIN es la cuenta de depuración: un paso configurado con
-     * role=SUPERADMIN no debe poder autosatisfacerse por coincidencia de rol
-     * — de lo contrario, probar el circuito completo con esa cuenta nunca
-     * muestra el bloqueo real (bug reportado por el usuario). Sigue
-     * pudiendo firmarse si se asigna por user_id a una persona puntual.
+     * SUPERADMIN "debe poder hacer todo" (decisión 2026-09-29): puede firmar
+     * EXPLÍCITAMENTE cualquier paso, sin importar el rol/usuario configurado
+     * — bypass total, distinto de cualquier otro rol.
      */
-    public function test_superadmin_cannot_satisfy_a_step_by_role_match(): void
+    public function test_superadmin_can_explicitly_sign_any_step_regardless_of_configured_role(): void
     {
-        $step = PaymentSignatureStep::create(['payment_type' => 'FINAL', 'step_order' => 1, 'role' => 'SUPERADMIN', 'label' => 'Paso mal configurado']);
+        $step = PaymentSignatureStep::create(['payment_type' => 'FINAL', 'step_order' => 1, 'role' => 'FINANZAS', 'label' => 'Paso de Finanzas']);
         $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
 
-        $this->assertFalse($step->canBeSignedBy($superadmin));
+        $this->assertTrue($step->canBeSignedBy($superadmin));
     }
 
-    public function test_superadmin_can_still_sign_when_assigned_by_specific_user_id(): void
+    /**
+     * Pero ese bypass NUNCA es silencioso: `trySign()` (el auto-firmado que
+     * disparan aprobar/pagar/etc.) nunca firma por SUPERADMIN, así que
+     * `assertCanProceed()` sigue bloqueándolo aunque técnicamente pudiera
+     * firmar — debe pasar primero por el acto explícito de `sign()`.
+     */
+    public function test_superadmin_is_still_blocked_by_assert_can_proceed_until_it_signs_explicitly(): void
     {
-        $chosen = User::factory()->create(['role' => 'SUPERADMIN']);
-        $other = User::factory()->create(['role' => 'SUPERADMIN']);
-        $step = PaymentSignatureStep::create(['payment_type' => 'FINAL', 'step_order' => 1, 'user_id' => $chosen->id, 'label' => 'Persona puntual']);
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
 
-        $this->assertTrue($step->canBeSignedBy($chosen));
-        $this->assertFalse($step->canBeSignedBy($other));
+        $this->expectException(ValidationException::class);
+        $service->assertCanProceed($order, $superadmin);
+    }
+
+    public function test_try_sign_never_signs_silently_for_superadmin(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $service->trySign($order, $superadmin);
+
+        $this->assertSame(0, $order->signatures()->count());
+    }
+
+    public function test_superadmin_explicit_sign_advances_the_chain_for_the_next_real_actor(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        // Firma explícita del primer paso (PROCURA) — permitido por el bypass.
+        $service->sign($order, $superadmin);
+        $this->assertSame(1, $order->fresh()->signatures()->count());
+
+        // Ahora le toca a PRESIDENCIA (paso 2) — ya no bloquea a ese actor real.
+        $service->assertCanProceed($order, User::factory()->create(['role' => 'PRESIDENCIA']));
+        $this->assertTrue(true);
     }
 
     public function test_cannot_sign_a_voided_or_paid_order(): void

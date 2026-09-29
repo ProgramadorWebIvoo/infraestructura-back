@@ -139,7 +139,10 @@ class ResidentAssignmentService
 
     /**
      * Cambio posterior del residente de una obra personalizada (D14, S3): solo
-     * Auditoría/ADMIN, con motivo, hasta INFORME_ENVIADO.
+     * Auditoría/ADMIN, con motivo, mientras el cierre siga sin verificar por
+     * Auditoría (hasta VERIFICANDO_FINALIZACION inclusive). Una vez Auditoría
+     * aprueba el cierre (PENDIENTE_SOLICITUD_FINIQUITO en adelante), el
+     * expediente ya quedó certificado con ese residente y no se reabre.
      */
     public function changeProjectResident(Project $project, User $to, string $reason): void
     {
@@ -148,8 +151,8 @@ class ResidentAssignmentService
         }
 
         $order = ProjectStateMachine::STATUS_ORDER[$project->status] ?? null;
-        if ($order === null || $order > ProjectStateMachine::STATUS_ORDER['INFORME_ENVIADO']) {
-            throw ValidationException::withMessages(['residentUserId' => ['El residente solo puede cambiarse hasta que el informe de cierre esté enviado.']])->status(422);
+        if ($order === null || $order > ProjectStateMachine::STATUS_ORDER['VERIFICANDO_FINALIZACION']) {
+            throw ValidationException::withMessages(['residentUserId' => ['El residente solo puede cambiarse mientras Auditoría no haya verificado el cierre de la obra.']])->status(422);
         }
 
         $this->assertValidResident($to);

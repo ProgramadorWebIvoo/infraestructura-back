@@ -113,14 +113,16 @@ class ProjectResidentAssignmentTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('reason');
     }
 
-    public function test_change_is_allowed_up_to_informe_enviado_only(): void
+    public function test_change_is_allowed_up_to_verificando_finalizacion_only(): void
     {
         $open = $this->custom('INFORME_ENVIADO', ['resident_user_id' => $this->rita->id]);
-        $late = $this->custom('VERIFICANDO_FINALIZACION', ['resident_user_id' => $this->rita->id]);
+        $stillOpen = $this->custom('VERIFICANDO_FINALIZACION', ['resident_user_id' => $this->rita->id]);
+        $late = $this->custom('PENDIENTE_SOLICITUD_FINIQUITO', ['resident_user_id' => $this->rita->id]);
         $rejected = $this->custom('RECHAZADO_AUDITORIA');
         $body = ['residentUserId' => $this->omar->id, 'reason' => 'Cambio'];
 
         $this->actingAs($this->auditoria)->patchJson("/api/projects/{$open->id}/resident", $body)->assertOk();
+        $this->actingAs($this->auditoria)->patchJson("/api/projects/{$stillOpen->id}/resident", $body)->assertOk();
         $this->actingAs($this->auditoria)->patchJson("/api/projects/{$late->id}/resident", $body)->assertUnprocessable();
         $this->actingAs($this->auditoria)->patchJson("/api/projects/{$rejected->id}/resident", $body)->assertUnprocessable();
     }

@@ -94,29 +94,51 @@ class PaymentSignatureServiceTest extends TestCase
         $order = app(PaymentOrderService::class)->generate($project->fresh(), PaymentOrder::TYPE_ADVANCE);
 
         $service = app(PaymentSignatureService::class);
-        $service->assertReadyForPayment($order); // no lanza
+        $service->assertCanProceed($order, User::factory()->create(['role' => 'FINANZAS'])); // no lanza
 
         $this->assertTrue($service->isFullySigned($order));
     }
 
-    public function test_assert_ready_for_payment_allows_only_the_last_step_pending(): void
+    public function test_assert_can_proceed_blocks_when_an_earlier_required_step_is_pending(): void
     {
         $order = $this->orderWithSteps();
         $service = app(PaymentSignatureService::class);
         $service->sign($order, User::factory()->create(['role' => 'PROCURA']));
 
         $this->expectException(ValidationException::class);
-        $service->assertReadyForPayment($order);
+        $service->assertCanProceed($order, User::factory()->create(['role' => 'FINANZAS']));
     }
 
-    public function test_assert_ready_for_payment_passes_when_only_last_step_pending(): void
+    public function test_assert_can_proceed_passes_for_the_actor_of_the_next_pending_step(): void
     {
         $order = $this->orderWithSteps();
         $service = app(PaymentSignatureService::class);
         $service->sign($order, User::factory()->create(['role' => 'PROCURA']));
         $service->sign($order, User::factory()->create(['role' => 'PRESIDENCIA']));
 
-        $service->assertReadyForPayment($order); // no lanza: solo falta FINANZAS
+        $service->assertCanProceed($order, User::factory()->create(['role' => 'FINANZAS'])); // no lanza: le toca a Finanzas
+        $this->assertTrue(true);
+    }
+
+    public function test_assert_can_proceed_blocks_the_wrong_actor_even_with_correct_turn(): void
+    {
+        $order = $this->orderWithSteps();
+        $service = app(PaymentSignatureService::class);
+        $service->sign($order, User::factory()->create(['role' => 'PROCURA']));
+        $service->sign($order, User::factory()->create(['role' => 'PRESIDENCIA']));
+
+        $this->expectException(ValidationException::class);
+        $service->assertCanProceed($order, User::factory()->create(['role' => 'SUPERADMIN']));
+    }
+
+    public function test_optional_step_never_blocks_a_later_required_step(): void
+    {
+        $order = $this->orderWithSteps();
+        PaymentSignatureStep::where('payment_type', 'ADVANCE')->where('step_order', 1)->update(['is_required' => false]);
+        $service = app(PaymentSignatureService::class);
+
+        // El paso 1 (PROCURA, ahora opcional) nunca se firma; el 2 (PRESIDENCIA) es obligatorio y debe poder avanzar igual.
+        $service->assertCanProceed($order, User::factory()->create(['role' => 'PRESIDENCIA'])); // no lanza
         $this->assertTrue(true);
     }
 

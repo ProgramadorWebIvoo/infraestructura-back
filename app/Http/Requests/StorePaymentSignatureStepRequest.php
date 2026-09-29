@@ -25,6 +25,7 @@ class StorePaymentSignatureStepRequest extends FormRequest
             'userId' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'label' => [$required, 'string', 'max:150'],
             'isActive' => ['sometimes', 'boolean'],
+            'isRequired' => ['sometimes', 'boolean'],
         ];
     }
 

@@ -493,8 +493,11 @@ class ProjectController extends Controller
             // una orden ya existente al aprobar la adjudicación.
             $order = $paymentOrders->generate($project->fresh(), PaymentOrder::TYPE_ADVANCE);
 
-            // Firma "silenciosa" del primer paso (Bloque C): si la cadena
-            // configurada empieza en PROCURA, queda firmado de una vez.
+            // Solo mejor esfuerzo (nunca bloquea): esta es la PRIMERA acción
+            // del circuito, así que "el próximo paso obligatorio" puede caer
+            // más adelante en la cadena (ej. un paso opcional antes) sin que
+            // eso signifique que selectContractor deba esperarlo — el gate
+            // real está en award-approval y pay(), donde si aplica de verdad.
             $signatures->trySign($order, auth()->user(), $request);
         });
 
@@ -522,7 +525,7 @@ class ProjectController extends Controller
         $order = $paymentOrders->assertReadyToPay($project, $data['paymentType'], (float) $data['amount']);
         // La cadena debe estar completa salvo, a lo sumo, el último paso —
         // que Finanzas firma dentro de la transacción de este método.
-        $signatures->assertReadyForPayment($order);
+        $signatures->assertCanProceed($order, auth()->user());
 
         // Todo movimiento contable requiere comprobante (Plan Maestro, Finanzas):
         // el cliente ya lo sube antes, pero la regla se garantiza aquí también.
@@ -535,8 +538,8 @@ class ProjectController extends Controller
         }
 
         DB::transaction(function () use ($project, $data, $rateFreezeService, $proof, $order, $signatures, $request) {
-            // Firma "silenciosa" del paso de Finanzas, si es su turno.
-            $signatures->trySign($order, auth()->user(), $request);
+            // Firma el paso de Finanzas — ya se validó arriba que le corresponde.
+            $signatures->signOrSkip($order, auth()->user(), $request);
 
             ProjectPayment::updateOrCreate(
                 ['project_id' => $project->id, 'payment_type' => $data['paymentType']],

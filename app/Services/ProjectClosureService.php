@@ -186,6 +186,8 @@ class ProjectClosureService
         DB::transaction(function () use ($project) {
             $project->update(['status' => self::S['LISTO_PAGO_FINAL']]);
             $order = $this->paymentOrders->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_FINAL);
+            // Solo mejor esfuerzo (ver selectContractor): es la primera
+            // acción del circuito del finiquito, no el gate real.
             $this->signatures->trySign($order, auth()->user());
         });
 

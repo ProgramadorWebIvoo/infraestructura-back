@@ -2,12 +2,15 @@
 
 namespace App\Http\Resources;
 
+use App\Services\PaymentSignatureService;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class PaymentOrderResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $pendingRequiredSignature = app(PaymentSignatureService::class)->pendingRequiredSignature($this->resource);
+
         return [
             'id' => $this->id,
             'number' => $this->number,
@@ -25,6 +28,14 @@ class PaymentOrderResource extends JsonResource
             'snapshot' => $this->snapshot,
             'createdAt' => optional($this->created_at)->toIso8601String(),
             'signatures' => $this->whenLoaded('signatures', fn () => PaymentOrderSignatureResource::collection($this->signatures)),
+            // Firma obligatoria que le falta a ESTA orden para poder avanzar
+            // (aprobación/pago) — el frontend la usa para deshabilitar esos
+            // botones de antemano en vez de esperar al 422 (F4 Bloque C).
+            'pendingRequiredSignature' => $pendingRequiredSignature ? [
+                'label' => $pendingRequiredSignature->label,
+                'role' => $pendingRequiredSignature->role,
+                'userName' => $pendingRequiredSignature->user_id !== null ? $pendingRequiredSignature->user?->name : null,
+            ] : null,
         ];
     }
 }

@@ -33,6 +33,22 @@ class PaymentSignatureService
     }
 
     /**
+     * Primer paso OBLIGATORIO sin firmar — ignora los no obligatorios que
+     * estén antes en el orden (D: "is_required" solo condiciona si el paso
+     * bloquea; no bloquea su propio turno ni el de los que le siguen). Es lo
+     * que usan las transiciones de negocio para decidir si avanzan; distinto
+     * de `nextPendingStep()`, que es el turno estricto para firmar de verdad
+     * y sí respeta el orden completo (obligatorios y no obligatorios).
+     */
+    private function nextRequiredPendingStep(PaymentOrder $order): ?PaymentSignatureStep
+    {
+        $signedStepIds = $order->signatures()->whereNull('revoked_at')->pluck('step_id')->all();
+
+        return $this->stepsFor($order->payment_type)
+            ->first(fn (PaymentSignatureStep $step) => $step->is_required && !in_array($step->id, $signedStepIds, true));
+    }
+
+    /**
      * Firma el paso que corresponde al usuario, en su turno estricto (Req
      * 2.5): no se puede firmar fuera de orden ni saltarse un paso. Si la
      * orden fue alterada después de crearse (el hash no coincide con el
@@ -81,11 +97,11 @@ class PaymentSignatureService
     }
 
     /**
-     * Firma "silenciosa" desde una acción de negocio existente (Bloque C:
-     * selectContractor, award-approval, send-to-finance, finiquito-request,
-     * pay): si le toca a este usuario firmar el próximo paso, lo hace; si no
-     * (no es su turno, no hay pasos configurados, o ya está completa), no
-     * hace nada — el paso queda para la bandeja de la orden.
+     * Firma "silenciosa" desde una acción de negocio existente: si le toca a
+     * este usuario firmar el próximo paso, lo hace; si no (no es su turno, no
+     * hay pasos configurados, o ya está completa), no hace nada — el paso
+     * queda para la bandeja de la orden. NUNCA bloquea a quien la llama; para
+     * eso está `assertCanProceed()`/`signOrSkip()`.
      */
     public function trySign(PaymentOrder $order, User $user, ?Request $request = null): void
     {
@@ -96,6 +112,50 @@ class PaymentSignatureService
             // la orden ya está completamente firmada — no bloquea la acción
             // que disparó el intento.
         }
+    }
+
+    /**
+     * Rechaza (422) si hay un paso OBLIGATORIO pendiente que este usuario no
+     * puede firmar — el gate real de "la transición no ocurre si falta la
+     * firma anterior" (Req 2.5). Sin pasos obligatorios pendientes (no hay
+     * cadena, todos firmados, o el que falta es opcional) no bloquea (D2).
+     * Se usa en los puntos del circuito que SÍ son el lugar natural donde
+     * debe firmarse un paso (selectContractor, award-approval,
+     * finiquito-request, pay) — nunca en confirmaciones intermedias como
+     * send-to-finance, para no bloquear esperando una firma que solo puede
+     * darse más adelante en el circuito (evita un candado cruzado).
+     */
+    public function assertCanProceed(PaymentOrder $order, User $user): void
+    {
+        $step = $this->nextRequiredPendingStep($order);
+        if (!$step) {
+            return;
+        }
+
+        if (!$step->canBeSignedBy($user)) {
+            $signer = $step->user_id !== null ? ($step->user?->name ?? 'un usuario específico') : $step->role;
+            throw ValidationException::withMessages([
+                'signature' => "Falta la firma de «{$step->label}» ({$signer}) antes de continuar.",
+            ]);
+        }
+    }
+
+    /** `assertCanProceed()` + intento de firma en el mismo turno — el punto de integración típico de una transición del circuito. */
+    public function signOrSkip(PaymentOrder $order, User $user, ?Request $request = null): void
+    {
+        $this->assertCanProceed($order, $user);
+        $this->trySign($order, $user, $request);
+    }
+
+    /**
+     * Mismo cálculo que `assertCanProceed()` pero para lectura (UI): el paso
+     * obligatorio pendiente que bloquearía la próxima transición de esta
+     * orden, o null si no hay ninguno. Usado para deshabilitar de antemano
+     * los botones de aprobación/pago en vez de esperar al 422.
+     */
+    public function pendingRequiredSignature(PaymentOrder $order): ?PaymentSignatureStep
+    {
+        return $this->nextRequiredPendingStep($order);
     }
 
     /**
@@ -120,26 +180,6 @@ class PaymentSignatureService
     public function isFullySigned(PaymentOrder $order): bool
     {
         return $this->nextPendingStep($order) === null;
-    }
-
-    /**
-     * Válido para que Finanzas pague: sin pasos configurados (D2), o con
-     * todos los pasos firmados salvo, a lo sumo, el último — que `pay()`
-     * firma dentro de su propia transacción.
-     */
-    public function assertReadyForPayment(PaymentOrder $order): void
-    {
-        $steps = $this->stepsFor($order->payment_type);
-        if ($steps->isEmpty()) {
-            return;
-        }
-
-        $signedStepIds = $order->signatures()->whereNull('revoked_at')->pluck('step_id')->all();
-        $unsigned = $steps->reject(fn (PaymentSignatureStep $step) => in_array($step->id, $signedStepIds, true));
-
-        if ($unsigned->count() > 1 || ($unsigned->count() === 1 && $unsigned->first()->id !== $steps->last()->id)) {
-            throw ValidationException::withMessages(['amount' => 'La orden de pago no tiene todas las firmas requeridas.']);
-        }
     }
 
     private function computeSignatureHash(string $documentHash, int $userId, \DateTimeInterface $signedAt): string

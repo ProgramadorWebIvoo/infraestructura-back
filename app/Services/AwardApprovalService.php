@@ -36,11 +36,14 @@ class AwardApprovalService
         DB::transaction(function () use ($project) {
             $project->update(['status' => self::S['APROBADO_PRESIDENCIA']]);
 
+            // Bloque C: Presidencia debe poder firmar su paso aquí mismo — si
+            // no le corresponde (rol distinto al configurado), la aprobación
+            // completa se revierte.
             $order = PaymentOrder::where('project_id', $project->id)
                 ->where('current_key', PaymentOrder::currentKeyFor($project->id, PaymentOrder::TYPE_ADVANCE))
                 ->first();
             if ($order) {
-                $this->signatures->trySign($order, auth()->user());
+                $this->signatures->signOrSkip($order, auth()->user());
             }
         });
 
@@ -100,6 +103,10 @@ class AwardApprovalService
                 (float) $proposal->total_cost
             );
 
+            // Solo mejor esfuerzo (nunca bloquea): si la cadena tiene un paso
+            // de FINANZAS pendiente en este punto, no puede firmarse porque
+            // Finanzas recién firma al pagar — exigirlo aquí sería un candado
+            // cruzado (send-to-finance nunca podría completarse).
             $order = PaymentOrder::where('project_id', $project->id)
                 ->where('current_key', PaymentOrder::currentKeyFor($project->id, PaymentOrder::TYPE_ADVANCE))
                 ->first();

@@ -14,11 +14,13 @@ class PaymentSignatureStep extends Model
         'user_id',
         'label',
         'is_active',
+        'is_required',
     ];
 
     protected $casts = [
         'step_order' => 'integer',
         'is_active' => 'boolean',
+        'is_required' => 'boolean',
     ];
 
     public function user()

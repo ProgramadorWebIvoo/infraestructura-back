@@ -17,6 +17,7 @@ class PaymentSignatureStepResource extends JsonResource
             'userName' => $this->whenLoaded('user', fn () => $this->user?->name),
             'label' => $this->label,
             'isActive' => $this->is_active,
+            'isRequired' => $this->is_required,
         ];
     }
 }

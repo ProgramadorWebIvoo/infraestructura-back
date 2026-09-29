@@ -86,9 +86,51 @@ class PaymentSignatureIntegrationTest extends TestCase
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 3000.00])
             ->assertStatus(422)
-            ->assertJsonValidationErrors('amount');
+            ->assertJsonValidationErrors('signature');
 
         $this->assertDatabaseMissing('project_payments', ['project_id' => $project->id]);
+    }
+
+    /** Reproduce el bug real reportado: un SUPERADMIN no debe poder saltarse el paso configurado de otro rol solo por tener acceso a la acción. */
+    public function test_superadmin_cannot_bypass_a_configured_step_it_does_not_match(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $project = Project::factory()->create(['status' => 'COMPARATIVA_ENVIADA']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id, 'contractor_code' => $this->contractor->code,
+            'total_cost' => 10000, 'negotiated_advance_percent' => 30,
+        ]);
+        $this->actingAs($this->procura)->postJson("/api/projects/{$project->id}/select-contractor", [
+            'contractorCode' => $this->contractor->code, 'proposalId' => $proposal->id,
+        ])->assertStatus(200);
+
+        // El paso 1 (PROCURA) ya quedó firmado; el 2 (PRESIDENCIA) está pendiente.
+        $response = $this->actingAs($superadmin)->postJson("/api/projects/{$project->id}/award-approval");
+
+        $response->assertStatus(422)->assertJsonValidationErrors('signature');
+        $this->assertSame('PENDIENTE_PRESIDENCIA', $project->fresh()->status);
+        $this->assertSame(1, PaymentOrder::where('project_id', $project->id)->firstOrFail()->signatures()->count());
+    }
+
+    /** El paso opcional (is_required=false) queda registrado si se firma en su turno, pero nunca bloquea a los pasos obligatorios siguientes. */
+    public function test_optional_step_does_not_block_the_chain(): void
+    {
+        PaymentSignatureStep::query()->delete();
+        PaymentSignatureStep::create(['payment_type' => 'ADVANCE', 'step_order' => 1, 'role' => 'ANALISTA', 'label' => 'Revisión opcional', 'is_required' => false]);
+        PaymentSignatureStep::create(['payment_type' => 'ADVANCE', 'step_order' => 2, 'role' => 'PRESIDENCIA', 'label' => 'Aprobación', 'is_required' => true]);
+
+        $project = Project::factory()->create(['status' => 'COMPARATIVA_ENVIADA']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id, 'contractor_code' => $this->contractor->code,
+            'total_cost' => 10000, 'negotiated_advance_percent' => 30,
+        ]);
+        // Procura no coincide con el paso opcional (ANALISTA): select-contractor no debe bloquearse.
+        $this->actingAs($this->procura)->postJson("/api/projects/{$project->id}/select-contractor", [
+            'contractorCode' => $this->contractor->code, 'proposalId' => $proposal->id,
+        ])->assertStatus(200);
+
+        // Presidencia puede aprobar aunque el paso opcional nunca se firmó.
+        $this->actingAs($this->presidencia)->postJson("/api/projects/{$project->id}/award-approval")->assertStatus(200);
     }
 
     public function test_signature_hash_is_traceable_and_order_endpoint_exposes_the_line(): void

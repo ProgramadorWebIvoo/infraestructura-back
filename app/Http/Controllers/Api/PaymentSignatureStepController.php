@@ -29,6 +29,7 @@ class PaymentSignatureStepController extends Controller
             'user_id' => $data['userId'] ?? null,
             'label' => strip_tags($data['label']),
             'is_active' => $data['isActive'] ?? true,
+            'is_required' => $data['isRequired'] ?? true,
         ]);
         $step->load('user:id,name');
 
@@ -51,6 +52,7 @@ class PaymentSignatureStepController extends Controller
             ...(array_key_exists('userId', $data) ? ['user_id' => $data['userId']] : []),
             ...(isset($data['label']) ? ['label' => strip_tags($data['label'])] : []),
             ...(isset($data['isActive']) ? ['is_active' => $data['isActive']] : []),
+            ...(isset($data['isRequired']) ? ['is_required' => $data['isRequired']] : []),
         ]);
         $paymentSignatureStep->load('user:id,name');
 

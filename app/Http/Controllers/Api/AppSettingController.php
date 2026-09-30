@@ -101,7 +101,7 @@ class AppSettingController extends Controller
 
     /**
      * `congelar_tasa_momento` es una opción única (radio en CONFIG APP): solo se
-     * aceptan los tres triggers de congelado o NINGUNO — un valor libre dejaría
+     * aceptan los tres triggers de congelado — un valor libre dejaría
      * el congelado desactivado en silencio (RateFreezeService compara por igualdad).
      */
     private function assertFreezeMoment(AppSetting $setting, ?string $newValue): void

@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  * propia para USDT) + Bs. resultantes. Nunca depende del switch BCV/USDT.
  *
  * La configuración es UNA sola opción (`congelar_tasa_momento`): el momento
- * del flujo en que se congela, o NINGUNO. Los demás triggers no congelan.
+ * del flujo en que se congela. Siempre se congela en uno; los demás triggers no.
  *
  * Snapshot inmutable (write-once): freezeForTrigger() es idempotente (un
  * trigger AUTO nunca duplica un freeze ya vigente para el mismo proyecto);
@@ -32,15 +32,13 @@ class RateFreezeService
 {
     public const MOMENT_SETTING = 'congelar_tasa_momento';
 
-    public const MOMENT_NONE = 'NINGUNO';
-
     /** Momento por defecto si el setting no existe todavía: el primero del flujo. */
     public const DEFAULT_MOMENT = ProjectRateFreeze::TRIGGER_CONTRATADO;
 
-    /** Valores válidos del setting: los tres triggers y NINGUNO. */
+    /** Valores válidos del setting: los tres triggers. */
     public static function moments(): array
     {
-        return [...ProjectRateFreeze::TRIGGERS, self::MOMENT_NONE];
+        return ProjectRateFreeze::TRIGGERS;
     }
 
     /**

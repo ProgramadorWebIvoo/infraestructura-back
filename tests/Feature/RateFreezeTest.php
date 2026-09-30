@@ -96,15 +96,19 @@ class RateFreezeTest extends TestCase
         $this->assertEquals(1, ProjectRateFreeze::where('project_id', $project->id)->count());
     }
 
-    public function test_freeze_for_trigger_does_nothing_when_setting_disabled(): void
+    public function test_there_is_always_exactly_one_moment_that_freezes(): void
     {
-        $this->setFreezeMoment('NINGUNO');
-
         $project = Project::factory()->create(['status' => 'CONTRATADO']);
-        $freeze = app(RateFreezeService::class)->freezeForTrigger($project, ProjectRateFreeze::TRIGGER_CONTRATADO, 1500.0);
+        $service = app(RateFreezeService::class);
 
-        $this->assertNull($freeze);
-        $this->assertEquals(0, ProjectRateFreeze::where('project_id', $project->id)->count());
+        foreach (ProjectRateFreeze::TRIGGERS as $moment) {
+            $this->setFreezeMoment($moment);
+            $others = array_diff(ProjectRateFreeze::TRIGGERS, [$moment]);
+
+            foreach ($others as $other) {
+                $this->assertNull($service->freezeForTrigger($project, $other, 100.0), "{$other} no debe congelar cuando el momento es {$moment}");
+            }
+        }
     }
 
     public function test_freeze_for_trigger_records_null_rate_when_no_exchange_rate_exists(): void
@@ -340,7 +344,10 @@ class RateFreezeTest extends TestCase
         $this->actingAs($this->superadmin)->patchJson("/api/settings/{$setting->id}", ['value' => 'CUALQUIER_COSA'])->assertStatus(422);
         $this->actingAs($this->superadmin)->patchJson("/api/settings/{$setting->id}", ['value' => 'true'])->assertStatus(422);
 
-        foreach (['PAGO_ANTICIPO', 'PAGO_FINIQUITO', 'NINGUNO', 'CONTRATADO'] as $moment) {
+        // No existe la opción de no congelar: siempre hay un momento.
+        $this->actingAs($this->superadmin)->patchJson("/api/settings/{$setting->id}", ['value' => 'NINGUNO'])->assertStatus(422);
+
+        foreach (['PAGO_ANTICIPO', 'PAGO_FINIQUITO', 'CONTRATADO'] as $moment) {
             $this->actingAs($this->superadmin)->patchJson("/api/settings/{$setting->id}", ['value' => $moment])->assertStatus(200);
             $this->assertDatabaseHas('app_settings', ['key' => 'congelar_tasa_momento', 'value' => $moment]);
         }

@@ -22,7 +22,8 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Administrador IVOO',
                 'password' => Hash::make('Admin12345'),
-            ]
+                'role' => 'SUPERADMIN',
+            ] 
         );
 
         // Residente y ubicaciones de ejemplo (QA y fixtures de depuración, F2-R R7a).

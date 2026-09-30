@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\ConfigAuditLog;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
-use App\Services\ExchangeRate\UsdtRateSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -151,22 +150,5 @@ class CurrencyController extends Controller
         $auditLog = ConfigAuditLog::recordAdminAction('currency', 'Cambio de moneda base', $previousCode, null, "Moneda base cambiada a \"{$currency->code}\".");
 
         return response()->json(['data' => [...$currency->fresh()->toArray(), 'auditLog' => $auditLog->toApiPayload()]]);
-    }
-
-    public function destroy(Currency $currency): JsonResponse
-    {
-        abort_if($currency->is_base, 422, 'No se puede eliminar la moneda base.');
-        abort_if($currency->is_official, 422, 'No se puede eliminar una moneda oficial del BCV — desactívala en su lugar.');
-        abort_if($currency->code === UsdtRateSyncService::CURRENCY_CODE, 422, 'No se puede eliminar USDT — desactívala en su lugar.');
-
-        $code = $currency->code;
-        $currency->delete();
-
-        $auditLog = ConfigAuditLog::recordAdminAction('currency', 'Eliminación de moneda', $code, null, "Moneda \"{$code}\" eliminada.");
-
-        // 200 (no 204) porque el frontend necesita el auditLog recién creado
-        // para insertarlo en vivo en el panel de auditoría (mismo patrón que
-        // store/update/setBase) — un 204 no puede llevar cuerpo.
-        return response()->json(['data' => ['auditLog' => $auditLog->toApiPayload()]]);
     }
 }

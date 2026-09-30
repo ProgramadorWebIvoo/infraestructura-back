@@ -164,8 +164,6 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
         ->middleware('role:SUPERADMIN');
     Route::post('/currencies/{currency}/set-base', [CurrencyController::class, 'setBase'])
         ->middleware('role:SUPERADMIN');
-    Route::delete('/currencies/{currency}', [CurrencyController::class, 'destroy'])
-        ->middleware('role:SUPERADMIN');
 
     // Histórico de tasas de cambio a USD — exclusivo SUPERADMIN.
     Route::get('/exchange-rates', [ExchangeRateController::class, 'index'])

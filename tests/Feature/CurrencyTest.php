@@ -223,26 +223,16 @@ class CurrencyTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_superadmin_can_delete_a_non_base_currency(): void
+    public function test_currencies_cannot_be_deleted_through_the_api(): void
     {
+        // Las monedas nunca se eliminan (pueden tener tasas y cotizaciones
+        // referenciándolas): solo se activan/desactivan. El endpoint no existe.
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);
         $gbp = Currency::create(['code' => 'GBP', 'name' => 'Libra esterlina', 'symbol' => '£', 'is_base' => false, 'is_active' => true]);
 
-        // 200 (no 204) porque el response lleva el auditLog recién creado —
-        // el frontend lo necesita para insertar la entrada en vivo en el
-        // panel de auditoría (mismo patrón que store/update/setBase).
-        $response = $this->actingAs($admin)->deleteJson("/api/currencies/{$gbp->id}");
-        $response->assertStatus(200);
-        $response->assertJsonPath('data.auditLog.action', 'Eliminación de moneda');
-        $this->assertDatabaseMissing('currencies', ['id' => $gbp->id]);
-    }
+        $this->actingAs($admin)->deleteJson("/api/currencies/{$gbp->id}")->assertStatus(405);
 
-    public function test_cannot_delete_the_base_currency(): void
-    {
-        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
-        $base = Currency::where('is_base', true)->firstOrFail();
-
-        $this->actingAs($admin)->deleteJson("/api/currencies/{$base->id}")->assertStatus(422);
+        $this->assertDatabaseHas('currencies', ['id' => $gbp->id]);
     }
 
     public function test_seeds_the_bcv_official_currencies(): void
@@ -285,18 +275,6 @@ class CurrencyTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertDatabaseHas('currencies', ['id' => $eur->id, 'is_active' => false, 'is_official' => true]);
-    }
-
-    public function test_cannot_delete_an_official_bcv_currency(): void
-    {
-        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
-        $eur = Currency::where('code', 'EUR')->firstOrFail();
-
-        $this->actingAs($admin)
-            ->deleteJson("/api/currencies/{$eur->id}")
-            ->assertStatus(422);
-
-        $this->assertDatabaseHas('currencies', ['id' => $eur->id]);
     }
 
     public function test_database_rejects_a_second_base_currency_outside_the_application_layer(): void

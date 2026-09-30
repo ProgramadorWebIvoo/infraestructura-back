@@ -26,6 +26,18 @@ class ExchangeRateTest extends TestCase
         }
     }
 
+    public function test_the_latest_rates_are_public_for_the_provider_pages(): void
+    {
+        ExchangeRate::create(['currency_code' => 'USD', 'rate_to_usd' => 800, 'source' => 'TEST', 'effective_at' => now()->subMinute()]);
+        ExchangeRate::create(['currency_code' => 'USD', 'rate_to_usd' => 810, 'source' => 'TEST', 'effective_at' => now()]);
+
+        $this->getJson('/api/public/exchange-rates')
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.currency_code', 'USD')
+            ->assertJsonPath('data.0.rate_to_usd', 810);
+    }
+
     public function test_non_superadmin_cannot_access_history_load_or_sync(): void
     {
         $user = User::factory()->create(['role' => 'ADMIN']);

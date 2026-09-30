@@ -82,6 +82,8 @@ Route::post('/public/renegotiations/{token}/proposal', [RenegotiationInvitationC
 // materiales (sin auth, consumidos por el enlace de invitación).
 Route::get('/public/contractor-document-types', [ContractorDocumentTypeController::class, 'publicList'])->middleware('throttle:public-api');
 Route::get('/public/currencies', [CurrencyController::class, 'activePublicList'])->middleware('throttle:public-api');
+// Última tasa por moneda — pública (son tasas de mercado): las páginas de proveedor muestran equivalentes en USD/Bs.
+Route::get('/public/exchange-rates', [ExchangeRateController::class, 'index'])->middleware('throttle:public-api');
 Route::get('/public/catalog-categories', [CatalogCategoryController::class, 'publicList'])->middleware('throttle:public-api');
 Route::get('/public/catalog-products/search', [CatalogProductController::class, 'publicSearch'])->middleware('throttle:public-api');
 

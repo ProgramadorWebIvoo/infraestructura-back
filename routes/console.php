@@ -24,6 +24,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('sanctum:clear-expired-tokens')->daily();
 Schedule::command('notifications:prune')->daily();
+Schedule::command('idempotency:prune')->daily();
 
 // Retención en meses (no días, a diferencia de notifications:prune) — no
 // hace falta correrlo a diario, mensual es suficiente para un horizonte de

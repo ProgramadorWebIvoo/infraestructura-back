@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\NotificationCatalog;
 use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\PaymentOrder;
@@ -129,7 +130,7 @@ class AwardApprovalService
     {
         $contractor = Contractor::where('code', $project->selected_contractor_code)->first();
 
-        if (!$contractor?->email) {
+        if (!$contractor?->email || !NotificationCatalog::channelEnabled('Correo de adjudicacion a proveedor', 'mail')) {
             return;
         }
 

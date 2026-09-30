@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Support\NotificationCatalog;
 use App\Http\Controllers\Concerns\LogsPublicAccess;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RenegotiateProposalRequest;
@@ -68,13 +69,15 @@ class RenegotiationInvitationController extends Controller
         // debe impedir que el enlace se genere. El token ya quedó persistido
         // arriba, así que el analista puede copiarlo/compartirlo manualmente
         // si el correo falla (`mailSent: false` en la respuesta).
-        $mailSent = true;
-        try {
-            Notification::route('mail', $contractor->email)
-                ->notify(new SupplierRenegotiationInvitation($project->title, $proposal->contractor_name_snapshot, $invitation->id));
-        } catch (\Throwable $e) {
-            report($e);
-            $mailSent = false;
+        $mailSent = NotificationCatalog::channelEnabled('Correo de invitacion de renegociacion a proveedor', 'mail');
+        if ($mailSent) {
+            try {
+                Notification::route('mail', $contractor->email)
+                    ->notify(new SupplierRenegotiationInvitation($project->title, $proposal->contractor_name_snapshot, $invitation->id));
+            } catch (\Throwable $e) {
+                report($e);
+                $mailSent = false;
+            }
         }
 
         AuditLog::record(

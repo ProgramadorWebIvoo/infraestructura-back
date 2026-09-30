@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\NotificationCatalog;
 use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\ProjectClosureReport;
@@ -73,7 +74,7 @@ class ClosureReportLinkService
 
     public function send(ProjectClosureReport $report, Project $project, ?string $rejectionReason = null): bool
     {
-        if (!$report->contractor_email) {
+        if (!$report->contractor_email || !NotificationCatalog::channelEnabled('Correo de enlace de informe de cierre a proveedor', 'mail')) {
             return false;
         }
 

@@ -141,6 +141,10 @@ class AppSettingCatalog
             'label' => 'Modo debug de sincronización',
             'description' => 'Registra y expone el detalle de cada fuente intentada (DolarVZLA/BCV) en cada sync, para diagnosticar fallos sin revisar logs del servidor.',
         ],
+        'tasa_switch_roles' => [
+            'label' => 'Roles con switch de tasa BCV / USDT',
+            'description' => 'Lista JSON de roles que ven el switch para calcular los montos en Bs. con la tasa BCV o con la tasa USDT. Todos parten en BCV; el switch solo permite cambiarlo. Vacío = nadie ve el switch.',
+        ],
         'rating_ia_cron_habilitado' => [
             'label' => 'Evaluación automática de rating IA activa',
             'description' => 'Si está desactivado, el cronjob de RatingIA no corre — solo queda disponible la sugerencia puntual por proveedor y el disparo manual del lote.',

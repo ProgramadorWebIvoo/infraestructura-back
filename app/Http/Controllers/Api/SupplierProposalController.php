@@ -119,7 +119,7 @@ class SupplierProposalController extends Controller
             // Moneda única del PEDIDO completo (no por línea) — el proveedor
             // cotiza todo el pedido en una sola moneda, ver
             // ProposalLineNormalizer (hereda esta moneda a cada línea).
-            'quoteCurrency'         => ['required', 'string', 'regex:/^[A-Z]{3}$/', 'exists:currencies,code'],
+            'quoteCurrency'         => ['required', 'string', 'regex:/^[A-Z]{3,10}$/', 'exists:currencies,code'],
             'estimatedDays'         => ['nullable', 'integer', 'min:1'],
             'durationUnit'          => ['nullable', 'string', 'in:dias,semanas,meses'],
             // Tope fijo (no el configurable de CONFIG APP): el proveedor externo

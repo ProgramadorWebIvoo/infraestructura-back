@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ConfigAuditLog;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
+use App\Services\ExchangeRate\UsdtRateSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -156,6 +157,7 @@ class CurrencyController extends Controller
     {
         abort_if($currency->is_base, 422, 'No se puede eliminar la moneda base.');
         abort_if($currency->is_official, 422, 'No se puede eliminar una moneda oficial del BCV — desactívala en su lugar.');
+        abort_if($currency->code === UsdtRateSyncService::CURRENCY_CODE, 422, 'No se puede eliminar USDT — desactívala en su lugar.');
 
         $code = $currency->code;
         $currency->delete();

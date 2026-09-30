@@ -17,10 +17,11 @@ class ExchangeRateSyncLogService
         ]);
     }
 
-    public function logFailure(string $errorMessage, ?array $debugTrace = null): void
+    public function logFailure(string $errorMessage, ?array $debugTrace = null, ?string $source = null): void
     {
         ExchangeRateSyncLog::create([
             'status' => 'FAILURE',
+            'source' => $source,
             'error_message' => $errorMessage,
             'executed_at' => now(),
             'debug_details' => $debugTrace,

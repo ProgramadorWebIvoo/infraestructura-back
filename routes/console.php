@@ -42,6 +42,12 @@ Schedule::command('queue:work --queue=default --max-time=60 --max-jobs=50 --stop
     ->withoutOverlapping()
     ->runInBackground();
 
+// SettingsService lee vía Cache: con CACHE_DRIVER=database también hace falta la
+// tabla `cache`. En una BD a medias (app_settings sí, cache no) el guard solo de
+// app_settings pasaba y `artisan migrate:fresh` reventaba antes de poder recrearla.
+$settingsReady = fn () => Schema::hasTable('app_settings')
+    && (config('cache.default') !== 'database' || Schema::hasTable(config('cache.stores.database.table', 'cache')));
+
 // Sync de tasas de cambio BCV: Lunes-Viernes, hora y activación configurables
 // desde CONFIG APP → Monedas (tasa_cambio_cron_hora / tasa_cambio_cron_habilitado,
 // ver AppSettingCatalog). Este archivo se re-evalúa en cada invocación de
@@ -60,13 +66,13 @@ Schedule::command('queue:work --queue=default --max-time=60 --max-jobs=50 --stop
 // y el bootstrap de `artisan test`, donde la tabla `app_settings` todavía no
 // existe) — sin el guard, la migración inicial del proyecto o el test suite
 // completo fallan con "table app_settings not found" antes de poder crearla.
-$cronHour = Schema::hasTable('app_settings') ? SettingsService::get('tasa_cambio_cron_hora', '10:00') : '10:00';
+$cronHour = $settingsReady() ? SettingsService::get('tasa_cambio_cron_hora', '10:00') : '10:00';
 
 Schedule::command('sync:exchange-rates')
     ->timezone('America/Caracas')
     ->dailyAt($cronHour)
     ->weekdays()
-    ->when(fn () => !Schema::hasTable('app_settings') || (bool) SettingsService::get('tasa_cambio_cron_habilitado', true))
+    ->when(fn () => !$settingsReady() || (bool) SettingsService::get('tasa_cambio_cron_habilitado', true))
     ->name('sync_exchange_rates')
     ->onSuccess(function () {
         \Log::info('✅ Exchange rates synced successfully');
@@ -74,6 +80,18 @@ Schedule::command('sync:exchange-rates')
     ->onFailure(function () {
         \Log::error('❌ Exchange rates sync failed');
     });
+
+// Tasa USDT (paralelo): se mueve durante el día, a diferencia del BCV (una vez
+// al día). Cada 30 min en horario laboral, gateada por el mismo toggle del
+// sync BCV; el comando es independiente para que un fallo no afecte al otro.
+Schedule::command('sync:usdt-rate')
+    ->timezone('America/Caracas')
+    ->everyThirtyMinutes()
+    ->weekdays()
+    ->between('08:00', '18:00')
+    ->withoutOverlapping()
+    ->when(fn () => !$settingsReady() || (bool) SettingsService::get('tasa_cambio_cron_habilitado', true))
+    ->name('sync_usdt_rate');
 
 // Batch de RatingIA (sugerencia de rating por proveedor): activación, hora y
 // FRECUENCIA EN DÍAS configurables desde CONFIG APP → Proveedores
@@ -86,13 +104,13 @@ Schedule::command('sync:exchange-rates')
 // decide si ya pasaron los N días exigidos desde la última corrida,
 // consultando rating_ia_run_logs (fuente de verdad del último run, no un
 // setting aparte que se pueda desincronizar).
-$ratingIaHour = Schema::hasTable('app_settings') ? SettingsService::get('rating_ia_cron_hora', '02:00') : '02:00';
+$ratingIaHour = $settingsReady() ? SettingsService::get('rating_ia_cron_hora', '02:00') : '02:00';
 
 Schedule::command('rating-ia:run')
     ->timezone('America/Caracas')
     ->dailyAt($ratingIaHour)
-    ->when(function () {
-        if (!Schema::hasTable('app_settings') || !Schema::hasTable('rating_ia_run_logs')) {
+    ->when(function () use ($settingsReady) {
+        if (!$settingsReady() || !Schema::hasTable('rating_ia_run_logs')) {
             return false;
         }
         if (!(bool) SettingsService::get('rating_ia_cron_habilitado', false)) {

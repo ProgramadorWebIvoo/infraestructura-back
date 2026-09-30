@@ -9,6 +9,7 @@ use App\Models\Currency;
 use App\Models\ExchangeRate;
 use App\Services\ExchangeRate\ExchangeRateSyncService;
 use App\Services\ExchangeRate\ExchangeRateSyncLogService;
+use App\Services\ExchangeRate\UsdtRateSyncService;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,7 +51,7 @@ class ExchangeRateController extends Controller
         $request->merge(['currency_code' => strtoupper((string) $request->input('currency_code'))]);
 
         $data = $request->validate([
-            'currency_code' => ['required', 'string', 'regex:/^[A-Za-z]{3}$/', 'exists:currencies,code'],
+            'currency_code' => ['required', 'string', 'regex:/^[A-Za-z]{3,10}$/', 'exists:currencies,code'],
             'rate_to_usd' => ['required', 'numeric', 'gt:0'],
             'source' => ['required', 'string', 'max:50'],
             'effective_at' => ['sometimes', 'date'],
@@ -79,9 +80,13 @@ class ExchangeRateController extends Controller
         return response()->json(['data' => [...$rate->toArray(), 'currencyName' => $currency?->name, 'auditLog' => $auditLog->toApiPayload()]], 201);
     }
 
-    public function sync(ExchangeRateSyncService $syncService): JsonResponse
+    public function sync(ExchangeRateSyncService $syncService, UsdtRateSyncService $usdtSyncService): JsonResponse
     {
         $debug = (bool) SettingsService::get('tasa_cambio_debug', false);
+
+        // USDT primero y aislado: nunca lanza, y su resultado no condiciona
+        // el del BCV (ni al revés).
+        $usdtOk = $usdtSyncService->sync();
 
         try {
             $ok = $syncService->sync($debug);
@@ -91,6 +96,7 @@ class ExchangeRateController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'No se pudo obtener la tasa de ninguna fuente (API ni scraping).',
+                    'usdt_success' => $usdtOk,
                     'debug' => $trace,
                 ], 500);
             }
@@ -98,6 +104,7 @@ class ExchangeRateController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Tasas sincronizadas exitosamente',
+                'usdt_success' => $usdtOk,
                 'debug' => $trace,
             ]);
         } catch (\Exception $e) {

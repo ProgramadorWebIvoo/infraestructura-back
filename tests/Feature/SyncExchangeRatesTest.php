@@ -290,7 +290,8 @@ class SyncExchangeRatesTest extends TestCase
 
         $this->assertDatabaseHas('app_notifications', [
             'user_id' => $superadmin->id,
-            'action' => 'Fallo en sync de tasas de cambio',
+            'action' => 'Sync automático falló',
+            'type' => 'error',
         ]);
     }
 

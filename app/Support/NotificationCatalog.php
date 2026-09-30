@@ -64,6 +64,8 @@ class NotificationCatalog
         'Sobre-ejecucion de presupuesto' => NotificationType::ADVERTENCIA,
         'Invitacion a proveedor proxima a vencer' => NotificationType::ADVERTENCIA,
         'Racha de rechazos detectada' => NotificationType::ADVERTENCIA,
+        'Sync automático falló' => NotificationType::ERROR,
+        'Anulacion de orden de pago' => NotificationType::ADVERTENCIA,
     ];
 
     /** @return array<string, array{label: ?string, group: string, scope: string, critical: bool, is_active: bool, app_enabled: bool, mail_enabled: bool, recipient_type: string}> keyed por action */

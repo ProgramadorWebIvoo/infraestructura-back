@@ -3,12 +3,9 @@
 namespace App\Services\ExchangeRate;
 
 use App\Events\ExchangeRatesUpdated;
-use App\Models\AppNotification;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
 use App\Models\ConfigAuditLog;
-use App\Models\User;
-use App\Support\NotificationType;
 use Illuminate\Support\Facades\DB;
 use Exception;
 
@@ -136,23 +133,15 @@ class ExchangeRateSyncService
     {
         $errorMsg = "API: {$primary->getMessage()} | Scraping: {$fallback->getMessage()}";
 
-        $superadmins = User::where('role', 'SUPERADMIN')->get();
-
-        foreach ($superadmins as $user) {
-            AppNotification::create([
-                'user_id' => $user->id,
-                'action' => 'Fallo en sync de tasas de cambio',
-                'type' => NotificationType::ERROR,
-                'details' => "No se pudo obtener tasa BCV ({$errorMsg})",
-            ]);
-        }
-
+        // Notifica por la matriz (acción "Sync automático falló", crítica,
+        // tipo error) en vez de crear filas de AppNotification a mano: así
+        // respeta roles/toggles configurados y emite push en tiempo real.
         ConfigAuditLog::recordAdminAction(
             'exchange_rate',
             'Sync automático falló',
             null,
             'ERROR',
-            $errorMsg
+            "No se pudo obtener tasa BCV ({$errorMsg})"
         );
 
         $this->logService->logFailure($errorMsg, $this->debug ? $this->trace : null);

@@ -26,9 +26,12 @@ return [
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['*'],
+    // '*' hace que el middleware refleje los encabezados pedidos en el preflight; Idempotency-Key
+    // se lista igual de forma explícita para dejar constancia de que el front lo envía.
+    'allowed_headers' => ['*', 'Idempotency-Key'],
 
-    'exposed_headers' => [],
+    // Sin exponerlos, el navegador no deja leer estos encabezados en peticiones cross-origin.
+    'exposed_headers' => ['Idempotent-Replayed', 'Retry-After', 'X-Request-ID', 'X-Refresh-Token'],
 
     'max_age' => 0,
 

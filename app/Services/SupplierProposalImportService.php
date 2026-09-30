@@ -210,10 +210,20 @@ class SupplierProposalImportService
                 'original_currency' => $line->quote_currency ?? 'USD',
                 'original_price' => $line->unit_price,
                 'fx_rate_to_usd' => $line->fx_rate_to_usd,
-                'fx_rate_source' => $line->quote_currency && $line->quote_currency !== 'USD' ? 'bcv_rate' : 'usd_only',
+                'fx_rate_source' => $this->fxRateSourceFor($line->quote_currency),
                 'quoted_at' => $proposal->submitted_at ?? now(),
                 'project_id' => $proposal->project_id,
             ]);
         }
+    }
+
+    /** De dónde salió la tasa a USD: USDT viene del mercado paralelo (usdt.com.ve), el resto de monedas de la tasa BCV. */
+    private function fxRateSourceFor(?string $quoteCurrency): string
+    {
+        return match (true) {
+            !$quoteCurrency || $quoteCurrency === 'USD' => 'usd_only',
+            $quoteCurrency === 'USDT' => 'usdt_rate',
+            default => 'bcv_rate',
+        };
     }
 }

@@ -36,7 +36,7 @@ class AlertStaleProjectsAndExpiringInvitations extends Command
     private const OVER_EXECUTION_ACTION = 'Sobre-ejecucion de presupuesto';
     private const INVITATION_EXPIRING_ACTION = 'Invitacion a proveedor proxima a vencer';
 
-    /** Ventana antes del vencimiento en la que se considera "próxima a vencer". */
+    /** Default de la ventana antes del vencimiento en la que se considera "próxima a vencer" (editable: `invitacion_aviso_horas`). */
     private const INVITATION_WARNING_HOURS = 48;
 
     public function handle(): int
@@ -120,12 +120,13 @@ class AlertStaleProjectsAndExpiringInvitations extends Command
     private function alertExpiringInvitations(): int
     {
         $notified = 0;
+        $warningHours = (int) SettingsService::get('invitacion_aviso_horas', self::INVITATION_WARNING_HOURS);
 
         SupplierInvitation::whereNull('used_at')
             ->whereNull('replaced_by')
             ->whereNotNull('expires_at')
             ->where('expires_at', '>', now())
-            ->where('expires_at', '<=', now()->addHours(self::INVITATION_WARNING_HOURS))
+            ->where('expires_at', '<=', now()->addHours($warningHours))
             ->with('project')
             ->get()
             ->each(function (SupplierInvitation $invitation) use (&$notified) {

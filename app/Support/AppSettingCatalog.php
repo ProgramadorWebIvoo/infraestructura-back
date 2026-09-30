@@ -93,6 +93,14 @@ class AppSettingCatalog
             'label' => 'Cierre de sesión por inactividad (minutos)',
             'description' => 'Minutos de inactividad tras los cuales la aplicación cierra la sesión en el navegador. Es un control del cliente: no revoca el token en el servidor, cuya expiración se define por SANCTUM_EXPIRATION en el entorno.',
         ],
+        'invitacion_aviso_horas' => [
+            'label' => 'Invitación por vencer — aviso (horas)',
+            'description' => 'Horas de anticipación con las que se avisa que una invitación pública a proveedor está por vencer (acción "Invitacion a proveedor proxima a vencer"). Rango 1-168 horas.',
+        ],
+        'rechazos_consecutivos_alerta' => [
+            'label' => 'Racha de rechazos — umbral',
+            'description' => 'Cantidad de rechazos consecutivos en una misma obra, sin avanzar de estado, que dispara la alerta "Racha de rechazos detectada". Rango 2-10.',
+        ],
         'retencion_notificaciones_dias' => [
             'label' => 'Retención de notificaciones (días)',
             'description' => 'Días que se conservan las notificaciones en la bandeja interna antes de purgarse automáticamente. Purgado destructivo, sin posibilidad de recuperación — rango acotado a 1-7 días.',

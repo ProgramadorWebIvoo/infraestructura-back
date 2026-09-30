@@ -25,6 +25,7 @@ class RejectionService
      * medio) sobre el mismo proyecto a partir del cual se avisa — señal de
      * que algo está trabado más allá de un rechazo puntual normal del flujo.
      */
+    /** Default del umbral (editable: `rechazos_consecutivos_alerta`). */
     private const CONSECUTIVE_REJECTION_ALERT_THRESHOLD = 3;
 
     /**
@@ -71,14 +72,15 @@ class RejectionService
      */
     private static function alertIfConsecutiveRejections(Project $project): void
     {
+        $threshold = (int) SettingsService::get('rechazos_consecutivos_alerta', self::CONSECUTIVE_REJECTION_ALERT_THRESHOLD);
         $recentActions = AuditLog::where('project_id', $project->id)
             ->latest('logged_at')
-            ->limit(self::CONSECUTIVE_REJECTION_ALERT_THRESHOLD + 1)
+            ->limit($threshold + 1)
             ->pluck('action');
 
         $streak = $recentActions->takeWhile(fn (string $a) => str_starts_with($a, 'Rechazo'))->count();
 
-        if ($streak === self::CONSECUTIVE_REJECTION_ALERT_THRESHOLD) {
+        if ($streak === $threshold) {
             NotificationDispatcher::notify(
                 $project,
                 'SISTEMA',

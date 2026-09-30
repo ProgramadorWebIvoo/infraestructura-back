@@ -55,12 +55,10 @@ return new class extends Migration
             self::APP_KEY => $actions->where('app_enabled', true)->pluck('key')->values()->all(),
             self::MAIL_KEY => $actions->where('mail_enabled', true)->pluck('key')->values()->all(),
         ];
-        $labels = [self::APP_KEY => 'Acciones que envían notificación (app)', self::MAIL_KEY => 'Acciones que envían correo'];
         foreach ($rows as $key => $value) {
             DB::table('app_settings')->insert([
                 'group' => 'notificaciones',
                 'key' => $key,
-                'label' => $labels[$key],
                 'value' => json_encode($value, JSON_UNESCAPED_UNICODE),
                 'type' => 'json',
                 'created_at' => $now,

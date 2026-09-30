@@ -72,6 +72,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\CheckRole::class,
             'project.access' => \App\Http\Middleware\EnsureProjectVisible::class,
             'refresh.token' => \App\Http\Middleware\RefreshSanctumToken::class,
+            'idempotency' => \App\Http\Middleware\Idempotency::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

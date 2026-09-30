@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ConfigAuditLog;
 use App\Models\User;
 use App\Services\AccessResolver;
 use Illuminate\Http\Request;
@@ -48,12 +49,25 @@ class AccessAdminController extends Controller
             ]);
         }
 
+        $before = $this->resolver->catalogForUser($user);
+
         $this->resolver->saveOverrides(
             $user,
             $data['viewOverrides'] ?? [],
             $tabOverrides,
         );
 
-        return response()->json($this->resolver->catalogForUser($user));
+        $after = $this->resolver->catalogForUser($user);
+        $changes = $this->resolver->describeChanges($before, $after);
+
+        $auditLog = $changes === null ? null : ConfigAuditLog::recordAdminAction(
+            'user',
+            'Modificacion de accesos de usuario',
+            null,
+            null,
+            "Usuario: {$user->name} ({$user->email}) / {$changes}",
+        );
+
+        return response()->json([...$after, 'auditLog' => $auditLog?->toApiPayload()]);
     }
 }

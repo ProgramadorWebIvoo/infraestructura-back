@@ -120,6 +120,33 @@ class AccessResolver
     }
 
     /**
+     * Resume en texto los overrides que difieren entre dos catálogos de
+     * catalogForUser() (antes/después de guardar), para la auditoría.
+     * Devuelve null si no cambió ninguno.
+     */
+    public function describeChanges(array $before, array $after): ?string
+    {
+        $state = fn (?bool $override) => match ($override) {
+            true => 'permitido',
+            false => 'denegado',
+            default => 'rol',
+        };
+
+        $changes = [];
+        foreach (['views' => fn ($e) => 'Vista '.$e['key'], 'tabs' => fn ($e) => 'Tab '.$e['viewKey'].'::'.$e['tabKey']] as $group => $name) {
+            $previous = collect($before[$group])->keyBy($name);
+            foreach ($after[$group] as $entry) {
+                $was = $previous->get($name($entry))['override'] ?? null;
+                if ($was !== $entry['override']) {
+                    $changes[] = $name($entry).': '.$state($was).' → '.$state($entry['override']);
+                }
+            }
+        }
+
+        return $changes === [] ? null : implode('; ', $changes);
+    }
+
+    /**
      * Simula el merge de $tabOverrides sobre el estado actual del usuario
      * (sin escribir nada) y devuelve los view_key que quedarían sin ninguna
      * tab activa — una vista así deja al usuario sin nada que ver al entrar

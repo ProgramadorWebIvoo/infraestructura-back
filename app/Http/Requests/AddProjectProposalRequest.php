@@ -18,6 +18,10 @@ class AddProjectProposalRequest extends FormRequest
     {
         return [
             'contractorCode' => ['required', 'exists:contractors,code'],
+            // Moneda en la que se digitaron los montos (ausente = moneda base).
+            // El backend convierte a la base y guarda el original y la tasa
+            // (ver ProposalCurrencyConverter).
+            'quoteCurrency' => ['nullable', 'string', 'regex:/^[A-Za-z]{3,10}$/', 'exists:currencies,code'],
             'materialCost' => ['required', 'numeric', 'min:0'],
             'materialItems' => ['nullable', 'array'],
             'materialItems.*.materialName' => ['required_with:materialItems', 'string'],

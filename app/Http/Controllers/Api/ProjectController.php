@@ -33,6 +33,7 @@ use App\Services\PaymentSignatureService;
 use App\Services\ProjectStateMachine;
 use App\Services\ResidentAssignmentService;
 use App\Support\ProjectLocation;
+use App\Services\ProposalCurrencyConverter;
 use App\Services\ProposalRenegotiationService;
 use App\Services\RateFreezeService;
 use App\Services\RejectionService;
@@ -304,7 +305,7 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(Project::detailRelations()));
     }
 
-    public function addProposal(AddProjectProposalRequest $request, Project $project)
+    public function addProposal(AddProjectProposalRequest $request, Project $project, ProposalCurrencyConverter $currencyConverter)
     {
         $data = $request->validated();
 
@@ -314,10 +315,8 @@ class ProjectController extends Controller
             'id' => ProjectProposal::nextId(),
             'contractor_code' => $contractor->code,
             'contractor_name_snapshot' => $contractor->name,
-            'material_cost' => $data['materialCost'],
+            ...$currencyConverter->columnsFor($data),
             'material_items' => \App\Support\ProposalMaterialItemsNormalizer::withCatalogIds($project, $data['materialItems'] ?? null),
-            'labor_cost' => $data['laborCost'],
-            'total_cost' => $data['totalCost'],
             'delivery_weeks' => $data['deliveryWeeks'],
             'duration_value' => $data['durationValue'] ?? null,
             'duration_unit' => $data['durationUnit'] ?? null,
@@ -330,6 +329,9 @@ class ProjectController extends Controller
         ]);
 
         $auditDetails = "Oferta {$proposal->id} cargada por {$contractor->name}.";
+        if ($proposal->fx_rate_to_base !== null) {
+            $auditDetails .= " Cotizada en {$proposal->quote_currency} (tasa a {$proposal->base_currency_at_import}: {$proposal->fx_rate_to_base}).";
+        }
         if ($proposal->motivo_anticipo_excedido) {
             $auditDetails .= " Motivo exceso de anticipo: {$proposal->motivo_anticipo_excedido}";
         }
@@ -359,9 +361,11 @@ class ProjectController extends Controller
 
         $data = $request->validated();
         $precioAnterior = (float) $proposal->total_cost;
-        $precioNuevo = (float) $data['totalCost'];
 
         $renegotiated = $renegotiationService->apply($project, $proposal, $data + ['createdBy' => auth()->id()]);
+        // Ya convertido a la moneda base por el servicio (el cliente envía los
+        // montos en quoteCurrency): comparar contra el precio anterior en la misma unidad.
+        $precioNuevo = (float) $renegotiated->total_cost;
 
         $auditDetails = "Propuesta {$proposal->id} ({$proposal->contractor_name_snapshot}) renegociada como {$renegotiated->id}. " .
             "Precio anterior: {$precioAnterior}. Precio nuevo: {$precioNuevo}. Diferencia: " . ($precioNuevo - $precioAnterior) . ". " .

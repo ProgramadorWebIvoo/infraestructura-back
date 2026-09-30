@@ -131,7 +131,10 @@ class RenegotiationInvitationController extends Controller
                     'quantity' => $m->quantity,
                     'unit' => $m->unit,
                 ]),
-                'laborCost' => (float) $proposal->labor_cost,
+                // En la moneda en que cotizó el proveedor (quoteCurrency), igual
+                // que materialItems y totalCostOriginal: labor_cost está en la
+                // moneda base y no cuadraría con el resto del formulario.
+                'laborCost' => (float) ($proposal->labor_cost_original ?? $proposal->labor_cost),
                 'totalCost' => (float) $proposal->total_cost,
                 'totalCostOriginal' => $proposal->total_cost_original !== null ? (float) $proposal->total_cost_original : (float) $proposal->total_cost,
                 'deliveryWeeks' => $proposal->delivery_weeks,
@@ -182,9 +185,11 @@ class RenegotiationInvitationController extends Controller
         $data = $validator->validate();
 
         $precioAnterior = (float) $proposal->total_cost;
-        $precioNuevo = (float) $data['totalCost'];
 
         $renegotiated = $renegotiationService->apply($project, $proposal, $data);
+        // Ya convertido a la moneda base por el servicio (el proveedor envía los
+        // montos en quoteCurrency): comparar contra el precio anterior en la misma unidad.
+        $precioNuevo = (float) $renegotiated->total_cost;
 
         $invitation->update(['used_at' => now()]);
 

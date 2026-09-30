@@ -16,20 +16,23 @@ use Illuminate\Support\Facades\DB;
  */
 class ProposalRenegotiationService
 {
+    public function __construct(private ProposalCurrencyConverter $currencyConverter) {}
+
     public function apply(Project $project, ProjectProposal $proposal, array $data): ProjectProposal
     {
         $precioAnterior = (float) $proposal->total_cost;
-        $precioNuevo = (float) $data['totalCost'];
+        // Los montos llegan en quoteCurrency; precio nuevo y diferencia se
+        // guardan en la moneda base, comparables con el precio anterior.
+        $currencyColumns = $this->currencyConverter->columnsFor($data);
+        $precioNuevo = (float) $currencyColumns['total_cost'];
 
-        $renegotiated = DB::transaction(function () use ($project, $proposal, $data, $precioAnterior, $precioNuevo) {
+        $renegotiated = DB::transaction(function () use ($project, $proposal, $data, $precioAnterior, $precioNuevo, $currencyColumns) {
             $new = $project->proposals()->create([
                 'id' => ProjectProposal::nextId(),
                 'contractor_code' => $proposal->contractor_code,
                 'contractor_name_snapshot' => $proposal->contractor_name_snapshot,
-                'material_cost' => $data['materialCost'],
+                ...$currencyColumns,
                 'material_items' => \App\Support\ProposalMaterialItemsNormalizer::withCatalogIds($project, $data['materialItems'] ?? null),
-                'labor_cost' => $data['laborCost'],
-                'total_cost' => $data['totalCost'],
                 'delivery_weeks' => $data['deliveryWeeks'],
                 'duration_value' => $data['durationValue'] ?? null,
                 'duration_unit' => $data['durationUnit'] ?? null,

@@ -38,6 +38,9 @@ class RenegotiateProposalRequest extends FormRequest
     public static function baseRules(?string $minFechaOferta): array
     {
         return [
+            // Moneda en la que se digitaron los montos (ausente = moneda base);
+            // la conversión a la base vive en ProposalCurrencyConverter.
+            'quoteCurrency' => ['nullable', 'string', 'regex:/^[A-Za-z]{3,10}$/', 'exists:currencies,code'],
             'materialCost' => ['required', 'numeric', 'min:0'],
             'materialItems' => ['nullable', 'array'],
             'materialItems.*.materialName' => ['required_with:materialItems', 'string'],

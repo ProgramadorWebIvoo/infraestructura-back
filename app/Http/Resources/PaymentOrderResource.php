@@ -30,6 +30,8 @@ class PaymentOrderResource extends JsonResource
             'elaboratedByName' => $this->whenLoaded('elaboratedBy', fn () => $this->elaboratedBy?->name),
             'snapshot' => $this->snapshot,
             'createdAt' => optional($this->created_at)->toIso8601String(),
+            // Cómo se pagó realmente (solo cuando la orden ya está pagada y se cargó la relación).
+            'payment' => $this->whenLoaded('payment', fn () => $this->payment ? new PaymentSettlementResource($this->payment) : null),
             'signatures' => $this->whenLoaded('signatures', fn () => PaymentOrderSignatureResource::collection($this->signatures)),
             // Firma obligatoria que le falta a ESTA orden para poder avanzar
             // (aprobación/pago) — el frontend la usa para deshabilitar esos

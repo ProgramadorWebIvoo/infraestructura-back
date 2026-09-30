@@ -202,6 +202,26 @@ class PaymentSettlementTest extends TestCase
         $this->assertNull($payment->payment_rate_freeze_id);
     }
 
+    public function test_the_order_detail_and_the_project_history_expose_the_settlement(): void
+    {
+        $this->pay(['paymentMode' => 'BS', 'paidAmount' => 345600, 'appliedRate' => 960, 'appliedRateSource' => 'MANUAL'])->assertStatus(200);
+        $order = PaymentOrder::where('project_id', $this->project->id)->firstOrFail();
+
+        $this->actingAs($this->finanzas)->getJson("/api/payment-orders/{$order->id}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.currency', 'USDT')
+            ->assertJsonPath('data.payment.paymentMode', 'BS')
+            ->assertJsonPath('data.payment.paidCurrency', 'VES')
+            ->assertJsonPath('data.payment.appliedRate', 960)
+            ->assertJsonPath('data.payment.contractRateFreeze.trigger', 'CONTRATADO')
+            ->assertJsonPath('data.payment.paymentRateFreeze.trigger', 'PAGO_ANTICIPO');
+
+        $this->actingAs($this->presidencia)->getJson("/api/project-history/{$this->project->id}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.payments.items.0.settlement.paidCurrency', 'VES')
+            ->assertJsonPath('data.payments.items.0.settlement.coveredAmount', 360);
+    }
+
     public function test_paid_orders_expose_no_stale_state(): void
     {
         $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 360])->assertStatus(200);

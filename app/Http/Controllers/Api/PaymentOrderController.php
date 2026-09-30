@@ -23,7 +23,13 @@ class PaymentOrderController extends Controller
         $user = auth()->user();
         abort_unless($this->signatures->canViewOrder($paymentOrder, $user), 403);
 
-        $paymentOrder->load(['elaboratedBy:id,name', 'signatures.user:id,name', 'signatures.step']);
+        $paymentOrder->load([
+            'elaboratedBy:id,name',
+            'signatures.user:id,name',
+            'signatures.step',
+            'payment.contractRateFreeze.frozenByUser:id,name',
+            'payment.paymentRateFreeze.frozenByUser:id,name',
+        ]);
         $nextStep = $this->signatures->nextPendingStep($paymentOrder);
 
         return response()->json([

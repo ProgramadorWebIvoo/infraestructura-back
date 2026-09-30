@@ -37,6 +37,8 @@ class ProjectHistoryDetailBuilder
             'proposals.creator:id,name',
             'proposals.contractor:code,name',
             'payments.comprobante',
+            'payments.contractRateFreeze',
+            'payments.paymentRateFreeze',
             'rateFreezes',
         ]);
 
@@ -219,6 +221,8 @@ class ProjectHistoryDetailBuilder
             'notes' => $p->notes,
             'proposalId' => $p->proposal_id,
             'proof' => $p->comprobante ? ['id' => $p->comprobante->id, 'name' => $p->comprobante->original_name] : null,
+            // Cómo se pagó realmente (moneda, tasa aplicada, diferencia, congelados); null en pagos anteriores.
+            'settlement' => $p->payment_mode !== null ? (new \App\Http\Resources\PaymentSettlementResource($p))->resolve() : null,
         ])->values();
         $total = round((float) $items->sum('amount'), 2);
 

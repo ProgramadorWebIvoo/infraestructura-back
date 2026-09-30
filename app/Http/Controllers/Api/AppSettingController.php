@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Models\ConfigAuditLog;
+use App\Services\RateFreezeService;
 use App\Services\SettingsService;
 use App\Support\AppSettingCatalog;
 use Illuminate\Http\JsonResponse;
@@ -76,6 +77,7 @@ class AppSettingController extends Controller
             abort_unless(json_last_error() === JSON_ERROR_NONE, 422, 'JSON inválido.');
         }
 
+        $this->assertFreezeMoment($setting, $data['value']);
         $this->assertSemaphoreOrder($setting, $data['value']);
         $this->assertCronHourFormat($setting, $data['value']);
 
@@ -95,6 +97,24 @@ class AppSettingController extends Controller
         $settingPayload['auditLog'] = $auditLog->toApiPayload();
 
         return response()->json(['data' => $settingPayload]);
+    }
+
+    /**
+     * `congelar_tasa_momento` es una opción única (radio en CONFIG APP): solo se
+     * aceptan los tres triggers de congelado o NINGUNO — un valor libre dejaría
+     * el congelado desactivado en silencio (RateFreezeService compara por igualdad).
+     */
+    private function assertFreezeMoment(AppSetting $setting, ?string $newValue): void
+    {
+        if ($setting->key !== RateFreezeService::MOMENT_SETTING) {
+            return;
+        }
+
+        abort_unless(
+            in_array($newValue, RateFreezeService::moments(), true),
+            422,
+            'El momento de congelación debe ser uno de: ' . implode(', ', RateFreezeService::moments()) . '.'
+        );
     }
 
     /**

@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Snapshot inmutable de la tasa de cambio BCV de un proyecto en el momento
- * de un trigger de negocio — ver RateFreezeService, única fuente de
+ * Snapshot inmutable de los bolívares de un monto del proyecto (moneda,
+ * monto, tasa de esa moneda y Bs. resultantes) en el momento de un trigger de negocio — ver RateFreezeService, única fuente de
  * escritura de este modelo. No tiene `updated_at`: una vez creada, una fila
  * nunca se edita; una corrección crea una fila nueva que la "supersede".
  */
@@ -31,8 +31,11 @@ class ProjectRateFreeze extends Model
         'project_id',
         'trigger',
         'base_currency',
+        'frozen_currency',
         'frozen_rate',
         'frozen_amount_base',
+        'frozen_amount',
+        'frozen_amount_bs',
         'exchange_rate_id',
         'source',
         'reason',
@@ -44,6 +47,8 @@ class ProjectRateFreeze extends Model
     protected $casts = [
         'frozen_rate' => 'float',
         'frozen_amount_base' => 'float',
+        'frozen_amount' => 'float',
+        'frozen_amount_bs' => 'float',
         'frozen_at' => 'datetime',
     ];
 

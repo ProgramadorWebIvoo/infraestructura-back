@@ -176,6 +176,11 @@ class PaymentSettlementTest extends TestCase
 
     public function test_the_payment_references_the_frozen_rates_and_the_audit_log_traces_it(): void
     {
+        // La adjudicación ya congeló (momento por defecto: CONTRATADO); el cambio a
+        // "pago de anticipo" hace que este pago también deje su propio congelado.
+        \App\Models\AppSetting::where('key', 'congelar_tasa_momento')->update(['value' => 'PAGO_ANTICIPO']);
+        \App\Services\SettingsService::forget();
+
         $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 360])->assertStatus(200);
 
         $payment = ProjectPayment::where('project_id', $this->project->id)->firstOrFail();
@@ -184,6 +189,10 @@ class PaymentSettlementTest extends TestCase
 
         $this->assertSame($contractFreeze->id, $payment->contract_rate_freeze_id);
         $this->assertSame($paymentFreeze->id, $payment->payment_rate_freeze_id);
+        // Los Bs. congelados son los de la obligación en USDT con la tasa USDT.
+        $this->assertSame('USDT', $paymentFreeze->frozen_currency);
+        $this->assertEquals(360.0, $paymentFreeze->frozen_amount);
+        $this->assertEquals(360000.0, $paymentFreeze->frozen_amount_bs);
 
         $entry = AuditLog::where('project_id', $this->project->id)->where('action', 'Liberacion de anticipo')->latest('logged_at')->firstOrFail();
         $this->assertStringContainsString('Pagado 360.00 USDT', $entry->details);
@@ -192,7 +201,8 @@ class PaymentSettlementTest extends TestCase
 
     public function test_the_payment_is_recorded_without_freeze_references_when_the_config_is_off(): void
     {
-        \App\Models\AppSetting::where('key', 'congelar_tasa_en_pago_anticipo')->update(['value' => 'false']);
+        // Momento por defecto (adjudicación): el pago no congela nada por sí mismo.
+        \App\Models\AppSetting::where('key', 'congelar_tasa_momento')->update(['value' => 'CONTRATADO']);
         \App\Services\SettingsService::forget();
 
         $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 360])->assertStatus(200);
@@ -204,6 +214,9 @@ class PaymentSettlementTest extends TestCase
 
     public function test_the_order_detail_and_the_project_history_expose_the_settlement(): void
     {
+        \App\Models\AppSetting::where('key', 'congelar_tasa_momento')->update(['value' => 'PAGO_ANTICIPO']);
+        \App\Services\SettingsService::forget();
+
         $this->pay(['paymentMode' => 'BS', 'paidAmount' => 345600, 'appliedRate' => 960, 'appliedRateSource' => 'MANUAL'])->assertStatus(200);
         $order = PaymentOrder::where('project_id', $this->project->id)->firstOrFail();
 

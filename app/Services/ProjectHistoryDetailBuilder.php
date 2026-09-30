@@ -200,7 +200,10 @@ class ProjectHistoryDetailBuilder
             'rateFreezes' => $project->rateFreezes->whereNull('superseded_by_id')->map(fn ($f) => [
                 'trigger' => $f->trigger,
                 'baseCurrency' => $f->base_currency,
+                'frozenCurrency' => $f->frozen_currency ?? $f->base_currency,
                 'frozenRate' => $f->frozen_rate,
+                'frozenAmount' => $f->frozen_amount ?? $f->frozen_amount_base,
+                'frozenAmountBs' => $f->frozen_amount_bs,
                 'frozenAmountBase' => $f->frozen_amount_base,
                 'frozenAt' => optional($f->frozen_at)->toIso8601String(),
                 'source' => $f->source,

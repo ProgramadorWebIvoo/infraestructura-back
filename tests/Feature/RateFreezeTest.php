@@ -37,6 +37,13 @@ class RateFreezeTest extends TestCase
         ExchangeRate::create(['currency_code' => 'USD', 'rate_to_usd' => 100, 'source' => 'BCV', 'effective_at' => now()->subDay()]);
     }
 
+    /** Fija el momento de congelación (radio único en CONFIG APP). */
+    private function setFreezeMoment(string $moment): void
+    {
+        AppSetting::where('key', 'congelar_tasa_momento')->update(['value' => $moment]);
+        SettingsService::forget();
+    }
+
     // ===== RateFreezeService (unidad) =====
 
     public function test_freeze_for_trigger_creates_snapshot_with_current_bcv_rate(): void
@@ -47,8 +54,11 @@ class RateFreezeTest extends TestCase
 
         $this->assertNotNull($freeze);
         $this->assertSame('USD', $freeze->base_currency);
+        $this->assertSame('USD', $freeze->frozen_currency);
         $this->assertEquals(100, $freeze->frozen_rate);
         $this->assertEquals(1500.0, $freeze->frozen_amount_base);
+        $this->assertEquals(1500.0, $freeze->frozen_amount);
+        $this->assertEquals(150000.0, $freeze->frozen_amount_bs);
         $this->assertSame('AUTO', $freeze->source);
         $this->assertNull($freeze->superseded_by_id);
     }
@@ -66,10 +76,29 @@ class RateFreezeTest extends TestCase
         $this->assertEquals(1, ProjectRateFreeze::where('project_id', $project->id)->count());
     }
 
+    public function test_the_freeze_moment_defaults_to_contratado_and_the_old_toggles_are_gone(): void
+    {
+        $this->assertDatabaseHas('app_settings', ['key' => 'congelar_tasa_momento', 'value' => 'CONTRATADO']);
+        $this->assertDatabaseMissing('app_settings', ['key' => 'congelar_tasa_en_contratacion']);
+        $this->assertDatabaseMissing('app_settings', ['key' => 'congelar_tasa_en_pago_anticipo']);
+        $this->assertDatabaseMissing('app_settings', ['key' => 'congelar_tasa_en_pago_finiquito']);
+    }
+
+    public function test_only_the_configured_moment_freezes(): void
+    {
+        $this->setFreezeMoment('PAGO_ANTICIPO');
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $service = app(RateFreezeService::class);
+
+        $this->assertNull($service->freezeForTrigger($project, ProjectRateFreeze::TRIGGER_CONTRATADO, 1500.0));
+        $this->assertNull($service->freezeForTrigger($project, ProjectRateFreeze::TRIGGER_PAGO_FINIQUITO, 1500.0));
+        $this->assertNotNull($service->freezeForTrigger($project, ProjectRateFreeze::TRIGGER_PAGO_ANTICIPO, 1500.0));
+        $this->assertEquals(1, ProjectRateFreeze::where('project_id', $project->id)->count());
+    }
+
     public function test_freeze_for_trigger_does_nothing_when_setting_disabled(): void
     {
-        AppSetting::where('key', 'congelar_tasa_en_contratacion')->update(['value' => 'false']);
-        SettingsService::forget();
+        $this->setFreezeMoment('NINGUNO');
 
         $project = Project::factory()->create(['status' => 'CONTRATADO']);
         $freeze = app(RateFreezeService::class)->freezeForTrigger($project, ProjectRateFreeze::TRIGGER_CONTRATADO, 1500.0);
@@ -146,7 +175,7 @@ class RateFreezeTest extends TestCase
         ]);
     }
 
-    public function test_pay_advance_and_final_freeze_their_own_triggers(): void
+    private function projectWithAdvanceOrder(): Project
     {
         $project = Project::factory()->create(['status' => 'CONTRATADO']);
         $proposal = ProjectProposal::factory()->create([
@@ -156,48 +185,124 @@ class RateFreezeTest extends TestCase
             'negotiated_advance_percent' => 30,
         ]);
         $project->update(['selected_contractor_code' => $this->contractor->code, 'selected_proposal_id' => $proposal->id]);
-        $paymentOrders = app(\App\Services\PaymentOrderService::class);
-        $paymentOrders->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_ADVANCE);
-        $doc = \App\Models\ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
+        app(\App\Services\PaymentOrderService::class)->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_ADVANCE);
+        \App\Models\ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
+
+        return $project;
+    }
+
+    public function test_paying_does_not_freeze_when_the_moment_is_contratado(): void
+    {
+        $project = $this->projectWithAdvanceOrder();
 
         $this->actingAs($this->finanzas)
-            ->postJson("/api/projects/{$project->id}/payments", [
-                'paymentType' => 'ADVANCE',
-                'amount' => 6000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 6000.00,
-            ])
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 6000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 6000.00])
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('project_rate_freezes', ['project_id' => $project->id]);
+    }
+
+    public function test_pay_advance_and_final_freeze_only_when_they_are_the_configured_moment(): void
+    {
+        $this->setFreezeMoment('PAGO_ANTICIPO');
+        $project = $this->projectWithAdvanceOrder();
+
+        $this->actingAs($this->finanzas)
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 6000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 6000.00])
             ->assertStatus(200);
 
         $this->assertDatabaseHas('project_rate_freezes', [
             'project_id' => $project->id,
             'trigger' => 'PAGO_ANTICIPO',
+            'frozen_currency' => 'USD',
+            'frozen_amount' => 6000.00,
             'frozen_amount_base' => 6000.00,
+            'frozen_amount_bs' => 600000.00,
             'source' => 'AUTO',
         ]);
 
+        $this->setFreezeMoment('PAGO_FINIQUITO');
         \App\Models\ProjectClosureReport::updateOrCreate(
             ['project_id' => $project->id],
             ['id' => (string) \Illuminate\Support\Str::uuid(), 'status' => \App\Models\ProjectClosureReport::STATUS_AUDIT_APPROVED, 'finiquito_amount' => 14000.00]
         );
         $project->update(['status' => 'LISTO_PAGO_FINAL']);
-        $paymentOrders->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_FINAL);
-        $doc = \App\Models\ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_FINIQUITO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
+        app(\App\Services\PaymentOrderService::class)->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_FINAL);
+        \App\Models\ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_FINIQUITO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)
-            ->postJson("/api/projects/{$project->id}/payments", [
-                'paymentType' => 'FINAL',
-                'amount' => 14000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 14000.00,
-            ])
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'FINAL', 'amount' => 14000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 14000.00])
             ->assertStatus(200);
 
-        $this->assertDatabaseHas('project_rate_freezes', [
-            'project_id' => $project->id,
-            'trigger' => 'PAGO_FINIQUITO',
-            'frozen_amount_base' => 14000.00,
-            'source' => 'AUTO',
-        ]);
+        $this->assertDatabaseHas('project_rate_freezes', ['project_id' => $project->id, 'trigger' => 'PAGO_FINIQUITO', 'frozen_amount_base' => 14000.00, 'source' => 'AUTO']);
+        // El anticipo no se toca al pagar el finiquito.
+        $this->assertEquals(2, ProjectRateFreeze::where('project_id', $project->id)->count());
+    }
 
-        // El anticipo no se toca al pagar el finiquito — cada trigger es independiente.
-        $this->assertEquals(2, \App\Models\ProjectRateFreeze::where('project_id', $project->id)->count());
+    public function test_the_freeze_is_made_in_the_quote_currency_with_its_own_rate(): void
+    {
+        ExchangeRate::create(['currency_code' => 'USDT', 'rate_to_usd' => 1000, 'source' => 'TEST', 'effective_at' => now()->subMinute()]);
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $this->contractor->code,
+            'total_cost' => 1500.00,
+            'quote_currency' => 'USDT',
+            'total_cost_original' => 1200.00,
+            'fx_rate_to_base' => 1.25,
+            'base_currency_at_import' => 'USD',
+        ]);
+        $project->update(['selected_proposal_id' => $proposal->id]);
+
+        $freeze = app(RateFreezeService::class)->freezeForTrigger($project->fresh(), ProjectRateFreeze::TRIGGER_CONTRATADO, 1500.0);
+
+        // Se congelan los Bs. de 1.200 USDT con la tasa USDT — no los 1.500 USD con la BCV.
+        $this->assertSame('USDT', $freeze->frozen_currency);
+        $this->assertEquals(1200.0, $freeze->frozen_amount);
+        $this->assertEquals(1000, $freeze->frozen_rate);
+        $this->assertEquals(1200000.0, $freeze->frozen_amount_bs);
+        $this->assertEquals(1500.0, $freeze->frozen_amount_base);
+        $this->assertSame('USD', $freeze->base_currency);
+    }
+
+    public function test_a_payment_freeze_uses_the_order_obligation_currency(): void
+    {
+        ExchangeRate::create(['currency_code' => 'USDT', 'rate_to_usd' => 1000, 'source' => 'TEST', 'effective_at' => now()->subMinute()]);
+        $this->setFreezeMoment('PAGO_ANTICIPO');
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $this->contractor->code,
+            'total_cost' => 1500.00,
+            'quote_currency' => 'USDT',
+            'total_cost_original' => 1200.00,
+            'fx_rate_to_base' => 1.25,
+            'base_currency_at_import' => 'USD',
+            'negotiated_advance_percent' => 30,
+        ]);
+        $project->update(['selected_contractor_code' => $this->contractor->code, 'selected_proposal_id' => $proposal->id]);
+        app(\App\Services\PaymentOrderService::class)->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_ADVANCE);
+
+        $freeze = app(RateFreezeService::class)->freezeForTrigger($project->fresh(), ProjectRateFreeze::TRIGGER_PAGO_ANTICIPO, 450.0);
+
+        // Orden de 360 USDT (equivale a 450 USD).
+        $this->assertSame('USDT', $freeze->frozen_currency);
+        $this->assertEquals(360.0, $freeze->frozen_amount);
+        $this->assertEquals(360000.0, $freeze->frozen_amount_bs);
+        $this->assertEquals(450.0, $freeze->frozen_amount_base);
+    }
+
+    public function test_the_freeze_moment_setting_only_accepts_a_valid_moment(): void
+    {
+        $setting = AppSetting::where('key', 'congelar_tasa_momento')->firstOrFail();
+
+        $this->actingAs($this->superadmin)->patchJson("/api/settings/{$setting->id}", ['value' => 'CUALQUIER_COSA'])->assertStatus(422);
+        $this->actingAs($this->superadmin)->patchJson("/api/settings/{$setting->id}", ['value' => 'true'])->assertStatus(422);
+
+        foreach (['PAGO_ANTICIPO', 'PAGO_FINIQUITO', 'NINGUNO', 'CONTRATADO'] as $moment) {
+            $this->actingAs($this->superadmin)->patchJson("/api/settings/{$setting->id}", ['value' => $moment])->assertStatus(200);
+            $this->assertDatabaseHas('app_settings', ['key' => 'congelar_tasa_momento', 'value' => $moment]);
+        }
     }
 
     // ===== ProjectRateFreezeController =====

@@ -89,7 +89,8 @@ Route::get('/public/catalog-categories', [CatalogCategoryController::class, 'pub
 Route::get('/public/catalog-products/search', [CatalogProductController::class, 'publicSearch'])->middleware('throttle:public-api');
 
     
-Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(function () {
+// `idempotency` va al final: tras la autorización (project.access), para que un replay nunca la salte.
+Route::middleware(['auth:sanctum', 'refresh.token', 'project.access', 'idempotency'])->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::get('/auth/permissions', [AuthController::class, 'permissions']);
     Route::get('/auth/tabs', [AuthController::class, 'tabs']);

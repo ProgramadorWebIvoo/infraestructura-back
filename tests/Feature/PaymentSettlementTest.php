@@ -120,6 +120,36 @@ class PaymentSettlementTest extends TestCase
         $this->assertSame(0.0, $payment->difference_amount);
     }
 
+    public function test_the_disbursement_ledger_exposes_everything_needed_to_inspect_a_payment(): void
+    {
+        $this->pay(['paymentMode' => 'BS', 'paidAmount' => 360000, 'appliedRate' => 1000, 'appliedRateSource' => 'USDT', 'bank' => 'Banesco', 'reference' => 'REF-9'])
+            ->assertStatus(200);
+
+        $row = $this->actingAs($this->finanzas)->getJson('/api/finance/disbursements')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->json('data.0');
+
+        $this->assertSame($this->project->id, $row['projectId']);
+        $this->assertSame('ADVANCE', $row['type']);
+        $this->assertEquals(450, $row['amount']);
+        $this->assertSame('USDT', $row['quoteCurrency']);
+        $this->assertEquals(1.25, $row['fxRateToBase']);
+        $this->assertSame('Banesco', $row['bank']);
+        $this->assertSame('REF-9', $row['reference']);
+        $this->assertNotNull($row['orderNumber']);
+        $this->assertSame('BS', $row['settlement']['paymentMode']);
+        $this->assertArrayHasKey('contractRateFreeze', $row['settlement']);
+        $this->assertArrayHasKey('paymentRateFreeze', $row['settlement']);
+        $this->assertArrayHasKey('proof', $row);
+    }
+
+    public function test_the_disbursement_ledger_is_restricted_to_finance_roles(): void
+    {
+        $this->actingAs($this->procura)->getJson('/api/finance/disbursements')->assertStatus(403);
+        $this->actingAs($this->finanzas)->getJson('/api/finance/disbursements')->assertOk();
+    }
+
     public function test_paid_in_another_currency(): void
     {
         // 360 USDT a 0,80 USD por USDT = 288 USD.

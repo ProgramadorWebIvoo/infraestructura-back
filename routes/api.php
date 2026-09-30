@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ClosureReportController;
 use App\Http\Controllers\Api\ContractorController;
 use App\Http\Controllers\Api\ContractorDocumentController;
 use App\Http\Controllers\Api\ContractorDocumentTypeController;
+use App\Http\Controllers\Api\FinanceDisbursementController;
 use App\Http\Controllers\Api\PaymentOrderController;
 use App\Http\Controllers\Api\PaymentSignatureStepController;
 use App\Http\Controllers\Api\DebugClosureFixtureController;
@@ -327,6 +328,8 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
     Route::post('/projects/{project}/send-to-finance', [AwardApprovalController::class, 'sendToFinance'])
         ->middleware('role:PROCURA,ADMIN,SUPERADMIN');
     Route::post('/projects/{project}/payments', [ProjectController::class, 'pay'])
+        ->middleware('role:FINANZAS,ADMIN,SUPERADMIN');
+    Route::get('/finance/disbursements', [FinanceDisbursementController::class, 'index'])
         ->middleware('role:FINANZAS,ADMIN,SUPERADMIN');
     Route::get('/projects/{project}/rate-freezes', [ProjectRateFreezeController::class, 'index']);
     Route::post('/projects/{project}/rate-freezes', [ProjectRateFreezeController::class, 'store'])

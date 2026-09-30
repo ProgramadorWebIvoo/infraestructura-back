@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Única fuente de escritura de ProjectRateFreeze: congela los BOLÍVARES de un
- * monto en el momento de un trigger de negocio (adjudicación, pago de
- * anticipo, pago de finiquito), para que ese monto en Bs. deje de
+ * monto en el momento de un trigger de negocio (CONTRATADO = Procura solicita el
+ * anticipo a Finanzas tras la aprobación de Presidencia; pago de anticipo; pago
+ * de finiquito), para que ese monto en Bs. deje de
  * recalcularse con la tasa del día.
  *
  * Se congela en la moneda del propio monto (la de cotización: USD, EUR,

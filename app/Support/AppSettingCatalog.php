@@ -119,7 +119,7 @@ class AppSettingCatalog
         ],
         'congelar_tasa_momento' => [
             'label' => 'Momento en que se congela la tasa',
-            'description' => 'Elige UNO: el momento del flujo en que se congelan los Bs. de la obra (adjudicación, pago de anticipo o pago de finiquito), o ninguno. Se congela el monto en su moneda de cotización con la tasa de esa moneda (BCV para USD/EUR, la propia para USDT), sin depender del switch BCV/USDT.',
+            'description' => 'Elige UNO: el momento del flujo en que se congelan los Bs. de la obra — cuando Procura solicita el anticipo a Finanzas (tras la aprobación de Presidencia), al pagar el anticipo o al pagar el finiquito — o ninguno. Se congela el monto en su moneda de cotización con la tasa de esa moneda (BCV para USD/EUR, la propia para USDT), sin depender del switch BCV/USDT.',
         ],
         'tasa_cambio_cron_hora' => [
             'label' => 'Hora de ejecución del cronjob',

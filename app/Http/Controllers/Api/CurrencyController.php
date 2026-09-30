@@ -30,7 +30,12 @@ class CurrencyController extends Controller
      */
     public function activePublicList(): JsonResponse
     {
+        // Solo la base o monedas con al menos una tasa cargada: una moneda
+        // activa sin tasa (ej. USDT antes de su primer sync) haría fallar el
+        // envío del proveedor al no poder convertir su cotización.
         $currencies = Currency::where('is_active', true)
+            ->where(fn ($query) => $query->where('is_base', true)
+                ->orWhereIn('code', ExchangeRate::select('currency_code')))
             ->orderByDesc('is_base')
             ->orderBy('code')
             ->get(['code', 'name', 'symbol', 'is_base'])
@@ -131,6 +136,8 @@ class CurrencyController extends Controller
     public function setBase(Currency $currency): JsonResponse
     {
         abort_unless($currency->is_active, 422, 'No se puede establecer como base una moneda inactiva.');
+        // USDT es una tasa de mercado (no oficial): como base rompería los montos en USD y el congelado de tasa.
+        abort_if($currency->code === 'USDT', 422, 'USDT no puede ser la moneda base.');
 
         // $previousBase se lee DENTRO de la transacción con lockForUpdate():
         // leerla afuera permitía que dos POST /set-base concurrentes (para

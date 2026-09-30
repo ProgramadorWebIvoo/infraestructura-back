@@ -6,6 +6,7 @@ use App\Services\SettingsService;
 use App\Support\ValidatesImmutableMaterialQuantities;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class AddProjectProposalRequest extends FormRequest
 {
@@ -21,7 +22,7 @@ class AddProjectProposalRequest extends FormRequest
             // Moneda en la que se digitaron los montos (ausente = moneda base).
             // El backend convierte a la base y guarda el original y la tasa
             // (ver ProposalCurrencyConverter).
-            'quoteCurrency' => ['nullable', 'string', 'regex:/^[A-Za-z]{3,10}$/', 'exists:currencies,code'],
+            'quoteCurrency' => ['nullable', 'string', 'regex:/^[A-Za-z]{3,10}$/', Rule::exists('currencies', 'code')->where('is_active', true)],
             'materialCost' => ['required', 'numeric', 'min:0'],
             'materialItems' => ['nullable', 'array'],
             'materialItems.*.materialName' => ['required_with:materialItems', 'string'],
@@ -34,7 +35,8 @@ class AddProjectProposalRequest extends FormRequest
             // cobra mano de obra por separado (ya viene incluida en materiales
             // o es autoinstalación del cliente).
             'laborCost' => ['required', 'numeric', 'min:0'],
-            'totalCost' => ['required', 'numeric', 'min:0'],
+            // Informativo: el backend lo recalcula como materiales + mano de obra (ProposalCurrencyConverter).
+            'totalCost' => ['nullable', 'numeric', 'min:0'],
             'deliveryWeeks' => ['required', 'integer', 'min:0'],
             'durationValue' => ['nullable', 'integer', 'min:0'],
             'durationUnit' => ['nullable', 'string', 'in:dias,semanas,meses'],

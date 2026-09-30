@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CatalogCategory;
 use App\Models\Currency;
+use App\Models\ExchangeRate;
 use App\Models\MaterialCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -21,6 +22,8 @@ class PublicCatalogReferenceTest extends TestCase
     public function test_public_currencies_lists_only_active_ones(): void
     {
         Currency::create(['code' => 'VES', 'name' => 'Bolívar', 'symbol' => 'Bs', 'is_base' => false, 'is_active' => true]);
+        // Solo se ofrecen monedas convertibles: la base o las que ya tienen tasa.
+        ExchangeRate::create(['currency_code' => 'VES', 'rate_to_usd' => 1, 'source' => 'TEST', 'effective_at' => now()->subMinute()]);
         Currency::where('code', 'EUR')->update(['is_active' => false]);
 
         $response = $this->getJson('/api/public/currencies');

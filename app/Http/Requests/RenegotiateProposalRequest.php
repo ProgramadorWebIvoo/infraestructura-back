@@ -6,6 +6,7 @@ use App\Services\SettingsService;
 use App\Support\ValidatesImmutableMaterialQuantities;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Renegociar una propuesta existente: el "precio anterior" NUNCA se recibe
@@ -40,7 +41,7 @@ class RenegotiateProposalRequest extends FormRequest
         return [
             // Moneda en la que se digitaron los montos (ausente = moneda base);
             // la conversión a la base vive en ProposalCurrencyConverter.
-            'quoteCurrency' => ['nullable', 'string', 'regex:/^[A-Za-z]{3,10}$/', 'exists:currencies,code'],
+            'quoteCurrency' => ['nullable', 'string', 'regex:/^[A-Za-z]{3,10}$/', Rule::exists('currencies', 'code')->where('is_active', true)],
             'materialCost' => ['required', 'numeric', 'min:0'],
             'materialItems' => ['nullable', 'array'],
             'materialItems.*.materialName' => ['required_with:materialItems', 'string'],
@@ -50,7 +51,8 @@ class RenegotiateProposalRequest extends FormRequest
             'materialItems.*.totalPrice' => ['required_with:materialItems', 'numeric', 'min:0'],
             'materialItems.*.notes' => ['nullable', 'string'],
             'laborCost' => ['required', 'numeric', 'min:0'],
-            'totalCost' => ['required', 'numeric', 'min:0'],
+            // Informativo: el backend lo recalcula como materiales + mano de obra (ProposalCurrencyConverter).
+            'totalCost' => ['nullable', 'numeric', 'min:0'],
             'deliveryWeeks' => ['required', 'integer', 'min:0'],
             'durationValue' => ['nullable', 'integer', 'min:0'],
             'durationUnit' => ['nullable', 'string', 'in:dias,semanas,meses'],

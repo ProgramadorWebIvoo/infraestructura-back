@@ -235,6 +235,30 @@ class CurrencyTest extends TestCase
         $this->assertDatabaseHas('currencies', ['id' => $gbp->id]);
     }
 
+    public function test_usdt_cannot_be_set_as_the_base_currency(): void
+    {
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+        $usdt = Currency::where('code', 'USDT')->firstOrFail();
+
+        $this->actingAs($admin)->postJson("/api/currencies/{$usdt->id}/set-base")->assertStatus(422);
+
+        $this->assertDatabaseHas('currencies', ['code' => 'USD', 'is_base' => true]);
+    }
+
+    public function test_public_list_hides_active_currencies_that_have_no_rate_yet(): void
+    {
+        // USDT viene sembrada activa pero sin tasa hasta su primer sync: un
+        // proveedor no debe poder cotizar en ella (no habría cómo convertirla).
+        $codes = collect($this->getJson('/api/public/currencies')->assertStatus(200)->json('data'))->pluck('code');
+        $this->assertContains('USD', $codes->all());
+        $this->assertNotContains('USDT', $codes->all());
+
+        ExchangeRate::create(['currency_code' => 'USDT', 'rate_to_usd' => 1000, 'source' => 'TEST', 'effective_at' => now()->subMinute()]);
+
+        $codes = collect($this->getJson('/api/public/currencies')->json('data'))->pluck('code');
+        $this->assertContains('USDT', $codes->all());
+    }
+
     public function test_seeds_the_bcv_official_currencies(): void
     {
         // EUR/USD llegan sembradas por

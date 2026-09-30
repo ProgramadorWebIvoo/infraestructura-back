@@ -36,15 +36,36 @@ return new class extends Migration
         Schema::table('project_payments', fn (Blueprint $table) => $table->string('currency', 10)->default('USD')->change());
     }
 
+    /** [tabla, columna] de todo código de moneda ampliado por esta migración. */
+    private const CODE_COLUMNS = [
+        ['currencies', 'code'],
+        ['exchange_rates', 'currency_code'],
+        ['supplier_material_proposals', 'quote_currency'],
+        ['supplier_material_proposal_lines', 'quote_currency'],
+        ['product_price_history', 'original_currency'],
+        ['project_proposals', 'quote_currency'],
+        ['project_proposals', 'base_currency_at_import'],
+        ['project_rate_freezes', 'base_currency'],
+        ['project_payments', 'currency'],
+    ];
+
     /**
-     * Solo reversible si no hay datos con códigos de más de 3 letras: se
-     * eliminan primero las tasas y la moneda USDT sembradas por esta
-     * funcionalidad para que el acortado no falle por truncamiento.
+     * Solo reversible si ningún dato usa ya códigos de más de 3 caracteres
+     * (USDT sembrada, tasas o cotizaciones en USDT): acortar la columna
+     * fallaría con "Data too long" o, peor, habría que borrar histórico
+     * fiscal. En ese caso aborta ANTES de tocar nada (el DDL de MySQL no es
+     * transaccional, un fallo a medias dejaría el esquema inconsistente).
      */
     public function down(): void
     {
-        DB::table('exchange_rates')->whereRaw('CHAR_LENGTH(currency_code) > 3')->delete();
-        DB::table('currencies')->whereRaw('CHAR_LENGTH(code) > 3')->delete();
+        foreach (self::CODE_COLUMNS as [$table, $column]) {
+            if (DB::table($table)->whereRaw("LENGTH({$column}) > 3")->exists()) {
+                throw new \RuntimeException(
+                    "No se puede revertir: {$table}.{$column} contiene códigos de más de 3 caracteres (ej. USDT). "
+                    . 'Elimina o migra esos datos manualmente antes de hacer rollback.'
+                );
+            }
+        }
 
         Schema::table('exchange_rates', fn (Blueprint $table) => $table->dropForeign(['currency_code']));
 

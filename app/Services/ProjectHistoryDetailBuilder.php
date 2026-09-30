@@ -165,6 +165,9 @@ class ProjectHistoryDetailBuilder
             'materialCost' => $p->material_cost,
             'laborCost' => $p->labor_cost,
             'totalCost' => $p->total_cost,
+            // Lo cotizado en su moneda original y la tasa a base fijada al cotizar (null en ofertas en USD).
+            'totalCostOriginal' => $p->total_cost_original,
+            'fxRateToBase' => $p->fx_rate_to_base,
             'negotiatedAdvancePercent' => $p->negotiated_advance_percent,
             'deliveryWeeks' => $p->delivery_weeks,
             'precioAnterior' => $p->precio_anterior,
@@ -195,6 +198,9 @@ class ProjectHistoryDetailBuilder
             'contractorCode' => $awarded->contractor_code,
             'contractorName' => $awarded->contractor_name_snapshot ?? $awarded->contractor?->name,
             'totalCost' => $awarded->total_cost,
+            'quoteCurrency' => $awarded->quote_currency ?? 'USD',
+            'totalCostOriginal' => $awarded->total_cost_original,
+            'fxRateToBase' => $awarded->fx_rate_to_base,
             'negotiatedAdvancePercent' => $awarded->negotiated_advance_percent,
             'origen' => $awarded->origen,
             'rateFreezes' => $project->rateFreezes->whereNull('superseded_by_id')->map(fn ($f) => [

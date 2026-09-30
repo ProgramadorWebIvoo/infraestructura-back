@@ -265,6 +265,12 @@ class ProjectHistoryTest extends TestCase
         $this->assertTrue(collect($d['suppliers'])->firstWhere('id', 'P-2')['isAwarded']);
 
         $this->assertSame('P-2', $d['award']['proposalId']);
+        // Contrato de moneda: la adjudicación y cada oferta exponen lo cotizado y la tasa a base (null si fue en USD).
+        $this->assertArrayHasKey('quoteCurrency', $d['award']);
+        $this->assertArrayHasKey('totalCostOriginal', $d['award']);
+        $this->assertArrayHasKey('fxRateToBase', $d['award']);
+        $this->assertArrayHasKey('totalCostOriginal', $original);
+        $this->assertArrayHasKey('fxRateToBase', $original);
 
         $this->assertCount(2, $d['payments']['items']);
         $this->assertEquals(2500, $d['payments']['total']);

@@ -29,6 +29,7 @@ use App\Services\DossierEvaluationService;
 use App\Services\ClosureReportLinkService;
 use App\Models\PaymentOrder;
 use App\Services\PaymentOrderService;
+use App\Services\PaymentSettlementService;
 use App\Services\PaymentSignatureService;
 use App\Services\ProjectStateMachine;
 use App\Services\ResidentAssignmentService;
@@ -510,7 +511,7 @@ class ProjectController extends Controller
         return new ProjectResource($project->fresh()->load(Project::detailRelations()));
     }
 
-    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService, ClosureReportLinkService $closureLinks, PaymentOrderService $paymentOrders, PaymentSignatureService $signatures)
+    public function pay(PayProjectRequest $request, Project $project, RateFreezeService $rateFreezeService, ClosureReportLinkService $closureLinks, PaymentOrderService $paymentOrders, PaymentSignatureService $signatures, PaymentSettlementService $settlements)
     {
         $data = $request->validated();
 
@@ -531,6 +532,10 @@ class ProjectController extends Controller
         // que Finanzas firma dentro de la transacción de este método.
         $signatures->assertCanProceed($order, auth()->user());
 
+        // Cómo se pagó realmente (moneda, monto, tasa real, diferencia): se valida
+        // y calcula antes de abrir la transacción de escritura, igual que la orden.
+        $settlement = $settlements->build($order, $data);
+
         // Todo movimiento contable requiere comprobante (Plan Maestro, Finanzas):
         // el cliente ya lo sube antes, pero la regla se garantiza aquí también.
         $proofType = $data['paymentType'] === 'ADVANCE' ? 'COMPROBANTE_ANTICIPO' : 'COMPROBANTE_FINIQUITO';
@@ -541,13 +546,19 @@ class ProjectController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($project, $data, $rateFreezeService, $proof, $order, $signatures, $request) {
+        DB::transaction(function () use ($project, $data, $rateFreezeService, $proof, $order, $signatures, $request, $settlement) {
             // Firma el paso de Finanzas — ya se validó arriba que le corresponde.
             $signatures->signOrSkip($order, auth()->user(), $request);
 
-            ProjectPayment::updateOrCreate(
+            $payment = ProjectPayment::updateOrCreate(
                 ['project_id' => $project->id, 'payment_type' => $data['paymentType']],
                 [
+                    ...$settlement,
+                    // Tasa congelada de la adjudicación (la de la cotización), si existe.
+                    'contract_rate_freeze_id' => ProjectRateFreeze::where('project_id', $project->id)
+                        ->where('trigger', ProjectRateFreeze::TRIGGER_CONTRATADO)
+                        ->active()
+                        ->value('id'),
                     'proposal_id' => $project->selected_proposal_id,
                     'payment_order_id' => $order->id,
                     // Siempre en moneda base (lo asumen los agregados); la obligación en
@@ -567,14 +578,25 @@ class ProjectController extends Controller
 
             // Congela la tasa BCV vigente para el monto de este pago (si el
             // trigger está habilitado en CONFIG APP) — ver RateFreezeService.
-            $rateFreezeService->freezeForTrigger(
-                $project,
-                $data['paymentType'] === 'ADVANCE' ? ProjectRateFreeze::TRIGGER_PAGO_ANTICIPO : ProjectRateFreeze::TRIGGER_PAGO_FINIQUITO,
-                (float) $order->amount_base
-            );
+            $paymentTrigger = $data['paymentType'] === 'ADVANCE' ? ProjectRateFreeze::TRIGGER_PAGO_ANTICIPO : ProjectRateFreeze::TRIGGER_PAGO_FINIQUITO;
+            $rateFreezeService->freezeForTrigger($project, $paymentTrigger, (float) $order->amount_base);
+
+            // Deja referenciada en el pago la tasa congelada de este trigger (si la
+            // configuración la aplicó), para poder auditar contra qué tasa quedó.
+            $payment->update([
+                'payment_rate_freeze_id' => ProjectRateFreeze::where('project_id', $project->id)
+                    ->where('trigger', $paymentTrigger)
+                    ->active()
+                    ->value('id'),
+            ]);
         });
 
-        AuditLog::record($project, 'FINANZAS', $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos', $data['notes'] ?? null);
+        AuditLog::record(
+            $project,
+            'FINANZAS',
+            $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos',
+            trim($settlements->describe($settlement) . ' ' . ($data['notes'] ?? ''))
+        );
 
         if ($data['paymentType'] === 'ADVANCE') {
             $closureLinks->open($project);

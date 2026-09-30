@@ -62,7 +62,7 @@ class PaymentSignatureIntegrationTest extends TestCase
         ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)->postJson("/api/projects/{$project->id}/payments", [
-            'paymentType' => 'ADVANCE', 'amount' => 3000.00,
+            'paymentType' => 'ADVANCE', 'amount' => 3000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 3000.00,
         ])->assertStatus(200);
 
         $this->assertSame(3, $order->fresh()->signatures()->count());
@@ -84,7 +84,7 @@ class PaymentSignatureIntegrationTest extends TestCase
         ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)
-            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 3000.00])
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 3000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 3000.00])
             ->assertStatus(422)
             ->assertJsonValidationErrors('signature');
 
@@ -134,7 +134,7 @@ class PaymentSignatureIntegrationTest extends TestCase
         ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $response = $this->actingAs($superadmin)->postJson("/api/projects/{$project->id}/payments", [
-            'paymentType' => 'ADVANCE', 'amount' => 3000.00,
+            'paymentType' => 'ADVANCE', 'amount' => 3000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 3000.00,
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors('signature');

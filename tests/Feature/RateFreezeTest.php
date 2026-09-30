@@ -163,7 +163,7 @@ class RateFreezeTest extends TestCase
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [
                 'paymentType' => 'ADVANCE',
-                'amount' => 6000.00,
+                'amount' => 6000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 6000.00,
             ])
             ->assertStatus(200);
 
@@ -185,7 +185,7 @@ class RateFreezeTest extends TestCase
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [
                 'paymentType' => 'FINAL',
-                'amount' => 14000.00,
+                'amount' => 14000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 14000.00,
             ])
             ->assertStatus(200);
 

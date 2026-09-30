@@ -895,7 +895,7 @@ class ProjectLifecycleTest extends TestCase
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$projectId}/payments", [
                 'paymentType' => 'ADVANCE',
-                'amount'      => 6000.00,
+                'amount'      => 6000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 6000.00,
                 'notes'       => 'Anticipo del 30%',
             ])
             ->assertJsonPath('data.status', 'EN_EJECUCION');
@@ -916,7 +916,7 @@ class ProjectLifecycleTest extends TestCase
         $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$projectId}/payments", [
                 'paymentType' => 'FINAL',
-                'amount'      => 14000.00,
+                'amount'      => 14000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 14000.00,
                 'notes'       => 'Pago final de obra',
             ])
             ->assertJsonPath('data.status', 'COMPLETADO_PAGADO');
@@ -1070,7 +1070,7 @@ class ProjectLifecycleTest extends TestCase
         app(\App\Services\PaymentOrderService::class)->generate($project->fresh(), \App\Models\PaymentOrder::TYPE_ADVANCE);
 
         $this->actingAs($this->finanzas)
-            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100])
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 100])
             ->assertStatus(422)
             ->assertJsonValidationErrors('proof');
 
@@ -1087,7 +1087,7 @@ class ProjectLifecycleTest extends TestCase
         $response = $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [
                 'paymentType' => 'ADVANCE',
-                'amount'      => 999999,
+                'amount'      => 999999, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 999999,
             ]);
 
         $response->assertStatus(422);
@@ -1102,7 +1102,7 @@ class ProjectLifecycleTest extends TestCase
         $response = $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [
                 'paymentType' => 'FINAL',
-                'amount'      => 1000,
+                'amount'      => 1000, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 1000,
             ]);
 
         $response->assertStatus(422);
@@ -1118,7 +1118,7 @@ class ProjectLifecycleTest extends TestCase
         $response = $this->actingAs($this->finanzas)
             ->postJson("/api/projects/{$project->id}/payments", [
                 'paymentType' => 'ADVANCE',
-                'amount'      => 500,
+                'amount'      => 500, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 500,
             ]);
 
         $response->assertStatus(422);

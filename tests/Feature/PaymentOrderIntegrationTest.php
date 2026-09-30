@@ -111,7 +111,7 @@ class PaymentOrderIntegrationTest extends TestCase
         ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)
-            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 999.99])
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 999.99, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 999.99])
             ->assertStatus(422)
             ->assertJsonValidationErrors('amount');
 
@@ -130,7 +130,7 @@ class PaymentOrderIntegrationTest extends TestCase
         ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)
-            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 3000.00])
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 3000.00, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 3000.00])
             ->assertStatus(200)
             ->assertJsonPath('data.status', 'EN_EJECUCION');
 
@@ -160,7 +160,7 @@ class PaymentOrderIntegrationTest extends TestCase
         ProjectDocument::create(['project_id' => $project->id, 'document_type' => 'COMPROBANTE_ANTICIPO', 'original_name' => 'p.pdf', 'stored_path' => 'x/p.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'version_number' => 1]);
 
         $this->actingAs($this->finanzas)
-            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100])
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 100])
             ->assertStatus(422)
             ->assertJsonValidationErrors('amount');
     }

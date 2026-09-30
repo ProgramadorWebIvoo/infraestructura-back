@@ -450,7 +450,7 @@ class ProjectClosureFlowTest extends TestCase
     {
         $finanzas = User::factory()->create(['role' => 'FINANZAS']);
 
-        $this->actingAs($finanzas)->postJson("/api/projects/{$this->project->id}/payments", ['paymentType' => 'FINAL', 'amount' => 100])->assertStatus(422);
+        $this->actingAs($finanzas)->postJson("/api/projects/{$this->project->id}/payments", ['paymentType' => 'FINAL', 'amount' => 100, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 100])->assertStatus(422);
     }
 
     private function toResidentStage(): void

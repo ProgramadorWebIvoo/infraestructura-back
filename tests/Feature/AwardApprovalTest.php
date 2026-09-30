@@ -126,7 +126,7 @@ class AwardApprovalTest extends TestCase
         $project = $this->projectWithSelection('APROBADO_PRESIDENCIA');
 
         $this->actingAs($this->finanzas)
-            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100])
+            ->postJson("/api/projects/{$project->id}/payments", ['paymentType' => 'ADVANCE', 'amount' => 100, 'paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 100])
             ->assertStatus(422);
     }
 }

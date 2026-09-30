@@ -20,10 +20,29 @@ class ProjectPayment extends Model
         'reference',
         'comprobante_document_id',
         'payment_order_id',
+        'obligation_amount',
+        'obligation_currency',
+        'payment_mode',
+        'paid_currency',
+        'paid_amount',
+        'applied_rate',
+        'applied_rate_source',
+        'suggested_rate',
+        'covered_amount',
+        'difference_amount',
+        'difference_reason',
+        'contract_rate_freeze_id',
+        'payment_rate_freeze_id',
     ];
 
     protected $casts = [
         'amount' => 'float',
+        'obligation_amount' => 'float',
+        'paid_amount' => 'float',
+        'applied_rate' => 'float',
+        'suggested_rate' => 'float',
+        'covered_amount' => 'float',
+        'difference_amount' => 'float',
         'paid_date' => 'date:Y-m-d',
     ];
 
@@ -45,5 +64,17 @@ class ProjectPayment extends Model
     public function paymentOrder()
     {
         return $this->belongsTo(PaymentOrder::class);
+    }
+
+    /** Tasa congelada al adjudicar (la de la cotización), si la configuración la aplicó. */
+    public function contractRateFreeze()
+    {
+        return $this->belongsTo(ProjectRateFreeze::class, 'contract_rate_freeze_id');
+    }
+
+    /** Tasa congelada en este pago, si la configuración la aplicó. */
+    public function paymentRateFreeze()
+    {
+        return $this->belongsTo(ProjectRateFreeze::class, 'payment_rate_freeze_id');
     }
 }

@@ -12,11 +12,28 @@ class ExchangeRateTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_non_superadmin_cannot_access_exchange_rates(): void
+    public function test_any_authenticated_role_can_read_the_latest_rates(): void
+    {
+        // El conversor a Bs. y el switch BCV/USDT lo usan todos los roles.
+        ExchangeRate::create(['currency_code' => 'USD', 'rate_to_usd' => 800, 'source' => 'TEST', 'effective_at' => now()->subMinute()]);
+
+        foreach (['ADMIN', 'PROCURA', 'FINANZAS', 'ANALISTA'] as $role) {
+            $user = User::factory()->create(['role' => $role]);
+
+            $this->actingAs($user)->getJson('/api/exchange-rates')
+                ->assertStatus(200)
+                ->assertJsonPath('data.0.currency_code', 'USD');
+        }
+    }
+
+    public function test_non_superadmin_cannot_access_history_load_or_sync(): void
     {
         $user = User::factory()->create(['role' => 'ADMIN']);
 
-        $this->actingAs($user)->getJson('/api/exchange-rates')->assertStatus(403);
+        $this->actingAs($user)->getJson('/api/exchange-rates/USD/history')->assertStatus(403);
+        $this->actingAs($user)->postJson('/api/exchange-rates', ['currency_code' => 'EUR', 'rate_to_usd' => 1, 'source' => 'manual'])->assertStatus(403);
+        $this->actingAs($user)->postJson('/api/exchange-rates/sync')->assertStatus(403);
+        $this->actingAs($user)->getJson('/api/exchange-rates/last-sync')->assertStatus(403);
     }
 
     public function test_superadmin_can_load_a_rate(): void

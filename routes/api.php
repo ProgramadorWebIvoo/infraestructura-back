@@ -165,10 +165,14 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
     Route::post('/currencies/{currency}/set-base', [CurrencyController::class, 'setBase'])
         ->middleware('role:SUPERADMIN');
 
-    // Histórico de tasas de cambio a USD — exclusivo SUPERADMIN.
+    // Última tasa por moneda — abierto a cualquier autenticado (mismo criterio
+    // que /currencies/base): el conversor a Bs., el sidebar de tasas y el
+    // switch BCV/USDT de TODAS las vistas lo consumen; son tasas públicas.
+    // El histórico, la carga manual y el sync siguen exclusivos de SUPERADMIN.
     Route::get('/exchange-rates', [ExchangeRateController::class, 'index'])
-        ->middleware(['role:SUPERADMIN'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
+
+    // Histórico de tasas de cambio a USD — exclusivo SUPERADMIN.
     Route::get('/exchange-rates/{currencyCode}/history', [ExchangeRateController::class, 'history'])
         ->middleware(['role:SUPERADMIN'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');

@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Currency;
+use App\Events\ExchangeRatesUpdated;
 use App\Models\ExchangeRate;
+use App\Models\ExchangeRateSyncLog;
 use App\Models\User;
 use App\Services\ExchangeRate\ExchangeRateSyncLogService;
 use App\Services\ExchangeRate\UsdtApiFetcher;
 use App\Services\ExchangeRate\UsdtRateSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -117,5 +120,56 @@ class SyncUsdtRateTest extends TestCase
         $this->assertTrue($this->service()->sync());
 
         Http::assertNothingSent();
+    }
+
+    public function test_a_broadcast_failure_does_not_turn_the_sync_into_a_failure(): void
+    {
+        Http::fake([self::URL => Http::response($this->payload(), 200)]);
+        Event::listen(ExchangeRatesUpdated::class, fn () => throw new \RuntimeException('Pusher caído'));
+
+        $this->assertTrue($this->service()->sync());
+
+        $this->assertEquals(1, ExchangeRate::where('currency_code', 'USDT')->count());
+    }
+
+    public function test_an_unchanged_rate_leaves_no_trace_in_the_sync_logs(): void
+    {
+        Http::fake([self::URL => Http::response($this->payload(), 200)]);
+
+        $this->service()->sync();
+        $this->service()->sync();
+        $this->service()->sync();
+
+        $this->assertEquals(1, ExchangeRateSyncLog::count());
+    }
+
+    public function test_last_sync_ignores_usdt_so_a_stale_bcv_is_not_masked(): void
+    {
+        ExchangeRateSyncLog::create(['status' => 'SUCCESS', 'source' => 'DOLARVZLA_API', 'rates_synced' => 2, 'executed_at' => now()->subDays(3)]);
+        ExchangeRateSyncLog::create(['status' => 'SUCCESS', 'source' => 'USDT_COM_VE:binance', 'rates_synced' => 1, 'executed_at' => now()]);
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)->getJson('/api/exchange-rates/last-sync')
+            ->assertStatus(200)
+            ->assertJsonPath('data.source', 'DOLARVZLA_API');
+    }
+
+    public function test_manual_sync_still_runs_bcv_when_usdt_fails(): void
+    {
+        Http::fake([
+            self::URL => Http::response([], 500),
+            'rates.dolarvzla.com/*' => Http::response([
+                'current' => ['date' => '2026-09-30', 'usd' => 800.0, 'eur' => 900.0],
+                'previous' => ['date' => '2026-09-29', 'usd' => 799.0, 'eur' => 899.0],
+                'changePercentage' => ['usd' => 0.1, 'eur' => 0.1],
+            ], 200),
+        ]);
+        $admin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($admin)->postJson('/api/exchange-rates/sync')
+            ->assertStatus(200)
+            ->assertJsonPath('usdt_success', false);
+
+        $this->assertEquals(1, ExchangeRate::where('currency_code', 'USD')->count());
     }
 }

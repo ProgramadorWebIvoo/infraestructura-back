@@ -35,9 +35,14 @@ class ExchangeRateSyncLogService
             ->get();
     }
 
+    /**
+     * Última sincronización BCV exitosa: excluye la de USDT, que corre cada
+     * 30 min y haría parecer "recién sincronizado" a un BCV caído hace días.
+     */
     public function getLastSuccessfulSync()
     {
         return ExchangeRateSyncLog::where('status', 'SUCCESS')
+            ->where(fn ($query) => $query->whereNull('source')->orWhere('source', 'not like', UsdtApiFetcher::SOURCE . '%'))
             ->orderByDesc('executed_at')
             ->first();
     }

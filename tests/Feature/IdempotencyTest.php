@@ -33,7 +33,7 @@ class IdempotencyTest extends TestCase
         parent::setUp();
 
         $this->user = User::factory()->create(['role' => 'SUPERADMIN']);
-        Sanctum::actingAs($this->user);
+        $this->actingAs($this->user);
         $this->setMode('log');
         $this->registerProbeRoutes();
     }
@@ -238,7 +238,7 @@ class IdempotencyTest extends TestCase
         $other = User::factory()->create(['role' => 'SUPERADMIN']);
 
         $this->postJson('/api/_idem/ok', ['a' => 1], $this->idem($key))->assertCreated();
-        Sanctum::actingAs($other);
+        $this->actingAs($other);
         $this->postJson('/api/_idem/ok', ['a' => 1], $this->idem($key))
             ->assertCreated()
             ->assertHeaderMissing('Idempotent-Replayed');

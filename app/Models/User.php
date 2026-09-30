@@ -3,7 +3,6 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Services\NotificationDispatcher;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -63,18 +62,16 @@ class User extends Authenticatable
     /**
      * Auditado igual que cualquier otra acción de la app (AuditLog::record()
      * con `$project = null`, ver AuditLog::record()) para que quede visible
-     * en el historial de auditoría — pero el correo con el token real de
-     * reset solo se envía si `acciones_con_correo` lo permite
-     * (NotificationDispatcher::isMailActionAllowed()), respetando el mismo
-     * control de CONFIG APP que el resto de correos de la app.
+     * en el historial de auditoría. El correo con el token es un flujo de
+     * cuenta, no una alerta de negocio: se envía siempre, sin pasar por
+     * CONFIG APP (apagarlo dejaría a los usuarios sin poder recuperar su
+     * acceso).
      */
     public function sendPasswordResetNotification($token): void
     {
         AuditLog::record(null, 'SISTEMA', 'Solicitud de restablecimiento de contrasena', "Solicitado para: {$this->email}");
 
-        if (NotificationDispatcher::isMailActionAllowed('Solicitud de restablecimiento de contrasena')) {
-            $this->notify(new \App\Notifications\UserPasswordReset($token, $this->email));
-        }
+        $this->notify(new \App\Notifications\UserPasswordReset($token, $this->email));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

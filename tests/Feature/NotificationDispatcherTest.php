@@ -274,14 +274,9 @@ class NotificationDispatcherTest extends TestCase
         $this->assertFalse(NotificationDispatcher::isMailActionAllowed('Otra accion cualquiera'));
     }
 
-    public function test_password_reset_is_audited_and_sends_mail_when_action_allowed(): void
+    public function test_password_reset_is_audited_and_mail_is_always_sent(): void
     {
         Notification::fake();
-
-        AppSetting::where('key', 'acciones_con_correo')->update([
-            'value' => json_encode(['Solicitud de restablecimiento de contrasena']),
-        ]);
-        SettingsService::forget();
 
         $user = User::factory()->create();
 
@@ -292,25 +287,6 @@ class NotificationDispatcherTest extends TestCase
             'project_id' => null,
         ]);
         Notification::assertSentTo($user, UserPasswordReset::class);
-    }
-
-    public function test_password_reset_is_audited_but_mail_is_suppressed_when_action_not_allowed(): void
-    {
-        Notification::fake();
-
-        AppSetting::where('key', 'acciones_con_correo')->update([
-            'value' => json_encode(['Otra accion cualquiera']),
-        ]);
-        SettingsService::forget();
-
-        $user = User::factory()->create();
-
-        $user->sendPasswordResetNotification('token-123');
-
-        $this->assertDatabaseHas('audit_logs', [
-            'action' => 'Solicitud de restablecimiento de contrasena',
-        ]);
-        Notification::assertNotSentTo($user, UserPasswordReset::class);
     }
 
     public function test_contractor_register_action_is_now_auditable_and_included_in_catalog(): void

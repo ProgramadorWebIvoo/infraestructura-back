@@ -25,6 +25,14 @@ return new class extends Migration
         Schema::table('exchange_rates', fn (Blueprint $table) => $table
             ->foreign('currency_code')->references('code')->on('currencies'));
 
+        // SQLite (tests) reconstruye la tabla en change() y pierde el `WHERE is_base = 1` del índice
+        // único parcial: queda único sobre todo is_base y la siembra de USDT (is_base = 0) choca con
+        // la fila de otra moneda no base. Se recrea parcial, como lo dejó 2026_08_14_000013.
+        if (DB::getDriverName() === 'sqlite') {
+            DB::statement('DROP INDEX IF EXISTS uq_currencies_single_base');
+            DB::statement('CREATE UNIQUE INDEX uq_currencies_single_base ON currencies (is_base) WHERE is_base = 1');
+        }
+
         Schema::table('supplier_material_proposals', fn (Blueprint $table) => $table->string('quote_currency', 10)->default('USD')->change());
         Schema::table('supplier_material_proposal_lines', fn (Blueprint $table) => $table->string('quote_currency', 10)->change());
         Schema::table('product_price_history', fn (Blueprint $table) => $table->string('original_currency', 10)->change());

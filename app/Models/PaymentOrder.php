@@ -21,6 +21,7 @@ class PaymentOrder extends Model
         'contractor_code',
         'payment_type',
         'amount',
+        'amount_base',
         'currency',
         'exchange_rate',
         'snapshot',
@@ -34,6 +35,7 @@ class PaymentOrder extends Model
 
     protected $casts = [
         'amount' => 'float',
+        'amount_base' => 'float',
         'exchange_rate' => 'float',
         'snapshot' => 'array',
     ];

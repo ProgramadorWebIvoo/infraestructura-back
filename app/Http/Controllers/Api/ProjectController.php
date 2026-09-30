@@ -550,7 +550,9 @@ class ProjectController extends Controller
                 [
                     'proposal_id' => $project->selected_proposal_id,
                     'payment_order_id' => $order->id,
-                    'amount' => $order->amount,
+                    // Siempre en moneda base (lo asumen los agregados); la obligación en
+                    // moneda de cotización vive en la orden (amount/currency).
+                    'amount' => $order->amount_base,
                     'paid_date' => $data['paidDate'] ?? now()->toDateString(),
                     'notes' => $data['notes'] ?? null,
                     'bank' => $data['bank'] ?? null,
@@ -568,7 +570,7 @@ class ProjectController extends Controller
             $rateFreezeService->freezeForTrigger(
                 $project,
                 $data['paymentType'] === 'ADVANCE' ? ProjectRateFreeze::TRIGGER_PAGO_ANTICIPO : ProjectRateFreeze::TRIGGER_PAGO_FINIQUITO,
-                (float) $order->amount
+                (float) $order->amount_base
             );
         });
 

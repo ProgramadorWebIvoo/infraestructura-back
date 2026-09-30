@@ -129,6 +129,69 @@ class PaymentOrderServiceTest extends TestCase
         $this->assertTrue($result->is($order));
     }
 
+    /** Propuesta cotizada en USDT: 1.200 USDT = 1.500 USD base (tasa 1,25). */
+    private function usdtProject(): Project
+    {
+        return $this->projectWithProposal([
+            'total_cost' => 1500,
+            'quote_currency' => 'USDT',
+            'total_cost_original' => 1200,
+            'fx_rate_to_base' => 1.25,
+            'base_currency_at_import' => 'USD',
+        ]);
+    }
+
+    public function test_advance_order_is_expressed_in_the_quote_currency_and_keeps_the_base_amount(): void
+    {
+        $order = app(PaymentOrderService::class)->generate($this->usdtProject(), PaymentOrder::TYPE_ADVANCE);
+
+        // 30% de 1.200 USDT; su equivalente base es 30% de 1.500 USD.
+        $this->assertSame(360.0, $order->amount);
+        $this->assertSame('USDT', $order->currency);
+        $this->assertSame(450.0, $order->amount_base);
+        $this->assertSame(1.25, $order->exchange_rate);
+        $this->assertSame('USDT', $order->snapshot['currency']);
+        $this->assertSame('450.00', $order->snapshot['amount_base']);
+    }
+
+    public function test_final_order_reconverts_the_finiquito_with_the_proposal_rate(): void
+    {
+        $project = $this->usdtProject();
+        ProjectClosureReport::create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'project_id' => $project->id,
+            'status' => ProjectClosureReport::STATUS_AUDIT_APPROVED,
+            'finiquito_amount' => 1050,
+        ]);
+
+        $order = app(PaymentOrderService::class)->generate($project->fresh(), PaymentOrder::TYPE_FINAL);
+
+        $this->assertSame(840.0, $order->amount);
+        $this->assertSame(1050.0, $order->amount_base);
+        $this->assertSame('USDT', $order->currency);
+    }
+
+    public function test_order_in_base_currency_keeps_amount_and_amount_base_equal(): void
+    {
+        $order = app(PaymentOrderService::class)->generate($this->projectWithProposal(), PaymentOrder::TYPE_ADVANCE);
+
+        $this->assertSame($order->amount, $order->amount_base);
+        $this->assertSame('USD', $order->currency);
+        $this->assertNull($order->exchange_rate);
+    }
+
+    public function test_assert_ready_to_pay_compares_against_the_base_amount(): void
+    {
+        $project = $this->usdtProject();
+        $order = app(PaymentOrderService::class)->generate($project, PaymentOrder::TYPE_ADVANCE);
+
+        $this->assertTrue(app(PaymentOrderService::class)->assertReadyToPay($project, PaymentOrder::TYPE_ADVANCE, 450.00)->is($order));
+
+        $this->expectException(ValidationException::class);
+        // 360 es la obligación en USDT, no el importe base que envía el cliente.
+        app(PaymentOrderService::class)->assertReadyToPay($project, PaymentOrder::TYPE_ADVANCE, 360.00);
+    }
+
     public function test_elaborated_by_resolves_the_analyst_who_submitted_the_comparative(): void
     {
         $analyst = User::factory()->create(['role' => 'ANALISTA']);

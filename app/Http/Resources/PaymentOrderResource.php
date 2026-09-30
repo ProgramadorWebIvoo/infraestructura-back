@@ -18,7 +18,10 @@ class PaymentOrderResource extends JsonResource
             'proposalId' => $this->proposal_id,
             'contractorCode' => $this->contractor_code,
             'paymentType' => $this->payment_type,
+            // Obligación en la moneda de cotización (`currency`); `amountBase`
+            // es el mismo compromiso en la moneda base (USD).
             'amount' => $this->amount,
+            'amountBase' => $this->amount_base,
             'currency' => $this->currency,
             'exchangeRate' => $this->exchange_rate,
             'status' => $this->status,

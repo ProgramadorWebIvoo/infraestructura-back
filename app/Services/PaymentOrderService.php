@@ -42,11 +42,16 @@ class PaymentOrderService
             $contractor = Contractor::where('code', $project->selected_contractor_code)->first();
             abort_unless($contractor, 422, 'El proveedor adjudicado ya no existe.');
 
-            $amount = $type === PaymentOrder::TYPE_ADVANCE
+            // Importe en la moneda BASE (USD): es lo que comparan el flujo de
+            // pago y los agregados, sin cambios respecto a antes.
+            $amountBase = $type === PaymentOrder::TYPE_ADVANCE
                 ? $this->advanceAmount($proposal)
                 : $this->finiquitoAmount($project);
 
-            $snapshot = $this->buildSnapshot($project, $proposal, $contractor, $type, $amount);
+            // Obligación en la moneda en la que se pactó (ej. 1.200 USDT).
+            [$amount, $currency, $exchangeRate] = $this->obligationFor($proposal, $type, $amountBase);
+
+            $snapshot = $this->buildSnapshot($project, $proposal, $contractor, $type, $amount, $amountBase, $currency, $exchangeRate);
             $contentHash = $this->canonicalHash($snapshot);
 
             $order = PaymentOrder::create([
@@ -56,8 +61,9 @@ class PaymentOrderService
                 'contractor_code' => $contractor->code,
                 'payment_type' => $type,
                 'amount' => $amount,
-                'currency' => $proposal->quote_currency ?? 'USD',
-                'exchange_rate' => $proposal->fx_rate_to_base ?? null,
+                'amount_base' => $amountBase,
+                'currency' => $currency,
+                'exchange_rate' => $exchangeRate,
                 'snapshot' => $snapshot,
                 'status' => PaymentOrder::STATUS_EN_FIRMA,
                 'content_hash' => $contentHash,
@@ -70,7 +76,7 @@ class PaymentOrderService
                 $project,
                 auth()->user()?->role ?? 'SISTEMA',
                 $type === PaymentOrder::TYPE_ADVANCE ? 'Generacion de orden de pago de anticipo' : 'Generacion de orden de pago de finiquito',
-                "Orden #{$order->number} / Proveedor: {$contractor->name} / Monto: {$amount} {$order->currency}"
+                "Orden #{$order->number} / Proveedor: {$contractor->name} / Monto: {$amount} {$order->currency}" . ($exchangeRate !== null ? " (equivale a {$amountBase} en moneda base, tasa {$exchangeRate})" : '')
             );
 
             return $order;
@@ -130,7 +136,10 @@ class PaymentOrderService
             throw ValidationException::withMessages(['amount' => 'La orden de pago no está en un estado válido para pagarse.']);
         }
 
-        if (bccomp((string) $order->amount, number_format($amount, 2, '.', ''), 2) !== 0) {
+        // El cliente envía el monto en moneda base (como lo calculan las
+        // pantallas de Finanzas); se compara contra el equivalente base de la
+        // orden, no contra la obligación en moneda de cotización.
+        if (bccomp((string) $order->amount_base, number_format($amount, 2, '.', ''), 2) !== 0) {
             throw ValidationException::withMessages(['amount' => 'El monto no coincide con el de la orden de pago vigente.']);
         }
 
@@ -146,6 +155,31 @@ class PaymentOrderService
     private function advanceAmount(ProjectProposal $proposal): float
     {
         return round((float) $proposal->total_cost * ((float) $proposal->negotiated_advance_percent / 100), 2);
+    }
+
+    /**
+     * Obligación expresada en la moneda de cotización. Una propuesta convertida
+     * al importarla (EUR, USDT...) conserva su monto original y la tasa usada:
+     * el anticipo sale del total original × %, y el finiquito (calculado en
+     * base) se reconvierte con esa misma tasa. Sin conversión, la obligación es
+     * el propio importe base.
+     *
+     * @return array{0: float, 1: string, 2: ?float} [monto, moneda, tasa a base]
+     */
+    private function obligationFor(ProjectProposal $proposal, string $type, float $amountBase): array
+    {
+        $currency = $proposal->quote_currency ?? 'USD';
+        $fx = $proposal->fx_rate_to_base;
+
+        if ($fx === null || $fx <= 0 || $proposal->total_cost_original === null) {
+            return [$amountBase, $currency, null];
+        }
+
+        $amount = $type === PaymentOrder::TYPE_ADVANCE
+            ? round((float) $proposal->total_cost_original * ((float) $proposal->negotiated_advance_percent / 100), 2)
+            : round($amountBase / (float) $fx, 2);
+
+        return [$amount, $currency, (float) $fx];
     }
 
     private function finiquitoAmount(Project $project): float
@@ -170,7 +204,7 @@ class PaymentOrderService
         return (int) (PaymentOrder::lockForUpdate()->max('number')) + 1;
     }
 
-    private function buildSnapshot(Project $project, ProjectProposal $proposal, Contractor $contractor, string $type, float $amount): array
+    private function buildSnapshot(Project $project, ProjectProposal $proposal, Contractor $contractor, string $type, float $amount, float $amountBase, string $currency, ?float $exchangeRate): array
     {
         return [
             'project' => [
@@ -187,10 +221,14 @@ class PaymentOrderService
                 'id' => $proposal->id,
                 'total_cost' => number_format((float) $proposal->total_cost, 2, '.', ''),
                 'negotiated_advance_percent' => number_format((float) $proposal->negotiated_advance_percent, 2, '.', ''),
-                'currency' => $proposal->quote_currency ?? 'USD',
+                'currency' => $currency,
+                'total_cost_original' => $proposal->total_cost_original !== null ? number_format((float) $proposal->total_cost_original, 2, '.', '') : null,
+                'fx_rate_to_base' => $exchangeRate !== null ? number_format($exchangeRate, 6, '.', '') : null,
             ],
             'payment_type' => $type,
             'amount' => number_format($amount, 2, '.', ''),
+            'currency' => $currency,
+            'amount_base' => number_format($amountBase, 2, '.', ''),
         ];
     }
 

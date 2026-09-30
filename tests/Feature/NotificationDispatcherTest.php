@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Events\NotificationCreated;
 use App\Models\AppNotification;
-use App\Models\AppSetting;
+use App\Models\NotificationAction;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\User;
@@ -14,7 +14,6 @@ use App\Models\NotificationRule;
 use App\Notifications\UserPasswordReset;
 use App\Services\NotificationDispatcher;
 use App\Services\NotificationRuleResolver;
-use App\Services\SettingsService;
 use App\Support\NotificationCatalog;
 use App\Support\NotificationType;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -162,36 +161,32 @@ class NotificationDispatcherTest extends TestCase
         );
     }
 
-    public function test_mail_actions_list_is_editable_via_config_app_without_deploy(): void
+    public function test_mail_channel_can_be_turned_off_per_action_without_deploy(): void
     {
         Notification::fake();
 
         $finanzas = User::factory()->create(['role' => 'FINANZAS']);
         $project = Project::factory()->create(['status' => 'LISTO_PAGO_FINAL']);
 
-        // Quitar "Liberacion total de fondos" de la lista editable — sin
-        // tocar código, esa acción deja de enviar correo.
-        AppSetting::where('key', 'acciones_con_correo')->update([
-            'value' => json_encode(['Rechazo de cuadro comparativo']),
-        ]);
-        SettingsService::forget();
+        // Apagar el canal correo de la acción — sin tocar código ni reglas,
+        // esa acción deja de enviar correo.
+        NotificationAction::where('key', 'Liberacion total de fondos')->update(['mail_enabled' => false]);
+        NotificationCatalog::forget();
 
         AuditLog::record($project, 'AUDITORIA', 'Liberacion total de fondos');
 
         Notification::assertNotSentTo($finanzas, ProjectActionMail::class);
     }
 
-    public function test_action_excluded_from_notification_list_does_not_notify_nor_create_row(): void
+    public function test_action_with_app_channel_off_does_not_notify_nor_create_row(): void
     {
         Notification::fake();
 
         $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
-        AppSetting::where('key', 'acciones_con_notificacion_app')->update([
-            'value' => json_encode(['Otra accion cualquiera']),
-        ]);
-        SettingsService::forget();
+        NotificationAction::where('key', 'Creacion de peticion de obra')->update(['app_enabled' => false]);
+        NotificationCatalog::forget();
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
@@ -202,21 +197,37 @@ class NotificationDispatcherTest extends TestCase
         ]);
     }
 
-    public function test_action_still_in_notification_list_notifies_normally(): void
+    public function test_app_channel_off_does_not_silence_the_mail_channel(): void
+    {
+        Notification::fake();
+
+        $finanzas = User::factory()->create(['role' => 'FINANZAS']);
+        $project = Project::factory()->create(['status' => 'LISTO_PAGO_FINAL']);
+
+        NotificationRule::firstOrCreate(['action' => 'Liberacion de anticipo', 'role' => 'FINANZAS', 'channel' => 'mail'], ['enabled' => true]);
+        NotificationRuleResolver::forget();
+        NotificationAction::where('key', 'Liberacion de anticipo')->update(['app_enabled' => false]);
+        NotificationCatalog::forget();
+
+        AuditLog::record($project, 'FINANZAS', 'Liberacion de anticipo', 'anticipo liberado');
+
+        $this->assertDatabaseMissing('app_notifications', ['user_id' => $finanzas->id, 'action' => 'Liberacion de anticipo']);
+        Notification::assertSentTo($finanzas, ProjectActionMail::class);
+    }
+
+    public function test_inactive_action_notifies_on_no_channel(): void
     {
         Notification::fake();
 
         $auditoria = User::factory()->create(['role' => 'AUDITORIA']);
         $project = Project::factory()->create(['status' => 'CREADO']);
 
-        AppSetting::where('key', 'acciones_con_notificacion_app')->update([
-            'value' => json_encode(['Creacion de peticion de obra']),
-        ]);
-        SettingsService::forget();
+        NotificationAction::where('key', 'Creacion de peticion de obra')->update(['is_active' => false]);
+        NotificationCatalog::forget();
 
         AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'detalle');
 
-        Notification::assertSentTo($auditoria, ProjectActionNotification::class);
+        Notification::assertNotSentTo($auditoria, ProjectActionNotification::class);
     }
 
     public function test_mark_read_endpoint_updates_read_at(): void
@@ -263,15 +274,17 @@ class NotificationDispatcherTest extends TestCase
         Notification::assertNotSentTo($someUser, ProjectActionNotification::class);
     }
 
-    public function test_is_mail_action_allowed_reflects_acciones_con_correo_setting(): void
+    public function test_external_mail_actions_follow_their_toggle_and_reset_is_always_on(): void
     {
-        AppSetting::where('key', 'acciones_con_correo')->update([
-            'value' => json_encode(['Solicitud de restablecimiento de contrasena']),
-        ]);
-        SettingsService::forget();
+        $this->assertTrue(NotificationCatalog::channelEnabled('Correo de adjudicacion a proveedor', 'mail'));
 
-        $this->assertTrue(NotificationDispatcher::isMailActionAllowed('Solicitud de restablecimiento de contrasena'));
-        $this->assertFalse(NotificationDispatcher::isMailActionAllowed('Otra accion cualquiera'));
+        NotificationAction::where('key', 'Correo de adjudicacion a proveedor')->update(['mail_enabled' => false]);
+        NotificationAction::where('key', 'Correo de restablecimiento de contrasena')->update(['mail_enabled' => false]);
+        NotificationCatalog::forget();
+
+        $this->assertFalse(NotificationCatalog::channelEnabled('Correo de adjudicacion a proveedor', 'mail'));
+        $this->assertTrue(NotificationCatalog::channelEnabled('Correo de restablecimiento de contrasena', 'mail'));
+        $this->assertFalse(NotificationCatalog::channelEnabled('Accion completamente inventada', 'mail'));
     }
 
     public function test_password_reset_is_audited_and_mail_is_always_sent(): void
@@ -483,27 +496,15 @@ class NotificationDispatcherTest extends TestCase
         ]);
     }
 
-    public function test_notify_falls_back_to_informacion_type_for_an_action_not_in_the_catalog(): void
+    public function test_notify_ignores_an_action_not_in_the_catalog(): void
     {
-        // NotificationDispatcher::notify() no exige que $action exista en
-        // NotificationCatalog — no lanza excepción y cae al tipo INFORMACION
-        // por defecto (ver NotificationCatalog::type()). El propio setting
-        // `acciones_con_notificacion_app` sembrado es una whitelist explícita
-        // de acciones conocidas, así que una acción inventada queda filtrada
-        // por esa capa antes de llegar a NotificationRuleResolver — para
-        // probar solo el fallback de tipo (sin la capa de whitelist),
-        // vaciamos la whitelist (null = "no filtrar nada", ver isAppNotificationAllowed()).
-        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
-        AppSetting::where('key', 'acciones_con_notificacion_app')->update(['value' => null]);
-        SettingsService::forget();
+        // Una acción emitida por código pero sin catalogar solo queda
+        // auditada: no notifica a nadie (se reporta en log para catalogarla).
+        User::factory()->create(['role' => 'SUPERADMIN']);
 
         NotificationDispatcher::notify(null, 'SISTEMA', 'Accion completamente inventada sin catalogo', 'detalle');
 
-        $this->assertDatabaseHas('app_notifications', [
-            'user_id' => $superadmin->id,
-            'action' => 'Accion completamente inventada sin catalogo',
-            'type' => NotificationType::INFORMACION,
-        ]);
+        $this->assertDatabaseMissing('app_notifications', ['action' => 'Accion completamente inventada sin catalogo']);
     }
 
     public function test_app_notification_row_carries_the_type_from_the_catalog(): void
@@ -556,9 +557,6 @@ class NotificationDispatcherTest extends TestCase
 
         NotificationRule::firstOrCreate(['action' => 'Liberacion de anticipo', 'role' => 'FINANZAS', 'channel' => 'mail'], ['enabled' => true]);
         NotificationRuleResolver::forget();
-
-        AppSetting::where('key', 'acciones_con_correo')->update(['value' => json_encode(['Liberacion de anticipo'])]);
-        SettingsService::forget();
 
         $finanzas = User::factory()->create(['role' => 'FINANZAS']);
         $project = Project::factory()->create(['status' => 'EN_EJECUCION']);

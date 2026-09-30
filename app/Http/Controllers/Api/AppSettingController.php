@@ -7,7 +7,6 @@ use App\Models\AppSetting;
 use App\Models\ConfigAuditLog;
 use App\Services\SettingsService;
 use App\Support\AppSettingCatalog;
-use App\Support\NotificationCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -43,22 +42,6 @@ class AppSettingController extends Controller
             ...$settings->groupBy('group')->all(),
             'missing' => AppSettingCatalog::missingFrom($settings->pluck('key')->all()),
         ]]);
-    }
-
-    /**
-     * Catálogo real de acciones auditadas disponibles para los selectores de
-     * `acciones_con_correo` / `acciones_con_notificacion_app` en CONFIG
-     * APP — misma fuente que usa NotificationCatalog/NotificationDispatcher
-     * al filtrar, así el frontend nunca ofrece una acción que la app no
-     * dispara de verdad.
-     *
-     * `value` es el string técnico que realmente se guarda en el setting
-     * (debe coincidir exactamente con el `$action` que se audita); `label`
-     * es el texto legible a mostrar.
-     */
-    public function notificationActions(): JsonResponse
-    {
-        return response()->json(['data' => NotificationCatalog::toOptions()]);
     }
 
     public function update(Request $request, AppSetting $setting): JsonResponse

@@ -189,4 +189,81 @@ class NotificationRuleControllerTest extends TestCase
             'action' => 'notification_rules.Rechazo de cuadro comparativo',
         ]);
     }
+
+    public function test_every_action_the_code_emits_without_catalog_is_now_catalogued(): void
+    {
+        $missing = array_filter([
+            'Alta de rol', 'Alta de ubicacion', 'Alta de paso de firma', 'Alta de tipo de proyecto',
+            'Alta de categoría de catálogo', 'Firma de orden de pago', 'Anulacion de orden de pago',
+            'Generacion de orden de pago de anticipo', 'Carga de tasa de cambio', 'Sync automático falló',
+            'Evaluacion inteligente de expediente', 'Renegociación de propuesta', 'Carga de documento de proveedor',
+            'Modificacion de configuracion de smtp',
+        ], fn (string $action) => !\App\Support\NotificationCatalog::exists($action));
+
+        $this->assertSame([], array_values($missing));
+    }
+
+    public function test_external_actions_are_listed_but_excluded_from_the_role_matrix(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $response = $this->actingAs($superadmin)->getJson('/api/notification-rules');
+
+        $actions = collect($response->json('data.actions'));
+        $external = $actions->firstWhere('value', 'Correo de adjudicacion a proveedor');
+        $this->assertSame('external', $external['recipientType']);
+        $this->assertArrayNotHasKey('Correo de adjudicacion a proveedor', $response->json('data.rules'));
+        $this->assertNotContains('Correo de adjudicacion a proveedor', $response->json('data.unconfigured'));
+    }
+
+    public function test_update_persists_channel_toggles_and_they_change_delivery(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($superadmin)->putJson('/api/notification-rules', [
+            'action' => 'Alta de material',
+            'app' => ['SUPERADMIN'],
+            'mail' => ['SUPERADMIN'],
+            'appEnabled' => false,
+            'mailEnabled' => true,
+        ])->assertStatus(200)->assertJsonPath('data.appEnabled', false);
+
+        $this->assertFalse(\App\Support\NotificationCatalog::channelEnabled('Alta de material', 'app'));
+        $this->assertTrue(\App\Support\NotificationCatalog::channelEnabled('Alta de material', 'mail'));
+    }
+
+    public function test_external_action_only_accepts_the_mail_toggle(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($superadmin)->putJson('/api/notification-rules', [
+            'action' => 'Correo de adjudicacion a proveedor',
+            'app' => ['SUPERADMIN'],
+            'appEnabled' => true,
+            'mailEnabled' => false,
+        ])->assertStatus(200)->assertJsonPath('data.app', [])->assertJsonPath('data.appEnabled', false);
+
+        $this->assertFalse(\App\Support\NotificationCatalog::channelEnabled('Correo de adjudicacion a proveedor', 'mail'));
+    }
+
+    public function test_password_reset_mail_cannot_be_turned_off(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($superadmin)->putJson('/api/notification-rules', [
+            'action' => 'Correo de restablecimiento de contrasena',
+            'mailEnabled' => false,
+        ])->assertStatus(422);
+    }
+
+    public function test_critical_action_cannot_have_the_app_channel_turned_off(): void
+    {
+        $superadmin = User::factory()->create(['role' => 'SUPERADMIN']);
+
+        $this->actingAs($superadmin)->putJson('/api/notification-rules', [
+            'action' => 'Rechazo de cuadro comparativo',
+            'app' => ['PROCURA'],
+            'appEnabled' => false,
+        ])->assertStatus(422);
+    }
 }

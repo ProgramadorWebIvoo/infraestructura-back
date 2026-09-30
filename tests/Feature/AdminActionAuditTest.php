@@ -9,7 +9,6 @@ use App\Models\MaterialCatalog;
 use App\Models\User;
 use App\Notifications\ProjectActionMail;
 use App\Notifications\ProjectActionNotification;
-use App\Services\SettingsService;
 use App\Support\NotificationCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -213,11 +212,6 @@ class AdminActionAuditTest extends TestCase
         ]);
         \App\Services\NotificationRuleResolver::forget();
 
-        \App\Models\AppSetting::where('key', 'acciones_con_correo')->update([
-            'value' => json_encode(['Alta de material']),
-        ]);
-        SettingsService::forget();
-
         $this->postJson('/api/materials/config', [
             'name' => 'Grava',
             'unit' => 'm3',
@@ -230,10 +224,10 @@ class AdminActionAuditTest extends TestCase
         Notification::assertSentTo($otroSuperadmin, \App\Notifications\AdminActionMail::class);
     }
 
-    public function test_admin_actions_are_included_in_default_acciones_con_notificacion_app(): void
+    public function test_admin_actions_are_catalogued_with_the_app_channel_on(): void
     {
-        $this->assertContains('Creacion de usuario', SettingsService::get('acciones_con_notificacion_app'));
-        $this->assertContains('Alta de proveedor', SettingsService::get('acciones_con_notificacion_app'));
-        $this->assertContains('Alta de configuracion de IA', SettingsService::get('acciones_con_notificacion_app'));
+        foreach (['Creacion de usuario', 'Alta de proveedor', 'Alta de configuracion de IA'] as $action) {
+            $this->assertTrue(\App\Support\NotificationCatalog::channelEnabled($action, 'app'), $action);
+        }
     }
 }

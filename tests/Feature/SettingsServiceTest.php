@@ -18,7 +18,6 @@ class SettingsServiceTest extends TestCase
         $this->assertSame(100, SettingsService::get('anticipo_maximo_porcentaje'));
         $this->assertSame(false, SettingsService::get('flag_de_prueba'));
         $this->assertSame(0.0, SettingsService::get('inflacion_referencia_anual_porcentaje'));
-        $this->assertIsArray(SettingsService::get('acciones_con_correo'));
     }
 
     public function test_get_returns_the_app_group_stalled_threshold_as_int(): void

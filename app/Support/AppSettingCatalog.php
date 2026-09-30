@@ -93,14 +93,6 @@ class AppSettingCatalog
             'label' => 'Cierre de sesión por inactividad (minutos)',
             'description' => 'Minutos de inactividad tras los cuales la aplicación cierra la sesión en el navegador. Es un control del cliente: no revoca el token en el servidor, cuya expiración se define por SANCTUM_EXPIRATION en el entorno.',
         ],
-        'acciones_con_correo' => [
-            'label' => 'Acciones que envían correo',
-            'description' => 'Lista de acciones auditadas que además de push y bandeja interna disparan un correo (para no generar spam con cada acción). El detalle de qué rol recibe cada acción vive en la matriz de notificaciones por rol, más abajo.',
-        ],
-        'acciones_con_notificacion_app' => [
-            'label' => 'Acciones que envían notificación (app)',
-            'description' => 'Lista de acciones auditadas que generan notificación push y bandeja interna. Por defecto, todas — quite las que no ameriten aviso para no generar ruido. El detalle de qué rol recibe cada acción vive en la matriz de notificaciones por rol, más abajo.',
-        ],
         'retencion_notificaciones_dias' => [
             'label' => 'Retención de notificaciones (días)',
             'description' => 'Días que se conservan las notificaciones en la bandeja interna antes de purgarse automáticamente. Purgado destructivo, sin posibilidad de recuperación — rango acotado a 1-7 días.',

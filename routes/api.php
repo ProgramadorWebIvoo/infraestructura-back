@@ -113,8 +113,6 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access'])->group(fu
     // el polling de fondo y las acciones de escritura del resto de la app.
     Route::get('/settings', [AppSettingController::class, 'index'])
         ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
-    Route::get('/settings/notification-actions', [AppSettingController::class, 'notificationActions'])
-        ->withoutMiddleware(['throttle:api'])->middleware('throttle:catalog');
     // Escritura de settings — exclusivo SUPERADMIN: incluye cron de IA/tasas,
     // datos fiscales y umbrales de presupuesto, impacto global del sistema.
     Route::patch('/settings/{setting}', [AppSettingController::class, 'update'])

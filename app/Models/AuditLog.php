@@ -45,10 +45,7 @@ class AuditLog extends Model
      * `$project` es nullable para eventos auditables que no pertenecen a
      * ningún proyecto (ej. solicitud de restablecimiento de contraseña) —
      * quedan visibles en el historial de auditoría igual que el resto,
-     * aunque sin destinatarios que resolver por rol/status de proyecto
-     * (NotificationDispatcher::notify() no hace nada en ese caso: el envío
-     * real, si aplica, lo decide el propio emisor vía
-     * NotificationDispatcher::isMailActionAllowed()).
+     * aunque sin destinatarios dirigidos a la obra (SOLICITANTE/RESIDENTE).
      */
     public static function record(?Project $project, string $role, string $action, ?string $details = null, ?string $observations = null): self
     {

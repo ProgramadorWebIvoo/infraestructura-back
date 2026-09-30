@@ -11,8 +11,8 @@ use App\Notifications\AdminActionNotification;
 use App\Notifications\ProjectActionMail;
 use App\Notifications\ProjectActionNotification;
 use App\Support\NotificationCatalog;
-use App\Support\NotificationType;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Punto único de notificación de eventos de negocio. Invocado desde
@@ -31,28 +31,18 @@ use Illuminate\Support\Facades\DB;
 class NotificationDispatcher
 {
     /**
-     * Fallback si el setting "acciones_con_correo" no existe/está vacío
-     * (BD sin migrar, o borrado por error) — mismas 4 acciones que antes
-     * vivían hardcodeadas aquí.
-     */
-    private const DEFAULT_MAIL_ACTIONS = [
-        'Rechazo de cuadro comparativo',
-        'Confirmacion de contratacion',
-        'Liberacion de anticipo',
-        'Liberacion total de fondos',
-    ];
-
-    /**
      * `$project = null` cubre acciones administrativas (usuarios,
      * proveedores, materiales, config de IA) y otras sin proyecto asociado
-     * (ej. reset de password, que no pasa por acá — ver
-     * isMailActionAllowed()). Los destinatarios se resuelven directamente
+     * (ej. reset de password, que no pasa por acá: su correo se envía
+     * siempre desde User). Los destinatarios se resuelven directamente
      * por acción, sin depender de un status de proyecto que no existe para
      * estos casos.
      */
     public static function notify(?Project $project, string $role, string $action, ?string $details = null): void
     {
-        if (!static::isAppNotificationAllowed($action)) {
+        if (!NotificationCatalog::exists($action)) {
+            Log::warning('notification_actions: acción emitida sin catalogar, solo queda auditada', ['action' => $action]);
+
             return;
         }
 
@@ -62,9 +52,10 @@ class NotificationDispatcher
         // mismo) — se excluye de ambos canales, no solo de "app".
         $actorId = auth()->id();
 
-        $appRecipients = NotificationRuleResolver::recipientsFor($action, 'app', $project)
-            ->reject(fn (User $user) => $user->id === $actorId);
-        $type = NotificationCatalog::exists($action) ? NotificationCatalog::type($action) : NotificationType::INFORMACION;
+        $appRecipients = NotificationCatalog::channelEnabled($action, 'app')
+            ? NotificationRuleResolver::recipientsFor($action, 'app', $project)->reject(fn (User $user) => $user->id === $actorId)
+            : collect();
+        $type = NotificationCatalog::type($action);
 
         foreach ($appRecipients as $user) {
             $appNotification = AppNotification::create([
@@ -105,7 +96,7 @@ class NotificationDispatcher
             });
         }
 
-        if (!static::isMailActionAllowed($action)) {
+        if (!NotificationCatalog::channelEnabled($action, 'mail')) {
             return;
         }
 
@@ -130,31 +121,5 @@ class NotificationDispatcher
                 }
             });
         }
-    }
-
-    /**
-     * Acciones que disparan push + bandeja interna — por defecto todas,
-     * editable desde CONFIG APP para silenciar acciones de bajo valor sin
-     * dejar de auditarlas. Si el setting no existe (BD sin migrar), no se
-     * filtra nada.
-     */
-    private static function isAppNotificationAllowed(string $action): bool
-    {
-        $notifyActions = SettingsService::get('acciones_con_notificacion_app');
-
-        return $notifyActions === null || in_array($action, $notifyActions, true);
-    }
-
-    /**
-     * Expone el filtro `acciones_con_correo` para emisores que no pasan por
-     * `notify()` (correos con contenido que este dispatcher no puede
-     * construir, ej. el token de restablecimiento de contraseña) pero sí
-     * quieren respetar el mismo control de CONFIG APP antes de enviar.
-     */
-    public static function isMailActionAllowed(string $action): bool
-    {
-        $mailActions = SettingsService::get('acciones_con_correo', self::DEFAULT_MAIL_ACTIONS);
-
-        return in_array($action, $mailActions, true);
     }
 }

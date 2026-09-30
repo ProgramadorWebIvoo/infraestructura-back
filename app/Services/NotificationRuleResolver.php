@@ -107,7 +107,7 @@ class NotificationRuleResolver
         $rules = self::all();
 
         return array_values(array_filter(
-            NotificationCatalog::keys(),
+            NotificationCatalog::roleKeys(),
             fn (string $action) => !isset($rules[$action]),
         ));
     }
@@ -123,7 +123,7 @@ class NotificationRuleResolver
         $rules = self::all();
         $matrix = [];
 
-        foreach (NotificationCatalog::keys() as $action) {
+        foreach (NotificationCatalog::roleKeys() as $action) {
             $matrix[$action] = [
                 'app' => $rules[$action]['app'] ?? [],
                 'mail' => $rules[$action]['mail'] ?? [],

@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\AppSetting;
 use App\Models\User;
 use App\Services\SettingsService;
-use App\Support\NotificationCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -118,7 +117,7 @@ class AppSettingTest extends TestCase
     public function test_update_rejects_invalid_json_value(): void
     {
         $admin = User::factory()->create(['role' => 'SUPERADMIN']);
-        $setting = AppSetting::where('key', 'acciones_con_correo')->firstOrFail();
+        $setting = AppSetting::create(['group' => 'app', 'key' => 'json_de_prueba', 'value' => '[]', 'type' => 'json']);
 
         $this->actingAs($admin)
             ->patchJson("/api/settings/{$setting->id}", ['value' => '{invalido'])
@@ -416,27 +415,5 @@ class AppSettingTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertContains('proyecto_estancado_umbral_dias', $response->json('data.missing'));
-    }
-
-    public function test_notification_actions_endpoint_returns_the_real_auditable_actions_catalog(): void
-    {
-        // Misma fuente que usa NotificationDispatcher al filtrar — el
-        // selector de tags en CONFIG APP nunca debe mostrar una acción que
-        // la app no dispare realmente. `value` es el string persistido en
-        // AuditLog/settings; `label` es el texto legible mostrado en la UI.
-        $user = User::factory()->create(['role' => 'ANALISTA']);
-
-        $response = $this->actingAs($user)->getJson('/api/settings/notification-actions');
-
-        $response->assertStatus(200);
-        $data = $response->json('data');
-        $this->assertCount(count(NotificationCatalog::keys()), $data);
-        $this->assertSame(NotificationCatalog::keys(), array_column($data, 'value'));
-
-        $contractorRegisterEntry = collect($data)->firstWhere('value', 'contractor.register');
-        $this->assertSame('Registro público de proveedor', $contractorRegisterEntry['label']);
-
-        $scalarActionEntry = collect($data)->firstWhere('value', 'Carga de propuesta');
-        $this->assertSame('Carga de propuesta', $scalarActionEntry['label']);
     }
 }

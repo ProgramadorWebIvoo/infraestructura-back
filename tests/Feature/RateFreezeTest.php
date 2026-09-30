@@ -119,6 +119,47 @@ class RateFreezeTest extends TestCase
         $this->assertNull($freeze->exchange_rate_id);
     }
 
+    public function test_an_empty_freeze_is_completed_when_the_rate_appears(): void
+    {
+        ExchangeRate::query()->delete();
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $service = app(RateFreezeService::class);
+
+        $empty = $service->freezeForTrigger($project, ProjectRateFreeze::TRIGGER_CONTRATADO, 1500.0);
+        $this->assertNull($empty->frozen_rate);
+
+        // Sigue sin tasa: no se acumulan filas vacías.
+        $this->assertNull($service->freezeForTrigger($project, ProjectRateFreeze::TRIGGER_CONTRATADO, 1500.0));
+        $this->assertEquals(1, ProjectRateFreeze::where('project_id', $project->id)->count());
+
+        ExchangeRate::create(['currency_code' => 'USD', 'rate_to_usd' => 100, 'source' => 'BCV', 'effective_at' => now()->subMinute()]);
+        $completed = $service->freezeForTrigger($project, ProjectRateFreeze::TRIGGER_CONTRATADO, 1500.0);
+
+        $this->assertNotNull($completed);
+        $this->assertEquals(150000.0, $completed->frozen_amount_bs);
+        $this->assertEquals($completed->id, $empty->fresh()->superseded_by_id);
+        $this->assertEquals(1, ProjectRateFreeze::where('project_id', $project->id)->active()->count());
+    }
+
+    public function test_the_manual_override_audit_records_the_result_and_flags_an_ignored_amount(): void
+    {
+        $project = Project::factory()->create(['status' => 'CONTRATADO']);
+        $proposal = ProjectProposal::factory()->create([
+            'project_id' => $project->id,
+            'contractor_code' => $this->contractor->code,
+            'total_cost' => 28000.00,
+        ]);
+        $project->update(['selected_proposal_id' => $proposal->id]);
+
+        $this->actingAs($this->superadmin)
+            ->postJson("/api/projects/{$project->id}/rate-freezes", ['trigger' => 'CONTRATADO', 'reason' => 'Corrección de la tasa del día de adjudicación.', 'amountBase' => 1.0])
+            ->assertStatus(201);
+
+        $entry = \App\Models\AuditLog::where('project_id', $project->id)->where('action', 'Congelación manual de tasa de cambio')->firstOrFail();
+        $this->assertStringContainsString('28000', $entry->details);
+        $this->assertStringContainsString('ignorado', $entry->details);
+    }
+
     public function test_freeze_manually_supersedes_previous_active_freeze(): void
     {
         $project = Project::factory()->create(['status' => 'CONTRATADO']);

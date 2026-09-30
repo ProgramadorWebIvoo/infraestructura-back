@@ -161,7 +161,17 @@ class ProjectModificationService
             return;
         }
 
-        $proposal->update(['total_cost' => max(0, round((float) $proposal->total_cost + $request->netAmountUsd(), 2))]);
+        $newTotal = max(0, round((float) $proposal->total_cost + $request->netAmountUsd(), 2));
+        $changes = ['total_cost' => $newTotal];
+
+        // Propuesta convertida (EUR/USDT): el monto original en la moneda de cotización
+        // debe seguir al total en base, o la orden de pago y el congelado (que parten del
+        // original) quedarían con un monto desactualizado.
+        if ($proposal->total_cost_original !== null && (float) $proposal->fx_rate_to_base > 0) {
+            $changes['total_cost_original'] = round($newTotal / (float) $proposal->fx_rate_to_base, 4);
+        }
+
+        $proposal->update($changes);
     }
 
     private function alertIfOverBudget(Project $project): void

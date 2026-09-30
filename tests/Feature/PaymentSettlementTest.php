@@ -235,6 +235,57 @@ class PaymentSettlementTest extends TestCase
             ->assertJsonPath('data.payments.items.0.settlement.coveredAmount', 360);
     }
 
+    public function test_amounts_and_rates_are_validated_to_the_stored_precision(): void
+    {
+        $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 360.001])->assertStatus(422)->assertJsonValidationErrors('paidAmount');
+        $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 1e20])->assertStatus(422)->assertJsonValidationErrors('paidAmount');
+        $this->pay(['paymentMode' => 'BS', 'paidAmount' => 360000, 'appliedRate' => 1000.123456789, 'appliedRateSource' => 'MANUAL'])->assertStatus(422)->assertJsonValidationErrors('appliedRate');
+        $this->pay(['paymentMode' => 'BS', 'paidAmount' => 360000, 'appliedRate' => 1e-30, 'appliedRateSource' => 'MANUAL'])->assertStatus(422);
+        $this->assertDatabaseCount('project_payments', 0);
+    }
+
+    public function test_an_inactive_currency_cannot_be_used_to_pay(): void
+    {
+        \App\Models\Currency::where('code', 'EUR')->update(['is_active' => false]);
+
+        $this->pay(['paymentMode' => 'OTHER_CURRENCY', 'paidCurrency' => 'EUR', 'paidAmount' => 100, 'appliedRate' => 0.3, 'appliedRateSource' => 'MANUAL'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('paidCurrency');
+    }
+
+    public function test_a_legacy_order_in_a_foreign_currency_without_rate_cannot_be_paid(): void
+    {
+        // Orden anterior al cambio: rotulada en USDT pero con el importe en USD y sin tasa que la respalde.
+        PaymentOrder::where('project_id', $this->project->id)->update(['exchange_rate' => null]);
+
+        $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 450])->assertStatus(422)->assertJsonValidationErrors('amount');
+        $this->assertDatabaseCount('project_payments', 0);
+    }
+
+    public function test_a_second_payment_cannot_overwrite_the_recorded_settlement(): void
+    {
+        $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 360])->assertStatus(200);
+
+        $this->pay(['paymentMode' => 'BS', 'paidAmount' => 999999, 'appliedRate' => 1, 'appliedRateSource' => 'MANUAL', 'differenceReason' => 'intento de sobrescritura'])
+            ->assertStatus(422);
+
+        $payment = ProjectPayment::where('project_id', $this->project->id)->firstOrFail();
+        $this->assertSame('QUOTE_CURRENCY', $payment->payment_mode);
+        $this->assertSame(360.0, $payment->paid_amount);
+        $this->assertSame(1, ProjectPayment::where('project_id', $this->project->id)->count());
+    }
+
+    public function test_the_audit_log_names_the_order_and_the_bank_reference(): void
+    {
+        $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 360, 'bank' => 'Binance', 'reference' => 'TX-77'])->assertStatus(200);
+
+        $order = PaymentOrder::where('project_id', $this->project->id)->firstOrFail();
+        $entry = AuditLog::where('project_id', $this->project->id)->where('action', 'Liberacion de anticipo')->latest('logged_at')->firstOrFail();
+        $this->assertStringContainsString("Orden #{$order->number}", $entry->details);
+        $this->assertStringContainsString('Binance TX-77', $entry->details);
+        $this->assertStringContainsString('Congelado de la cotización #', $entry->details);
+    }
+
     public function test_paid_orders_expose_no_stale_state(): void
     {
         $this->pay(['paymentMode' => 'QUOTE_CURRENCY', 'paidAmount' => 360])->assertStatus(200);

@@ -266,6 +266,19 @@ class ProjectModificationTest extends TestCase
         $this->assertEquals(20000, $this->project->fresh()->approved_investment_amount);
     }
 
+    public function test_approval_keeps_the_original_amount_of_a_converted_proposal_in_sync(): void
+    {
+        // 8.000 USDT = 10.000 USD base (fx 1,25): el original debe seguir al total en base.
+        $proposal = ProjectProposal::find($this->project->selected_proposal_id);
+        $proposal->update(['quote_currency' => 'USDT', 'total_cost_original' => 8000, 'fx_rate_to_base' => 1.25, 'base_currency_at_import' => 'USD']);
+
+        $this->approve($this->create(null, [['materialId' => $this->outlets->id, 'type' => 'AUMENTO', 'quantity' => 8]]));
+
+        $proposal->refresh();
+        $this->assertEquals(10400, $proposal->total_cost);
+        $this->assertEquals(8320, $proposal->total_cost_original); // 10.400 / 1,25
+    }
+
     public function test_pending_or_rejected_requests_do_not_touch_the_budget(): void
     {
         $request = $this->create();

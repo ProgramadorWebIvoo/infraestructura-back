@@ -546,13 +546,31 @@ class ProjectController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($project, $data, $rateFreezeService, $proof, $order, $signatures, $request, $settlement) {
+        $payment = DB::transaction(function () use ($project, $data, $rateFreezeService, $proof, $order, $signatures, $request, $settlement) {
+            // Las validaciones de arriba corrieron sin lock: dos pagos simultáneos (otro
+            // usuario u otra pestaña) las pasan a la vez. Se re-verifica con la orden y el
+            // proyecto bloqueados para que el segundo falle en vez de sobrescribir la
+            // liquidación auditada del primero (o chocar con la unique key con un 500).
+            Project::whereKey($project->id)->lockForUpdate()->firstOrFail();
+            $lockedOrder = PaymentOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            abort_unless(
+                in_array($lockedOrder->status, [PaymentOrder::STATUS_EN_FIRMA, PaymentOrder::STATUS_FIRMADA], true),
+                422,
+                'La orden de pago ya fue pagada o anulada.'
+            );
+            abort_if(
+                ProjectPayment::where('project_id', $project->id)->where('payment_type', $data['paymentType'])->exists(),
+                422,
+                'Ya existe un pago registrado para este concepto.'
+            );
+
             // Firma el paso de Finanzas — ya se validó arriba que le corresponde.
             $signatures->signOrSkip($order, auth()->user(), $request);
 
-            $payment = ProjectPayment::updateOrCreate(
-                ['project_id' => $project->id, 'payment_type' => $data['paymentType']],
+            $payment = ProjectPayment::create(
                 [
+                    'project_id' => $project->id,
+                    'payment_type' => $data['paymentType'],
                     ...$settlement,
                     // Tasa congelada de la adjudicación (la de la cotización), si existe.
                     'contract_rate_freeze_id' => ProjectRateFreeze::where('project_id', $project->id)
@@ -589,13 +607,24 @@ class ProjectController extends Controller
                     ->active()
                     ->value('id'),
             ]);
+
+            return $payment->fresh();
         });
 
+        // Rastro completo: orden, moneda/monto/tasa/diferencia, congelados referenciados y comprobante bancario.
+        $trace = array_filter([
+            "Orden #{$order->number}.",
+            $settlements->describe($settlement),
+            $payment->contract_rate_freeze_id ? "Congelado de la cotización #{$payment->contract_rate_freeze_id}." : null,
+            $payment->payment_rate_freeze_id ? "Congelado del pago #{$payment->payment_rate_freeze_id}." : null,
+            $payment->bank || $payment->reference ? 'Banco/ref.: ' . trim(($payment->bank ?? '') . ' ' . ($payment->reference ?? '')) . '.' : null,
+            $data['notes'] ?? null,
+        ]);
         AuditLog::record(
             $project,
             'FINANZAS',
             $data['paymentType'] === 'ADVANCE' ? 'Liberacion de anticipo' : 'Liberacion total de fondos',
-            trim($settlements->describe($settlement) . ' ' . ($data['notes'] ?? ''))
+            implode(' ', $trace)
         );
 
         if ($data['paymentType'] === 'ADVANCE') {

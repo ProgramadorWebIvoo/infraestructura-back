@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use App\Models\Contractor;
+use App\Models\Currency;
 use App\Models\PaymentOrder;
 use App\Models\Project;
 use App\Models\ProjectProposal;
@@ -136,6 +137,15 @@ class PaymentOrderService
             throw ValidationException::withMessages(['amount' => 'La orden de pago no está en un estado válido para pagarse.']);
         }
 
+        // Orden generada antes de expresar la obligación en la moneda de cotización:
+        // rotulada en otra moneda pero con el importe en base y sin tasa que lo respalde.
+        // Pagarla registraría una obligación falsa; hay que anularla y regenerarla.
+        if (strtoupper($order->currency) !== $this->baseCurrency() && $order->exchange_rate === null) {
+            throw ValidationException::withMessages([
+                'amount' => 'Esta orden se generó con un formato anterior (moneda de cotización sin tasa): anúlala y regenérala antes de pagar.',
+            ]);
+        }
+
         // El cliente envía el monto en moneda base (como lo calculan las
         // pantallas de Finanzas); se compara contra el equivalente base de la
         // orden, no contra la obligación en moneda de cotización.
@@ -168,18 +178,27 @@ class PaymentOrderService
      */
     private function obligationFor(ProjectProposal $proposal, string $type, float $amountBase): array
     {
-        $currency = $proposal->quote_currency ?? 'USD';
         $fx = $proposal->fx_rate_to_base;
 
+        // Sin conversión registrada (fx o monto original ausentes), el importe está en
+        // moneda base: la orden se rotula en base, no con la moneda de cotización (que
+        // haría creer que un importe en USD está en EUR/USDT).
         if ($fx === null || $fx <= 0 || $proposal->total_cost_original === null) {
-            return [$amountBase, $currency, null];
+            return [$amountBase, $this->baseCurrency(), null];
         }
+
+        $currency = strtoupper($proposal->quote_currency ?? $this->baseCurrency());
 
         $amount = $type === PaymentOrder::TYPE_ADVANCE
             ? round((float) $proposal->total_cost_original * ((float) $proposal->negotiated_advance_percent / 100), 2)
             : round($amountBase / (float) $fx, 2);
 
         return [$amount, $currency, (float) $fx];
+    }
+
+    private function baseCurrency(): string
+    {
+        return strtoupper(Currency::where('is_base', true)->value('code') ?? 'USD');
     }
 
     private function finiquitoAmount(Project $project): float

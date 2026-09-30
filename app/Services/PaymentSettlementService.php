@@ -45,9 +45,13 @@ class PaymentSettlementService
         $mode = $data['paymentMode'];
         $obligationCurrency = strtoupper($order->currency);
         $obligationAmount = (float) $order->amount;
-        $paidAmount = (float) $data['paidAmount'];
+        // A la precisión con la que se guarda: lo auditado debe poder reproducirse con sus propios datos.
+        $paidAmount = round((float) $data['paidAmount'], 2);
 
         [$paidCurrency, $appliedRate, $rateSource] = $this->resolveCurrencyAndRate($mode, $obligationCurrency, $data);
+        if ($appliedRate <= 0) {
+            throw ValidationException::withMessages(['appliedRate' => 'La tasa aplicada debe ser mayor que cero.']);
+        }
 
         $coveredAmount = round($paidAmount / $appliedRate, 2);
         $difference = round($coveredAmount - $obligationAmount, 2);
@@ -123,7 +127,7 @@ class PaymentSettlementService
             return [$obligationCurrency, 1.0, null];
         }
 
-        $rate = (float) ($data['appliedRate'] ?? 0);
+        $rate = round((float) ($data['appliedRate'] ?? 0), 8);
         $source = strtoupper((string) ($data['appliedRateSource'] ?? ''));
 
         if ($rate <= 0) {
@@ -143,8 +147,8 @@ class PaymentSettlementService
                 'paidCurrency' => 'Indica una moneda de pago distinta de la moneda de la obligación y de los bolívares.',
             ]);
         }
-        if (!Currency::where('code', $paidCurrency)->exists()) {
-            throw ValidationException::withMessages(['paidCurrency' => 'La moneda de pago no existe en el catálogo.']);
+        if (!Currency::where('code', $paidCurrency)->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages(['paidCurrency' => 'La moneda de pago no existe o está inactiva.']);
         }
 
         return [$paidCurrency, $rate, $source];
@@ -171,7 +175,7 @@ class PaymentSettlementService
             }
 
             return ExchangeRate::rateBetween($obligationCurrency, $paidCurrency, now());
-        } catch (\RuntimeException) {
+        } catch (\RuntimeException | \DivisionByZeroError) {
             return null;
         }
     }

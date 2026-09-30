@@ -39,12 +39,19 @@ class ProjectRateFreezeController extends Controller
 
         $freeze = $service->freezeManually($project, $data['trigger'], $data['reason'], $data['amountBase'] ?? null);
 
-        AuditLog::record(
-            $project,
-            'SUPERADMIN',
-            'Congelación manual de tasa de cambio',
-            "Trigger: {$data['trigger']} / Motivo: {$data['reason']}"
-        );
+        $details = "Trigger: {$data['trigger']} / Motivo: {$data['reason']}";
+        if ($freeze->frozen_amount !== null) {
+            $details .= " / Congelado: {$freeze->frozen_amount} {$freeze->frozen_currency}";
+            $details .= $freeze->frozen_rate !== null
+                ? " a {$freeze->frozen_rate} Bs. = {$freeze->frozen_amount_bs} Bs."
+                : ' (sin tasa disponible para la moneda)';
+        }
+        // amountBase solo se usa como respaldo si la obra no tiene propuesta ni orden vigente.
+        if (isset($data['amountBase']) && $freeze->frozen_amount_base !== null && abs((float) $data['amountBase'] - (float) $freeze->frozen_amount_base) > 0.005) {
+            $details .= " / amountBase recibido ({$data['amountBase']}) ignorado: se usó el monto vigente de la obra ({$freeze->frozen_amount_base})";
+        }
+
+        AuditLog::record($project, 'SUPERADMIN', 'Congelación manual de tasa de cambio', $details);
 
         return response()->json(['data' => new ProjectRateFreezeResource($freeze->load('frozenByUser:id,name'))], 201);
     }

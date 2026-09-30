@@ -67,15 +67,28 @@ class RateFreezeService
             // que esto solo agrega el lock, no anida una transacción real.
             Project::whereKey($project->id)->lockForUpdate()->first();
 
-            $alreadyFrozen = ProjectRateFreeze::where('project_id', $project->id)
+            $existing = ProjectRateFreeze::where('project_id', $project->id)
                 ->where('trigger', $trigger)
                 ->active()
-                ->exists();
-            if ($alreadyFrozen) {
+                ->first();
+            if ($existing && $existing->frozen_rate !== null) {
                 return null;
             }
 
-            return $this->snapshot($project, $trigger, ProjectRateFreeze::SOURCE_AUTO, null, $amountBase);
+            $new = $this->snapshot($project, $trigger, ProjectRateFreeze::SOURCE_AUTO, null, $amountBase);
+
+            // Había un congelado "vacío" (sin tasa al momento): el nuevo lo reemplaza
+            // (supersede) solo si ya pudo fijar los Bs.; si sigue sin tasa, no se acumulan filas vacías.
+            if ($existing) {
+                if ($new->frozen_rate === null) {
+                    $new->delete();
+
+                    return null;
+                }
+                $existing->update(['superseded_by_id' => $new->id]);
+            }
+
+            return $new;
         });
     }
 

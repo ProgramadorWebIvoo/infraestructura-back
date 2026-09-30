@@ -171,6 +171,28 @@ class PaymentOrderServiceTest extends TestCase
         $this->assertSame('USDT', $order->currency);
     }
 
+    public function test_a_proposal_without_a_recorded_conversion_yields_a_base_currency_order(): void
+    {
+        // quote_currency = EUR pero sin fx ni monto original (oferta cargada antes de convertir): el
+        // importe está en USD, así que la orden no debe rotularse como EUR.
+        $project = $this->projectWithProposal(['quote_currency' => 'EUR']);
+
+        $order = app(PaymentOrderService::class)->generate($project, PaymentOrder::TYPE_ADVANCE);
+
+        $this->assertSame('USD', $order->currency);
+        $this->assertSame($order->amount, $order->amount_base);
+    }
+
+    public function test_a_legacy_order_in_a_foreign_currency_without_rate_is_rejected_when_paying(): void
+    {
+        $project = $this->projectWithProposal();
+        $order = app(PaymentOrderService::class)->generate($project, PaymentOrder::TYPE_ADVANCE);
+        $order->update(['currency' => 'EUR', 'exchange_rate' => null]);
+
+        $this->expectException(ValidationException::class);
+        app(PaymentOrderService::class)->assertReadyToPay($project, PaymentOrder::TYPE_ADVANCE, 3000.00);
+    }
+
     public function test_order_in_base_currency_keeps_amount_and_amount_base_equal(): void
     {
         $order = app(PaymentOrderService::class)->generate($this->projectWithProposal(), PaymentOrder::TYPE_ADVANCE);

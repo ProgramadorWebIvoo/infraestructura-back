@@ -129,6 +129,10 @@ class AppSettingCatalog
             'label' => 'Sincronización automática activa',
             'description' => 'Si está desactivado, el cronjob no corre — solo queda disponible la sincronización manual.',
         ],
+        'idempotencia_modo' => [
+            'label' => 'Idempotencia de operaciones — modo',
+            'description' => 'off: desactivada. log: evita duplicados en las operaciones que envían clave y solo registra las que no. enforce: rechaza (428) toda operación sin clave; activar solo cuando el registro no muestre operaciones sin clave.',
+        ],
         'tasa_cambio_debug' => [
             'label' => 'Modo debug de sincronización',
             'description' => 'Registra y expone el detalle de cada fuente intentada (DolarVZLA/BCV) en cada sync, para diagnosticar fallos sin revisar logs del servidor.',

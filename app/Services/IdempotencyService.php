@@ -38,11 +38,21 @@ class IdempotencyService
 
     private const MUTATING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
+    public const MODE_SETTING = 'idempotencia_modo';
+
+
+    /** @return array<int, string> */
+    public static function modes(): array
+    {
+        return [self::MODE_OFF, self::MODE_LOG, self::MODE_ENFORCE];
+    }
+
+    /** CONFIG APP manda (cambia sin redeploy); config/env es el valor de respaldo si la fila no existe. */
     public function mode(): string
     {
-        $mode = (string) config('idempotency.mode', self::MODE_OFF);
+        $mode = (string) SettingsService::get(self::MODE_SETTING, config('idempotency.mode', self::MODE_OFF));
 
-        return in_array($mode, [self::MODE_LOG, self::MODE_ENFORCE], true) ? $mode : self::MODE_OFF;
+        return in_array($mode, self::modes(), true) ? $mode : self::MODE_OFF;
     }
 
     /** ¿Esta petición entra al circuito de idempotencia? */

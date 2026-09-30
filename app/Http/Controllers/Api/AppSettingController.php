@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Models\ConfigAuditLog;
+use App\Services\IdempotencyService;
 use App\Services\RateFreezeService;
 use App\Services\SettingsService;
 use App\Support\AppSettingCatalog;
@@ -80,6 +81,7 @@ class AppSettingController extends Controller
         $this->assertFreezeMoment($setting, $data['value']);
         $this->assertSemaphoreOrder($setting, $data['value']);
         $this->assertCronHourFormat($setting, $data['value']);
+        $this->assertIdempotencyMode($setting, $data['value']);
 
         $oldValue = $setting->value;
         $setting->update(['value' => $data['value']]);
@@ -114,6 +116,20 @@ class AppSettingController extends Controller
             in_array($newValue, RateFreezeService::moments(), true),
             422,
             'El momento de congelación debe ser uno de: ' . implode(', ', RateFreezeService::moments()) . '.'
+        );
+    }
+
+    /** Un valor libre degradaría la idempotencia a `off` en silencio (el servicio ignora lo desconocido). */
+    private function assertIdempotencyMode(AppSetting $setting, ?string $newValue): void
+    {
+        if ($setting->key !== IdempotencyService::MODE_SETTING) {
+            return;
+        }
+
+        abort_unless(
+            in_array($newValue, IdempotencyService::modes(), true),
+            422,
+            'El modo de idempotencia debe ser uno de: ' . implode(', ', IdempotencyService::modes()) . '.'
         );
     }
 

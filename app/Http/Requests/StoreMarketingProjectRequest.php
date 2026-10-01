@@ -3,11 +3,15 @@
 namespace App\Http\Requests;
 
 use App\Models\MarketingProject;
+use App\Http\Requests\Concerns\ChecksCompositeUniqueness;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreMarketingProjectRequest extends FormRequest
 {
+    use ChecksCompositeUniqueness;
+
     public function authorize(): bool
     {
         return true; // already behind auth:sanctum + role middleware
@@ -26,5 +30,22 @@ class StoreMarketingProjectRequest extends FormRequest
             'estimatedCost' => ['nullable', 'numeric', 'min:0'],
             'priority' => ['nullable', Rule::in(['BAJA', 'MEDIA', 'ALTA'])],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $v) {
+            $this->failIfCombinationExists(
+                $v,
+                'marketing_projects',
+                [
+                    'title' => $this->input('title'),
+                    'type' => $this->input('type'),
+                    'location' => $this->input('location'),
+                ],
+                'title',
+                'Ya existe una propuesta de marketing con el mismo título, tipo y ubicación.',
+            );
+        });
     }
 }

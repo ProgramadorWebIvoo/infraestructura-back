@@ -68,6 +68,12 @@ class AddProjectProposalRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $project = $this->route('project');
+            if ($project && $this->filled('contractorCode')
+                && $project->proposals()->where('contractor_code', $this->input('contractorCode'))->whereNull('replaced_by_id')->exists()) {
+                $validator->errors()->add('contractorCode', 'Este proveedor ya tiene una propuesta vigente en la obra; use renegociar para modificarla.');
+            }
+
             $advanceMax = SettingsService::get('anticipo_maximo_porcentaje', 100);
             $exceedsAdvance = (float) $this->input('negotiatedAdvancePercent', 0) > (float) $advanceMax;
             $motivoAnticipoExcedido = trim((string) $this->input('motivoAnticipoExcedido', ''));

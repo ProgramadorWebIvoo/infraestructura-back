@@ -167,6 +167,11 @@ class SupplierProposalController extends Controller
         ]);
 
         $proposal = DB::transaction(function () use ($token, $invitation, $data) {
+            // Enlace de un solo uso: se re-valida bajo lock para que dos envíos
+            // simultáneos no creen dos propuestas con el mismo token.
+            $locked = SupplierInvitation::whereKey($invitation->getKey())->lockForUpdate()->first();
+            abort_unless($locked && $locked->isValid(), 404, 'Enlace no valido o expirado.');
+
             $proposal = SupplierMaterialProposal::create([
                 'id'                     => SupplierMaterialProposal::nextId(),
                 'invitation_token'       => $token,

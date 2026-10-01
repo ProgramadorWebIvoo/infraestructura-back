@@ -3,9 +3,12 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\AcceptsProjectAttachments;
+use App\Services\ProjectStateMachine;
 use App\Support\ProjectLocation;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreProjectRequest extends FormRequest
 {
@@ -48,5 +51,50 @@ class StoreProjectRequest extends FormRequest
     public function messages(): array
     {
         return $this->attachmentMessages(array_keys(self::ATTACHMENT_FIELDS));
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $v) {
+            if ($v->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $this->rejectRepeatedMaterials($v);
+            $this->rejectDuplicateProject($v);
+        });
+    }
+
+    /** El mismo material (catálogo, o nombre + unidad) no puede venir dos veces en la misma obra. */
+    private function rejectRepeatedMaterials(Validator $v): void
+    {
+        $seen = [];
+        foreach ((array) $this->input('materials', []) as $index => $item) {
+            $key = ! empty($item['materialCatalogId'])
+                ? 'cat:' . $item['materialCatalogId']
+                : 'txt:' . mb_strtolower(trim((string) ($item['name'] ?? ''))) . '|' . mb_strtolower(trim((string) ($item['unit'] ?? '')));
+
+            if (isset($seen[$key])) {
+                $v->errors()->add("materials.$index.name", 'Este material ya está en la lista; ajuste su cantidad en lugar de repetirlo.');
+            }
+            $seen[$key] = true;
+        }
+    }
+
+    /** Una obra con el mismo título, tipo y ubicación que otra aún vigente es un duplicado. */
+    private function rejectDuplicateProject(Validator $v): void
+    {
+        $location = ProjectLocation::attributes($this->all())['location'];
+
+        $exists = DB::table('projects')
+            ->where('title', trim(strip_tags((string) $this->input('title'))))
+            ->where('type', $this->input('type'))
+            ->where('location', $location)
+            ->where('status', '!=', ProjectStateMachine::STATUSES['COMPLETADO_PAGADO'])
+            ->exists();
+
+        if ($exists) {
+            $v->errors()->add('title', 'Ya existe una obra vigente con el mismo título, tipo y ubicación.');
+        }
     }
 }

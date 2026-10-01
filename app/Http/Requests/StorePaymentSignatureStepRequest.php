@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ChecksCompositeUniqueness;
 use App\Support\Roles;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -9,6 +10,8 @@ use Illuminate\Validation\Validator;
 
 class StorePaymentSignatureStepRequest extends FormRequest
 {
+    use ChecksCompositeUniqueness;
+
     public function authorize(): bool
     {
         return true;
@@ -41,6 +44,19 @@ class StorePaymentSignatureStepRequest extends FormRequest
             if (!$hasRole && !$hasUser && !$this->route('paymentSignatureStep')) {
                 $v->errors()->add('role', 'Indique un rol o un usuario específico para este paso.');
             }
+
+            $current = $this->route('paymentSignatureStep');
+            $this->failIfCombinationExists(
+                $v,
+                'payment_signature_steps',
+                [
+                    'payment_type' => $this->input('paymentType', $current?->payment_type),
+                    'step_order' => $this->input('stepOrder', $current?->step_order),
+                ],
+                'stepOrder',
+                'Ya existe un paso con ese orden para este tipo de pago.',
+                $current?->id,
+            );
         });
     }
 }

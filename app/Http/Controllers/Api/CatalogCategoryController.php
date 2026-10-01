@@ -7,6 +7,8 @@ use App\Models\CatalogCategory;
 use App\Models\ConfigAuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 
 /**
  * Categorías del catálogo maestro de productos — exclusivo SUPERADMIN.
@@ -38,7 +40,7 @@ class CatalogCategoryController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:150'],
+            'name' => ['required', 'string', 'max:150', $this->uniqueNameUnder($request->input('parent_id'))],
             'parent_id' => ['nullable', 'integer', 'exists:catalog_categories,id'],
             'spec_schema' => ['nullable', 'array'],
             'spec_schema.*.key' => ['required_with:spec_schema', 'string', 'max:60'],
@@ -58,7 +60,10 @@ class CatalogCategoryController extends Controller
     public function update(Request $request, CatalogCategory $catalogCategory): JsonResponse
     {
         $data = $request->validate([
-            'name' => ['sometimes', 'string', 'max:150'],
+            'name' => ['sometimes', 'string', 'max:150', $this->uniqueNameUnder(
+                $request->has('parent_id') ? $request->input('parent_id') : $catalogCategory->parent_id,
+                $catalogCategory->id,
+            )],
             'parent_id' => ['sometimes', 'nullable', 'integer', 'exists:catalog_categories,id', 'not_in:' . $catalogCategory->id],
             'spec_schema' => ['sometimes', 'nullable', 'array'],
             'spec_schema.*.key' => ['required_with:spec_schema', 'string', 'max:60'],
@@ -88,5 +93,13 @@ class CatalogCategoryController extends Controller
         $auditLog = ConfigAuditLog::recordAdminAction('catalog_category', 'Eliminación de categoría de catálogo', $name, null, "Categoría \"{$name}\" eliminada.");
 
         return response()->json(['data' => ['auditLog' => $auditLog->toApiPayload()]]);
+    }
+
+    /** Dos categorías hermanas (mismo padre) no pueden llamarse igual. */
+    private function uniqueNameUnder(mixed $parentId, ?int $ignoreId = null): Unique
+    {
+        return Rule::unique('catalog_categories', 'name')
+            ->where(fn ($q) => blank($parentId) ? $q->whereNull('parent_id') : $q->where('parent_id', $parentId))
+            ->ignore($ignoreId);
     }
 }

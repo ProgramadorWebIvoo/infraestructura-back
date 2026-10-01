@@ -13,7 +13,6 @@ use App\Http\Controllers\Api\ContractorDocumentTypeController;
 use App\Http\Controllers\Api\FinanceDisbursementController;
 use App\Http\Controllers\Api\PaymentOrderController;
 use App\Http\Controllers\Api\PaymentSignatureStepController;
-use App\Http\Controllers\Api\DebugClosureFixtureController;
 use App\Http\Controllers\Api\PublicClosureReportController;
 use App\Http\Controllers\Api\ResidentClosureController;
 use App\Http\Controllers\Api\ProjectModificationController;
@@ -385,13 +384,6 @@ Route::middleware(['auth:sanctum', 'refresh.token', 'project.access', 'idempoten
         Route::put('/projects/{project}/modifications/{modification}', [ProjectModificationController::class, 'update']);
         Route::post('/projects/{project}/modifications/{modification}/approval', [ProjectModificationController::class, 'approve']);
         Route::post('/projects/{project}/modifications/{modification}/rejection', [ProjectModificationController::class, 'reject']);
-    });
-
-    // DEBUG-MODE: fixtures del cierre (404 si APP_DEBUG=false)
-    Route::middleware('role:ADMIN,SUPERADMIN')->prefix('debug/closure-fixtures')->group(function () {
-        Route::get('/', [DebugClosureFixtureController::class, 'index']);
-        Route::post('/', [DebugClosureFixtureController::class, 'store']);
-        Route::post('/{project}/advance', [DebugClosureFixtureController::class, 'advance']);
     });
 
     // AI Evaluation — mismo endpoint sirve a Procura (evaluación oficial del

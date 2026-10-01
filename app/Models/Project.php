@@ -180,11 +180,6 @@ class Project extends Model
         return $this->hasOne(ProjectClosureReport::class);
     }
 
-    public function modificationRequests()
-    {
-        return $this->hasMany(ProjectModificationRequest::class);
-    }
-
     public function documents()
     {
         return $this->hasMany(ProjectDocument::class);
@@ -213,7 +208,6 @@ class Project extends Model
             'resident:id,name',
             'localization.resident:id,name',
             'closureReport:id,project_id,status,revision,finiquito_amount',
-            'modificationRequests:id,project_id,status',
             'documents' => fn ($q) => $q->latestVersionOnly(),
         ];
     }
@@ -240,7 +234,6 @@ class Project extends Model
             'paymentOrders.elaboratedBy:id,name',
             'resident:id,name',
             'localization.resident:id,name',
-            'modificationRequests:id,project_id,status',
         ];
     }
 

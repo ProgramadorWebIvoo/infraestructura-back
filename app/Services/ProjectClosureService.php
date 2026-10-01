@@ -26,7 +26,6 @@ class ProjectClosureService
     public function __construct(
         private ClosureReportLinkService $links,
         private ClosureMeasurementService $measurements,
-        private ProjectModificationService $modifications,
         private PaymentOrderService $paymentOrders,
         private PaymentSignatureService $signatures,
     ) {
@@ -38,7 +37,6 @@ class ProjectClosureService
         $project = $report->project;
         ProjectStateMachine::assertStatusIn($project, [self::S['EN_EJECUCION'], self::S['INFORME_ENVIADO']], 'Solo se puede enviar el informe de una obra en ejecución.');
         abort_unless($report->isEditableByContractor(), 422, 'El informe ya fue enviado y está en revisión.');
-        abort_if($this->modifications->hasPending($project), 422, 'Hay modificaciones de obra pendientes de aprobación; deben resolverse antes de enviar el informe de cierre.');
         abort_if($project->effectiveResidentId() === null, 422, 'La obra no tiene ingeniero residente asignado; Auditoría debe asignarlo antes de enviar el informe.');
         abort_unless($report->photos()->exists(), 422, 'Adjunte al menos una foto de evidencia antes de enviar el informe.');
 
@@ -88,7 +86,6 @@ class ProjectClosureService
         $this->assertResidentMayReport($project, $user);
 
         $report = $project->closureReport;
-        abort_if($this->modifications->hasPending($project), 422, 'Hay modificaciones de obra pendientes de aprobación; deben resolverse antes de enviar el informe.');
         abort_unless($report->photos()->where('uploaded_by_type', 'RESIDENTE')->exists(), 422, 'Adjunte al menos una foto de verificación en obra antes de dar el visto bueno.');
 
         DB::transaction(function () use ($project, $report, $user, $notes, $items) {

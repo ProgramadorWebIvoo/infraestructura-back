@@ -37,8 +37,6 @@ class ResidentClosureResource extends JsonResource
                     'name' => $i->name,
                     'unit' => $i->unit,
                     'contractedQuantity' => $i->contracted_quantity,
-                    'originalQuantity' => $i->original_quantity ?? $i->contracted_quantity,
-                    'modificationQuantity' => round($i->contracted_quantity - ($i->original_quantity ?? $i->contracted_quantity), 2),
                     'residentQuantity' => $i->resident_quantity,
                     'residentNote' => $i->resident_note,
                 ])->values(),

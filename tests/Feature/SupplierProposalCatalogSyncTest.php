@@ -225,6 +225,66 @@ class SupplierProposalCatalogSyncTest extends TestCase
         $this->assertLessThanOrEqual(1, $contractorQueries);
     }
 
+    /**
+     * Una obra puede traer ~70 productos. Antes el envío ejecutaba ~13 consultas POR línea (observador
+     * recargando la propuesta e invalidando caché línea a línea, búsqueda/alta de catálogo, upsert del
+     * proveedor e INSERT del historial uno a uno): ~1000 consultas con 70 líneas. Este test fija un
+     * presupuesto holgado para que no vuelva a crecer con la cantidad de líneas.
+     */
+    public function test_seventy_line_submission_stays_within_a_query_budget(): void
+    {
+        Contractor::create(['code' => Contractor::nextCode(), 'name' => 'Acero del Sur', 'rif' => 'J-12345678-9', 'specialty' => 'Materiales', 'status' => 'active']);
+        $invitation = $this->makeInvitation();
+
+        $items = [];
+        for ($i = 1; $i <= 70; $i++) {
+            $items[] = $this->baseItem(['materialName' => "Producto de prueba {$i}"]);
+        }
+
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        $this->postJson("/api/public/invitations/{$invitation->id}/proposal", ['quoteCurrency' => 'USD', 'items' => $items])->assertStatus(201);
+        $queries = count(\Illuminate\Support\Facades\DB::getQueryLog());
+
+        $this->assertDatabaseCount('supplier_material_proposal_lines', 70);
+        $this->assertDatabaseCount('product_price_history', 70);
+        $this->assertDatabaseCount('catalog_product_suppliers', 70);
+        $this->assertLessThan(350, $queries, "El envío de 70 líneas ejecutó {$queries} consultas.");
+    }
+
+    /**
+     * Varias líneas del MISMO producto en una propuesta, con una fila previa del proveedor: el conteo
+     * suma una por línea (también sobre la fila existente) y el último precio es el de la última línea.
+     */
+    public function test_several_lines_of_the_same_product_accumulate_on_the_existing_supplier_row(): void
+    {
+        $contractor = Contractor::create(['code' => Contractor::nextCode(), 'name' => 'Acero del Sur', 'rif' => 'J-12345678-9', 'specialty' => 'Materiales', 'status' => 'active']);
+        $product = MaterialCatalog::create(['name' => 'Cemento Portland', 'unit' => 'saco', 'estimated_unit_price' => 8, 'is_active' => true]);
+        CatalogProductSupplier::create([
+            'catalog_product_id' => $product->id,
+            'supplier_code' => $contractor->code,
+            'last_quoted_at' => now()->subDays(5),
+            'last_quoted_price_usd' => 7,
+            'quote_count' => 4,
+        ]);
+        $invitation = $this->makeInvitation();
+
+        $this->postJson("/api/public/invitations/{$invitation->id}/proposal", [
+            'quoteCurrency' => 'USD',
+            'items' => [
+                $this->baseItem(['unitPrice' => 8, 'totalPrice' => 80]),
+                $this->baseItem(['materialName' => 'CEMENTO PORTLAND', 'unitPrice' => 9, 'totalPrice' => 90]),
+                $this->baseItem(['materialName' => 'Cabilla 3/8']),
+            ],
+        ])->assertStatus(201);
+
+        $link = CatalogProductSupplier::where('supplier_code', $contractor->code)->where('catalog_product_id', $product->id)->first();
+        $this->assertEquals(6, $link->quote_count);
+        $this->assertEquals(9, $link->last_quoted_price_usd);
+        $this->assertEquals(2, CatalogProductSupplier::where('supplier_code', $contractor->code)->count());
+        $this->assertEquals(3, ProductPriceHistory::count());
+        $this->assertEquals(1, MaterialCatalog::where('name', 'Cemento Portland')->count(), 'No se duplica el producto por diferencia de mayúsculas.');
+    }
+
     public function test_unknown_supplier_skips_catalog_link_but_still_normalizes_line(): void
     {
         $invitation = $this->makeInvitation();

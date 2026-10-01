@@ -6,8 +6,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
  * Obra vista por su ingeniero residente (F2-R S1): partidas, cantidades y
- * fotos propias. Nunca lo declarado por el contratista (informe independiente),
- * ni precios, montos, finiquito ni notas de Auditoría.
+ * fotos propias. Nunca lo declarado por el contratista (cantidades, notas ni fotos:
+ * medición ciega, para que su juicio sea único y sin guías), ni precios, montos,
+ * finiquito ni notas de Auditoría.
  *
  * @property \App\Models\Project $resource
  */

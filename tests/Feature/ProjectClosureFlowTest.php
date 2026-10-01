@@ -366,6 +366,21 @@ class ProjectClosureFlowTest extends TestCase
         $item = $this->actingAs($this->resident)->getJson("/api/resident/projects/{$this->project->id}")->assertOk()->json('data.closure.items.0');
         $this->assertArrayNotHasKey('executedQuantity', $item);
         $this->assertArrayNotHasKey('note', $item);
+        $this->assertSame([], collect($this->actingAs($this->resident)->getJson("/api/resident/projects/{$this->project->id}")->json('data.closure.photos'))->where('uploadedByType', 'CONTRATISTA')->all());
+    }
+
+    public function test_resident_still_blind_to_contractor_after_sending_own_report(): void
+    {
+        $url = "/api/resident/projects/{$this->project->id}";
+        $this->submitReport();
+        $this->actingAs($this->resident)->post("{$url}/photos", ['image' => $this->photo()])->assertStatus(201);
+        $this->actingAs($this->resident)->postJson("{$url}/approval", $this->residentPayload())->assertOk();
+
+        $closure = $this->actingAs($this->resident)->getJson($url)->assertOk()->json('data.closure');
+        $this->assertArrayNotHasKey('executedQuantity', $closure['items'][0]);
+        $this->assertArrayNotHasKey('note', $closure['items'][0]);
+        $this->assertArrayNotHasKey('contractorNotes', $closure);
+        $this->assertNotContains('CONTRATISTA', collect($closure['photos'])->pluck('uploadedByType')->all());
     }
 
     public function test_audit_rejection_and_procura_return_flow(): void

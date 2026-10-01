@@ -190,6 +190,15 @@ class Project extends Model
         return $this->hasMany(AuditLog::class);
     }
 
+    /** Última devolución/rechazo del flujo (ver ProjectReturnResolver); una sola fila por obra, sin N+1. */
+    public function latestReturnLog()
+    {
+        return $this->hasOne(AuditLog::class)->ofMany(
+            ['logged_at' => 'max', 'id' => 'max'],
+            fn ($query) => $query->whereIn('action', \App\Services\ProjectReturnResolver::actions())
+        );
+    }
+
     /**
      * Relaciones estándar para el detalle completo de un proyecto — usado
      * por prácticamente todos los endpoints de ProjectController (17
@@ -207,7 +216,8 @@ class Project extends Model
             'rateFreezes.frozenByUser:id,name',
             'resident:id,name',
             'localization.resident:id,name',
-            'closureReport:id,project_id,status,revision,finiquito_amount',
+            'closureReport:id,project_id,status,revision,finiquito_amount,rejection_reason,rejected_by_role,rejection_target,updated_at',
+            'latestReturnLog',
             'documents' => fn ($q) => $q->latestVersionOnly(),
         ];
     }
@@ -234,6 +244,8 @@ class Project extends Model
             'paymentOrders.elaboratedBy:id,name',
             'resident:id,name',
             'localization.resident:id,name',
+            'closureReport:id,project_id,status,revision,finiquito_amount,rejection_reason,rejected_by_role,rejection_target,updated_at',
+            'latestReturnLog',
         ];
     }
 

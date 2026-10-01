@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\ProjectReturnResolver;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Http\Resources\MissingValue;
 
@@ -114,6 +115,8 @@ class ProjectResource extends JsonResource
             'closureReportStatus' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->status),
             'closureReportRevision' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->revision),
             'finiquitoAmount' => $this->whenLoaded('closureReport', fn () => $this->closureReport?->finiquito_amount),
+            // Devolución vigente del flujo (rol que devolvió + motivo) o null; se omite si no se cargaron las relaciones.
+            'returnInfo' => $this->whenLoaded('latestReturnLog', fn () => ProjectReturnResolver::resolve($this->resource)),
             'qualityVerified' => $this->quality_verified,
             'completionVerifiedDate' => optional($this->completion_verified_date)->format('Y-m-d'),
             'documents' => $this->whenLoaded('documents', fn () =>

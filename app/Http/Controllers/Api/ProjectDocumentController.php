@@ -8,9 +8,8 @@ use App\Http\Resources\ProjectDocumentResource;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\ProjectDocument;
-use App\Services\FileIngestionPipeline;
+use App\Services\ProjectDocumentService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -58,10 +57,9 @@ class ProjectDocumentController extends Controller
         ]);
     }
 
-    public function upload(StoreProjectDocumentRequest $request, Project $project, FileIngestionPipeline $pipeline)
+    public function upload(StoreProjectDocumentRequest $request, Project $project, ProjectDocumentService $documents)
     {
         $type = $request->input('document_type');
-        $newVersionOfId = $request->input('new_version_of');
         $role = auth()->user()->role;
 
         // Los comprobantes de pago son evidencia bancaria exclusiva de
@@ -74,83 +72,15 @@ class ProjectDocumentController extends Controller
             abort_if($role === 'FINANZAS', 403, 'Finanzas solo puede adjuntar comprobantes de pago.');
         }
 
-        $saved = [];
+        $group = ['type' => $type, 'files' => $request->file('files'), 'newVersionOf' => $request->input('new_version_of')];
 
-        DB::transaction(function () use ($request, $project, $pipeline, $type, $newVersionOfId, $role, &$saved) {
-            $groupId = null;
-            $nextVersion = 1;
+        // Pared de seguridad sobre todos los archivos antes de tocar BD/disco.
+        $documents->preflight([$group], $project->id);
 
-            if ($newVersionOfId !== null) {
-                $original = ProjectDocument::where('id', $newVersionOfId)
-                    ->where('project_id', $project->id)
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                $groupId = $original->document_group_id;
-                $type = $original->document_type; // la versión no puede cambiar el tipo del documento
-                $nextVersion = ProjectDocument::where('document_group_id', $groupId)
-                    ->lockForUpdate()
-                    ->max('version_number') + 1;
-            }
-
-            foreach ($request->file('files') as $file) {
-                $directory = $groupId !== null
-                    ? "project-documents/{$project->id}/{$type}/{$groupId}"
-                    : "project-documents/{$project->id}/{$type}";
-
-                $ingested = $pipeline->ingest($file, $directory, 'project_document', $project->id);
-
-                $isNewGroup = $groupId === null;
-
-                $doc = $project->documents()->create([
-                    'document_group_id' => $groupId,
-                    'version_number' => $nextVersion,
-                    'document_type' => $type,
-                    'original_name' => $ingested->originalName,
-                    'stored_path' => $ingested->storedPath,
-                    'mime_type' => $ingested->mimeType,
-                    'size_bytes' => $ingested->sizeBytes,
-                    'uploaded_by' => auth()->id(),
-                ]);
-
-                if ($isNewGroup) {
-                    $doc->update(['document_group_id' => $doc->id]);
-                    // Reflejar en la carpeta física el group id recién asignado.
-                    $finalDirectory = "project-documents/{$project->id}/{$type}/{$doc->id}";
-                    $finalPath = $finalDirectory . '/' . basename($ingested->storedPath);
-                    Storage::disk('local')->move($ingested->storedPath, $finalPath);
-                    $doc->update(['stored_path' => $finalPath]);
-                }
-
-                $saved[] = [
-                    ...(new ProjectDocumentResource($doc->fresh()))->resolve(),
-                    'optimized' => $ingested->optimized,
-                ];
-            }
-
-            $label = match ($type) {
-                'CALC' => 'hojas de calculo/cubicaciones',
-                'PLANO' => 'planos de ingenieria',
-                'FOTO' => 'fotografias del sitio de obra',
-                'CORRECCION' => 'correcciones de peticion rechazada',
-                'REEVALUACION' => 'evidencia de solicitud de reevaluacion',
-                'COMPROBANTE_ANTICIPO' => 'comprobante de pago de anticipo',
-                'COMPROBANTE_FINIQUITO' => 'comprobante de liquidacion final',
-                default => 'documentos',
-            };
-
-            $names = implode(', ', array_column($saved, 'originalName'));
-            $action = $newVersionOfId !== null
-                ? 'Carga de nueva version de documento'
-                : "Carga de {$label}";
-            $details = $newVersionOfId !== null
-                ? "V{$nextVersion}: {$names}"
-                : $names;
-
-            $this->syncProjectCounts($project);
-
-            AuditLog::record($project, $role, $action, $details);
-        });
+        $saved = array_map(fn (array $s) => [
+            ...(new ProjectDocumentResource($s['document']->fresh()))->resolve(),
+            'optimized' => $s['optimized'],
+        ], $documents->attachGroups($project, [$group]));
 
         return response()->json(['data' => $saved], 201);
     }
@@ -165,7 +95,7 @@ class ProjectDocumentController extends Controller
      * las correcciones que Auditoría adjuntó al rechazar, quedan como
      * histórico/evidencia, no un adjunto propio de Infraestructura.
      */
-    public function destroy(Project $project, ProjectDocument $document)
+    public function destroy(Project $project, ProjectDocument $document, ProjectDocumentService $documents)
     {
         abort_unless($document->project_id === $project->id, 404);
 
@@ -188,7 +118,7 @@ class ProjectDocumentController extends Controller
 
         ProjectDocument::where('document_group_id', $document->document_group_id)->delete();
 
-        $this->syncProjectCounts($project);
+        $documents->syncCounts($project);
         AuditLog::record(
             $project,
             $role,
@@ -222,16 +152,6 @@ class ProjectDocumentController extends Controller
         }, 200, [
             'Content-Type' => $document->mime_type ?? 'application/octet-stream',
             'Content-Disposition' => 'inline; filename="' . $document->original_name . '"',
-        ]);
-    }
-
-    private function syncProjectCounts(Project $project): void
-    {
-        $latestIds = $project->documents()->latestVersionOnly()->pluck('id');
-
-        $project->update([
-            'calculations_added' => ProjectDocument::whereIn('id', $latestIds)->where('document_type', 'CALC')->exists(),
-            'blueprints_count'   => ProjectDocument::whereIn('id', $latestIds)->where('document_type', 'PLANO')->count(),
         ]);
     }
 }

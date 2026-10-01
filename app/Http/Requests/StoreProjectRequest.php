@@ -2,12 +2,18 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\AcceptsProjectAttachments;
 use App\Support\ProjectLocation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreProjectRequest extends FormRequest
 {
+    use AcceptsProjectAttachments;
+
+    /** Campo de la petición => tipo de documento. */
+    public const ATTACHMENT_FIELDS = ['photos' => 'FOTO', 'documents' => 'CALC', 'plans' => 'PLANO'];
+
     public function authorize(): bool
     {
         return true;
@@ -35,6 +41,12 @@ class StoreProjectRequest extends FormRequest
             'materials.*.specifications' => ['sometimes', 'nullable', 'string'],
             'materials.*.observations' => ['sometimes', 'nullable', 'string'],
             'estimatedTotal' => ['nullable', 'numeric', 'min:0'],
+            ...$this->attachmentRules(self::ATTACHMENT_FIELDS),
         ];
+    }
+
+    public function messages(): array
+    {
+        return $this->attachmentMessages(array_keys(self::ATTACHMENT_FIELDS));
     }
 }

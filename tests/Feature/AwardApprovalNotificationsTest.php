@@ -54,6 +54,14 @@ class AwardApprovalNotificationsTest extends TestCase
         return AppNotification::where('user_id', $user->id)->where('action', $action)->count();
     }
 
+    /** Avisos a Finanzas sobre la adjudicación: excluye el de la orden de anticipo, que se genera al seleccionar y es de otra índole. */
+    private function financeAwardInbox(): int
+    {
+        return AppNotification::where('user_id', $this->finanzas->id)
+            ->where('action', '!=', 'Generacion de orden de pago de anticipo')
+            ->count();
+    }
+
     private function select(): void
     {
         $this->actingAs($this->procura)->postJson("/api/projects/{$this->project->id}/select-contractor", [
@@ -76,11 +84,11 @@ class AwardApprovalNotificationsTest extends TestCase
     public function test_finance_is_only_notified_when_procura_sends_to_finance(): void
     {
         $this->select();
-        $this->assertSame(0, AppNotification::where('user_id', $this->finanzas->id)->count());
+        $this->assertSame(0, $this->financeAwardInbox());
 
         $this->actingAs($this->presidencia)->postJson("/api/projects/{$this->project->id}/award-approval")->assertStatus(200);
         $this->assertSame(1, $this->inbox($this->procura, 'Aprobacion de adjudicacion por Presidencia'));
-        $this->assertSame(0, AppNotification::where('user_id', $this->finanzas->id)->count());
+        $this->assertSame(0, $this->financeAwardInbox());
 
         $this->actingAs($this->procura)->postJson("/api/projects/{$this->project->id}/send-to-finance")->assertStatus(200);
         $this->assertSame(1, $this->inbox($this->finanzas, 'Confirmacion de contratacion'));

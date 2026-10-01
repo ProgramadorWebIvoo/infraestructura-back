@@ -70,10 +70,8 @@ class PaymentOrderController extends Controller
         $orders = $this->signatures->pendingSignaturesFor($user)->load(['elaboratedBy:id,name', 'signatures.user:id,name', 'signatures.step']);
 
         return response()->json([
-            'data' => [
-                'hasConfiguredSteps' => $this->signatures->hasConfiguredStepsFor($user),
-                'orders' => PaymentOrderResource::collection($orders)->resolve(),
-            ],
+            'hasConfiguredSteps' => $this->signatures->hasConfiguredStepsFor($user),
+            'orders' => PaymentOrderResource::collection($orders)->resolve(),
         ]);
     }
 }

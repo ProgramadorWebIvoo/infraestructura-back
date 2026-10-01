@@ -61,7 +61,7 @@ class NotificationDispatcherTest extends TestCase
         $finanzas = User::factory()->create(['role' => 'FINANZAS']);
         $project = Project::factory()->create(['status' => 'LISTO_PAGO_FINAL']);
 
-        AuditLog::record($project, 'AUDITORIA', 'Verificacion de finalizacion y calidad de obra');
+        AuditLog::record($project, 'PROCURA', 'Solicitud de pago de finiquito');
 
         Notification::assertSentTo($finanzas, ProjectActionNotification::class);
     }

@@ -36,6 +36,35 @@ class FileIngestionPipeline
     }
 
     /**
+     * Solo la pared de seguridad (sin tocar disco) y deja constancia del
+     * rechazo. Existe aparte de ingest() para que un proceso con adjuntos
+     * pueda rechazar TODOS los archivos antes de abrir su transacción — un
+     * evento de rechazo registrado dentro de una transacción se perdería
+     * con el rollback.
+     *
+     * @throws FileRejectedException si el archivo no pasa la pared de seguridad
+     */
+    public function scan(UploadedFile $file, string $context, ?string $contextId = null): void
+    {
+        try {
+            $this->scanner->scan($file);
+        } catch (FileRejectedException $e) {
+            $this->logEvent(
+                'rejected',
+                $context,
+                $contextId,
+                $file->getClientOriginalName(),
+                $file->getMimeType() ?? $file->getClientMimeType(),
+                strtolower($file->getClientOriginalExtension()),
+                $file->getSize(),
+                null,
+                $e->getMessage(),
+            );
+            throw $e;
+        }
+    }
+
+    /**
      * @throws FileRejectedException si el archivo no pasa la pared de seguridad
      */
     public function ingest(
@@ -49,12 +78,7 @@ class FileIngestionPipeline
         $ext = strtolower($file->getClientOriginalExtension());
         $mime = $file->getMimeType() ?? $file->getClientMimeType();
 
-        try {
-            $this->scanner->scan($file);
-        } catch (FileRejectedException $e) {
-            $this->logEvent('rejected', $context, $contextId, $originalName, $mime, $ext, $file->getSize(), null, $e->getMessage());
-            throw $e;
-        }
+        $this->scan($file, $context, $contextId);
 
         $contents = file_get_contents($file->getRealPath());
         $optimized = false;

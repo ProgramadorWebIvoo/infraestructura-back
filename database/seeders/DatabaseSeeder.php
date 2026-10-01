@@ -17,21 +17,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run()
     {
-        User::updateOrCreate(
-            ['email' => 'admin@ivoo.local'],
-            [
-                'name' => 'Administrador IVOO',
-                'password' => Hash::make('Admin12345'),
-                'role' => 'SUPERADMIN',
-            ] 
-        );
-
+        // -------------------------------------------------------------------------------------------
         // Residente y ubicaciones de ejemplo (QA y fixtures de depuración, F2-R R7a).
         $resident = User::updateOrCreate(
             ['email' => 'residente@ivoo.local'],
             [
                 'name' => 'Residente Ejemplo',
-                'password' => Hash::make('Residente12345'),
+                'password' => Hash::make('123'),
                 'role' => 'RESIDENTE',
                 'status' => 'Active',
             ]
@@ -47,6 +39,14 @@ class DatabaseSeeder extends Seeder
                 [...$data, 'is_active' => true, 'resident_user_id' => $resident->id]
             );
         }
+
+        // Datos base (usuarios QA, catálogo, IA y SMTP; los secretos salen del .env)
+        $this->call([
+            QaUsersSeeder::class,
+            MaterialCatalogSeeder::class,
+            AiConfigurationSeeder::class,
+            SystemKeyConfigSeeder::class,
+        ]);
 
         // \App\Models\User::factory()->create([
         //     'name' => 'Test User',

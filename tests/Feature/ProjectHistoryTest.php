@@ -238,6 +238,8 @@ class ProjectHistoryTest extends TestCase
     public function test_list_query_count_does_not_grow_with_number_of_projects(): void
     {
         Project::factory()->count(3)->create();
+        // Calentamiento: la primera petición carga app_settings (cacheado después) y no cuenta como N+1.
+        $this->actingAs($this->presidencia)->getJson('/api/project-history')->assertOk();
         DB::enableQueryLog();
         $this->actingAs($this->presidencia)->getJson('/api/project-history')->assertOk();
         $small = count(DB::getQueryLog());

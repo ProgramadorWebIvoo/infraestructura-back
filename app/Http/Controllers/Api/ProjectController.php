@@ -31,6 +31,7 @@ use App\Models\PaymentOrder;
 use App\Services\PaymentOrderService;
 use App\Services\PaymentSettlementService;
 use App\Services\PaymentSignatureService;
+use App\Services\ProjectDocumentService;
 use App\Services\ProjectStateMachine;
 use App\Services\ResidentAssignmentService;
 use App\Support\ProjectLocation;
@@ -74,12 +75,18 @@ class ProjectController extends Controller
         return new ProjectResource($project->load(Project::detailRelations()));
     }
 
-    public function store(StoreProjectRequest $request)
+    public function store(StoreProjectRequest $request, ProjectDocumentService $documents)
     {
         $data = $request->validated();
         $requesterId = $request->user()->id;
+        $groups = $request->attachmentGroups(StoreProjectRequest::ATTACHMENT_FIELDS);
 
-        $project = DB::transaction(function () use ($data, $requesterId) {
+        // Si un archivo no pasa la pared de seguridad la petición falla acá,
+        // antes de crear nada — no queda una obra sin sus adjuntos.
+        $documents->preflight($groups);
+
+        $saved = [];
+        $project = DB::transaction(function () use ($data, $requesterId, $documents, $groups, &$saved) {
             $project = Project::create([
                 'id' => Project::nextId(),
                 'title' => $data['title'],
@@ -96,17 +103,33 @@ class ProjectController extends Controller
 
             AuditLog::record($project, 'INFRAESTRUCTURA', 'Creacion de peticion de obra', 'Peticion registrada desde el modulo de infraestructura.');
 
+            $saved = $documents->attachGroups($project, $groups);
+
             return $project;
         });
 
-        return (new ProjectResource($project->load(Project::detailRelations())))->response()->setStatusCode(201);
+        return $this->projectWithAttachments($project->load(Project::detailRelations()), $saved, 201);
+    }
+
+    /**
+     * Proyecto + cuántas imágenes optimizó el backend al guardar los adjuntos
+     * (el frontend lo informa al usuario). Va dentro de `data` porque el
+     * cliente desenvuelve `response.data` y descartaría cualquier clave hermana.
+     */
+    private function projectWithAttachments(Project $project, array $saved, int $status = 200)
+    {
+        $optimizedCount = count(array_filter($saved, fn (array $s) => $s['optimized']));
+
+        return response()->json([
+            'data' => [...(new ProjectResource($project))->resolve(), 'optimizedCount' => $optimizedCount],
+        ], $status);
     }
 
     /**
      * Auditoría revisa (audita) la petición — no sube documentación
      * propia, solo confirma lo ya adjuntado por Infraestructura. Por eso no
      * recibe blueprintsCount/calculationsAdded del cliente: esos campos ya
-     * los mantiene sincronizados ProjectDocumentController::syncProjectCounts()
+     * los mantiene sincronizados ProjectDocumentService::syncCounts()
      * desde que Infraestructura cargó sus archivos.
      */
     public function review(ReviewProjectRequest $request, Project $project, ResidentAssignmentService $residents)
@@ -169,19 +192,29 @@ class ProjectController extends Controller
      * que es un flujo separado — ver RevisedDocumentsSection). No confundir con
      * rejectProposals(), que rechaza el cuadro comparativo de Procura.
      */
-    public function rejectProject(RejectProjectRequest $request, Project $project)
+    public function rejectProject(RejectProjectRequest $request, Project $project, ProjectDocumentService $documents)
     {
-        $project = RejectionService::reject(
-            $project,
-            self::STATUSES['CREADO'],
-            self::STATUSES['RECHAZADO_AUDITORIA'],
-            'AUDITORIA',
-            'Rechazo de petición de obra',
-            $request->validated(),
-            function (Project $project, array $payload) {}
-        );
+        $groups = $request->attachmentGroups(['files' => 'CORRECCION']);
+        $documents->preflight($groups, $project->id);
 
-        return new ProjectResource($project);
+        $saved = [];
+        $project = DB::transaction(function () use ($request, $project, $documents, $groups, &$saved) {
+            $project = RejectionService::reject(
+                $project,
+                self::STATUSES['CREADO'],
+                self::STATUSES['RECHAZADO_AUDITORIA'],
+                'AUDITORIA',
+                'Rechazo de petición de obra',
+                $request->safe()->only(['reason', 'observations']),
+                function (Project $project, array $payload) {}
+            );
+
+            $saved = $documents->attachGroups($project, $groups);
+
+            return $project->fresh(['materials', 'proposals', 'payments', 'documents']);
+        });
+
+        return $this->projectWithAttachments($project, $saved);
     }
 
     /**
@@ -189,13 +222,19 @@ class ProjectController extends Controller
      * no crea uno nuevo. Reemplaza materiales (borrar+recrear, igual que store())
      * y vuelve el status a CREADO para que Auditoría la reevalúe.
      */
-    public function resubmitProject(ResubmitProjectRequest $request, Project $project)
+    public function resubmitProject(ResubmitProjectRequest $request, Project $project, ProjectDocumentService $documents)
     {
         ProjectStateMachine::assertStatus($project, self::STATUSES['RECHAZADO_AUDITORIA'], 'Solo se puede reenviar una petición rechazada.');
 
         $data = $request->validated();
+        $groups = [
+            ...$request->attachmentGroups(ResubmitProjectRequest::ATTACHMENT_FIELDS),
+            ...$request->replacementGroups(),
+        ];
+        $documents->preflight($groups, $project->id);
 
-        $project = DB::transaction(function () use ($data, $project) {
+        $saved = [];
+        $project = DB::transaction(function () use ($data, $project, $documents, $groups, &$saved) {
             $project->update([
                 'title' => $data['title'],
                 'description' => $data['description'],
@@ -222,10 +261,12 @@ class ProjectController extends Controller
 
             AuditLog::record($project, 'INFRAESTRUCTURA', 'Reenvío de petición corregida', 'Petición editada y reenviada a Auditoría tras rechazo.');
 
+            $saved = $documents->attachGroups($project, $groups);
+
             return $project;
         });
 
-        return new ProjectResource($project->load(Project::detailRelations()));
+        return $this->projectWithAttachments($project->load(Project::detailRelations()), $saved);
     }
 
     /**
@@ -235,19 +276,29 @@ class ProjectController extends Controller
      * (Auditoría rechaza hacia Infraestructura) y de rejectProposals()
      * (Procura rechaza el cuadro comparativo ya en licitación).
      */
-    public function sendToReevaluation(SendToReevaluationRequest $request, Project $project)
+    public function sendToReevaluation(SendToReevaluationRequest $request, Project $project, ProjectDocumentService $documents)
     {
-        $project = RejectionService::reject(
-            $project,
-            self::STATUSES['REVISADO_AUDITORIA'],
-            self::STATUSES['EN_REEVALUACION_AUDITORIA'],
-            'PROCURA',
-            'Solicitud de reevaluación a Auditoría',
-            $request->validated(),
-            function (Project $project, array $payload) {}
-        );
+        $groups = $request->attachmentGroups(['files' => 'REEVALUACION']);
+        $documents->preflight($groups, $project->id);
 
-        return new ProjectResource($project);
+        $saved = [];
+        $project = DB::transaction(function () use ($request, $project, $documents, $groups, &$saved) {
+            $project = RejectionService::reject(
+                $project,
+                self::STATUSES['REVISADO_AUDITORIA'],
+                self::STATUSES['EN_REEVALUACION_AUDITORIA'],
+                'PROCURA',
+                'Solicitud de reevaluación a Auditoría',
+                $request->safe()->only(['reason', 'observations']),
+                function (Project $project, array $payload) {}
+            );
+
+            $saved = $documents->attachGroups($project, $groups);
+
+            return $project->fresh(['materials', 'proposals', 'payments', 'documents']);
+        });
+
+        return $this->projectWithAttachments($project, $saved);
     }
 
     /**

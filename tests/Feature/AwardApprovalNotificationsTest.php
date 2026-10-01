@@ -88,6 +88,7 @@ class AwardApprovalNotificationsTest extends TestCase
 
         $this->actingAs($this->presidencia)->postJson("/api/projects/{$this->project->id}/award-approval")->assertStatus(200);
         $this->assertSame(1, $this->inbox($this->procura, 'Aprobacion de adjudicacion por Presidencia'));
+        Notification::assertSentTo($this->procura, ProjectActionMail::class);
         $this->assertSame(0, $this->financeAwardInbox());
 
         $this->actingAs($this->procura)->postJson("/api/projects/{$this->project->id}/send-to-finance")->assertStatus(200);

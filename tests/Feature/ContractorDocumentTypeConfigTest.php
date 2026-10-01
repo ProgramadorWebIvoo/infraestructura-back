@@ -33,7 +33,12 @@ class ContractorDocumentTypeConfigTest extends TestCase
             ->assertJsonPath('key', 'solvencia_fiscal')
             ->assertJsonPath('isRequired', true);
 
-        $this->postJson('/api/contractor-document-types/config', ['label' => 'Solvencia fiscal', 'isRequired' => false], $headers)
+        $this->postJson('/api/contractor-document-types/config', ['label' => 'Solvencia fiscal'], $headers)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('label');
+
+        // Etiqueta distinta que produce el mismo slug: la clave se desambigua.
+        $this->postJson('/api/contractor-document-types/config', ['label' => 'Solvencia fiscal!', 'isRequired' => false], $headers)
             ->assertCreated()
             ->assertJsonPath('key', 'solvencia_fiscal_2');
 

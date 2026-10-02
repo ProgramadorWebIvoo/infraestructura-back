@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\ProjectRateFreezeController;
 use App\Http\Controllers\Api\RenegotiationInvitationController;
 use App\Http\Controllers\Api\SupplierInvitationController;
 use App\Http\Controllers\Api\SupplierProposalController;
+use App\Http\Controllers\Api\UploadLimitsController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AIEvaluationController;
 use App\Http\Controllers\Api\AiConfigController;
@@ -85,6 +86,8 @@ Route::get('/public/currencies', [CurrencyController::class, 'activePublicList']
 Route::get('/public/exchange-rates', [ExchangeRateController::class, 'index'])->middleware('throttle:public-api');
 Route::get('/public/catalog-categories', [CatalogCategoryController::class, 'publicList'])->middleware('throttle:public-api');
 Route::get('/public/catalog-products/search', [CatalogProductController::class, 'publicSearch'])->middleware('throttle:public-api');
+// Límites de subida (peso por archivo, cantidad, total por petición) — pública: la consumen los portales sin sesión.
+Route::get('/public/upload-limits', UploadLimitsController::class)->middleware('throttle:public-api');
 
     
 // `idempotency` va al final: tras la autorización (project.access), para que un replay nunca la salte.

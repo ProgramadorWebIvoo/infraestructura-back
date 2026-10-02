@@ -95,5 +95,18 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json(['message' => $e->getMessage()], 422);
             }
         });
+
+        // El total de la petición superó post_max_size: PHP descarta el cuerpo
+        // y Laravel lanza 413 sin texto útil. Se responde con el límite real
+        // para que el usuario sepa cuánto recortar.
+        $exceptions->render(function (\Illuminate\Http\Exceptions\PostTooLargeException $e, \Illuminate\Http\Request $request) {
+            $limit = \App\Support\UploadLimits::humanBytes(\App\Support\UploadLimits::postMaxBytes());
+
+            return response()->json([
+                'message' => "Los archivos pesan demasiado en conjunto: el servidor admite como máximo {$limit} por envío. Adjunte menos archivos o archivos más livianos.",
+                'code' => 'PAYLOAD_TOO_LARGE',
+                'limit_bytes' => \App\Support\UploadLimits::toArray()['postMaxBytes'],
+            ], 413);
+        });
     })
     ->create();

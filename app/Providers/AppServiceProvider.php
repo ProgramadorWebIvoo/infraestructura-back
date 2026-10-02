@@ -24,6 +24,7 @@ use App\Services\FileSecurityScanner;
 use App\Services\NotificationRuleResolver;
 use App\Services\SettingsService;
 use App\Services\SystemKeyConfigService;
+use App\Support\UploadLimits;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Http\Request;
@@ -89,8 +90,24 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->configureRateLimiting();
+        $this->translateFailedUploadMessage();
         $this->invalidateCachesAfterMigrate();
         $this->applySystemKeyConfig();
+    }
+
+    /**
+     * Cuando PHP rechaza un archivo por upload_max_filesize (o la conexión se
+     * corta a medias) la validación falla con la regla `uploaded`, cuyo texto
+     * por defecto es "The X failed to upload." en inglés y sin pista. Un solo
+     * mensaje global, con el límite real, en vez de uno por cada FormRequest.
+     */
+    protected function translateFailedUploadMessage(): void
+    {
+        $limit = UploadLimits::humanBytes(UploadLimits::uploadMaxBytes());
+
+        $this->app['translator']->addLines([
+            'validation.uploaded' => "No se pudo recibir el archivo: supera el máximo que admite el servidor ({$limit}) o la conexión se interrumpió. Inténtelo de nuevo.",
+        ], $this->app->getLocale());
     }
 
     /**

@@ -119,6 +119,8 @@ class AwardApprovalService
         });
 
         AuditLog::record($project, 'PROCURA', 'Confirmacion de contratacion', "Contratista {$project->selected_contractor_code} adjudicado y enviado a Finanzas.");
+        $advanceAmount = round((float) $proposal->total_cost * ((float) $proposal->negotiated_advance_percent / 100), 2);
+        AuditLog::record($project, 'PROCURA', 'Solicitud de liberacion de anticipo', "Anticipo por liberar: {$advanceAmount} USD.");
         CacheVersion::bump('contractor_history:' . $project->selected_contractor_code);
         $this->notifySupplier($project);
 

@@ -53,6 +53,7 @@ class NotificationCatalog
         'Informes de cierre listos para Auditoria' => NotificationType::ACCION_REQUERIDA,
         'Devolucion de finiquito a Auditoria' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de pago de finiquito' => NotificationType::ACCION_REQUERIDA,
+        'Solicitud de liberacion de anticipo' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de reevaluación a Auditoría' => NotificationType::ACCION_REQUERIDA,
         'Rechazo de propuesta de marketing' => NotificationType::ACCION_REQUERIDA,
         'Solicitud de restablecimiento de contrasena' => NotificationType::INFORMACION,

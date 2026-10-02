@@ -97,6 +97,21 @@ class AwardApprovalNotificationsTest extends TestCase
         Notification::assertSentTo($this->finanzas, ProjectActionMail::class);
     }
 
+    public function test_sending_to_finance_raises_an_action_required_request_only_for_finanzas(): void
+    {
+        $this->select();
+        $this->actingAs($this->presidencia)->postJson("/api/projects/{$this->project->id}/award-approval")->assertStatus(200);
+        $this->actingAs($this->procura)->postJson("/api/projects/{$this->project->id}/send-to-finance")->assertStatus(200);
+
+        $action = 'Solicitud de liberacion de anticipo';
+        $this->assertSame(1, $this->inbox($this->finanzas, $action));
+        $this->assertSame(0, $this->inbox($this->presidencia, $action));
+        $this->assertSame(
+            'accion_requerida',
+            AppNotification::where('user_id', $this->finanzas->id)->where('action', $action)->value('type'),
+        );
+    }
+
     public function test_supplier_is_notified_only_when_sent_to_finance(): void
     {
         $this->select();

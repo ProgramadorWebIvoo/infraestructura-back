@@ -10,6 +10,7 @@ use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\FakeFiles;
 use Tests\TestCase;
 
 class ProjectDocumentTest extends TestCase
@@ -51,7 +52,7 @@ class ProjectDocumentTest extends TestCase
     public function test_upload_stores_file_and_creates_document_record(): void
     {
         $project = Project::factory()->create();
-        $file = UploadedFile::fake()->create('cubicacion.pdf', 100, 'application/pdf');
+        $file = FakeFiles::pdf('cubicacion.pdf', 100);
 
         $response = $this->withHeaders($this->headers())
             ->post("/api/projects/{$project->id}/documents", [
@@ -74,7 +75,7 @@ class ProjectDocumentTest extends TestCase
     public function test_upload_accepts_foto_document_type_with_valid_image(): void
     {
         $project = Project::factory()->create();
-        $file = UploadedFile::fake()->create('sitio.jpg', 100, 'image/jpeg');
+        $file = FakeFiles::jpeg('sitio.jpg', 100);
 
         $response = $this->withHeaders($this->headers())
             ->post("/api/projects/{$project->id}/documents", [
@@ -94,7 +95,7 @@ class ProjectDocumentTest extends TestCase
     public function test_upload_rejects_plano_extension_for_foto_document_type(): void
     {
         $project = Project::factory()->create();
-        $file = UploadedFile::fake()->create('plano.dwg', 100, 'application/acad');
+        $file = FakeFiles::dwg('plano.dwg', 100);
 
         $response = $this->withHeaders($this->headers())
             ->post("/api/projects/{$project->id}/documents", [
@@ -124,7 +125,7 @@ class ProjectDocumentTest extends TestCase
     public function test_upload_rejects_disallowed_extension_for_document_type(): void
     {
         $project = Project::factory()->create();
-        $file = UploadedFile::fake()->create('imagen.png', 10, 'image/png');
+        $file = FakeFiles::png('imagen.png', 10);
 
         $response = $this->withHeaders($this->headers())
             ->post("/api/projects/{$project->id}/documents", [
@@ -138,7 +139,7 @@ class ProjectDocumentTest extends TestCase
     public function test_upload_sanitizes_path_traversal_in_filename(): void
     {
         $project = Project::factory()->create();
-        $file = UploadedFile::fake()->create('../../etc/passwd.pdf', 10, 'application/pdf');
+        $file = FakeFiles::pdf('../../etc/passwd.pdf', 10);
 
         $response = $this->withHeaders($this->headers())
             ->post("/api/projects/{$project->id}/documents", [
@@ -158,7 +159,7 @@ class ProjectDocumentTest extends TestCase
         SettingsService::forget();
 
         $project = Project::factory()->create();
-        $file = UploadedFile::fake()->create('cubicacion.pdf', 2048, 'application/pdf'); // 2 MB
+        $file = FakeFiles::pdf('cubicacion.pdf', 2048); // 2 MB
 
         $response = $this->withHeaders($this->headers())
             ->post("/api/projects/{$project->id}/documents", [
@@ -181,8 +182,8 @@ class ProjectDocumentTest extends TestCase
             ->post("/api/projects/{$project->id}/documents", [
                 'document_type' => 'CALC',
                 'files' => [
-                    UploadedFile::fake()->create('a.pdf', 10, 'application/pdf'),
-                    UploadedFile::fake()->create('b.pdf', 10, 'application/pdf'),
+                    FakeFiles::pdf('a.pdf', 10),
+                    FakeFiles::pdf('b.pdf', 10),
                 ],
             ]);
 
@@ -234,7 +235,7 @@ class ProjectDocumentTest extends TestCase
         $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',
             'new_version_of' => $v1->id,
-            'files' => [UploadedFile::fake()->create('plano-v2.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('plano-v2.pdf', 10)],
         ]);
 
         $orphanGroup = $this->createDocument($project, ['original_name' => 'plano-eliminado.pdf']);
@@ -311,7 +312,7 @@ class ProjectDocumentTest extends TestCase
     public function test_upload_without_new_version_of_creates_its_own_group_as_v1(): void
     {
         $project = Project::factory()->create();
-        $file = UploadedFile::fake()->create('plano.pdf', 100, 'application/pdf');
+        $file = FakeFiles::pdf('plano.pdf', 100);
 
         $response = $this->withHeaders($this->headers())
             ->post("/api/projects/{$project->id}/documents", [
@@ -331,7 +332,7 @@ class ProjectDocumentTest extends TestCase
         $project = Project::factory()->create();
         $v1 = $this->createDocument($project);
 
-        $file = UploadedFile::fake()->create('plano-corregido.pdf', 100, 'application/pdf');
+        $file = FakeFiles::pdf('plano-corregido.pdf', 100);
         $response = $this->withHeaders($this->headers())
             ->post("/api/projects/{$project->id}/documents", [
                 'document_type' => 'PLANO',
@@ -357,8 +358,8 @@ class ProjectDocumentTest extends TestCase
                 'document_type' => 'PLANO',
                 'new_version_of' => $v1->id,
                 'files' => [
-                    UploadedFile::fake()->create('a.pdf', 10, 'application/pdf'),
-                    UploadedFile::fake()->create('b.pdf', 10, 'application/pdf'),
+                    FakeFiles::pdf('a.pdf', 10),
+                    FakeFiles::pdf('b.pdf', 10),
                 ],
             ]);
 
@@ -373,7 +374,7 @@ class ProjectDocumentTest extends TestCase
         $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',
             'new_version_of' => $v1->id,
-            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('v2.pdf', 10)],
         ]);
 
         $response = $this->withHeaders($this->headers())->getJson("/api/projects/{$project->id}/documents");
@@ -391,7 +392,7 @@ class ProjectDocumentTest extends TestCase
         $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',
             'new_version_of' => $v1->id,
-            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('v2.pdf', 10)],
         ]);
 
         $response = $this->withHeaders($this->headers())
@@ -409,7 +410,7 @@ class ProjectDocumentTest extends TestCase
         $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',
             'new_version_of' => $v1->id,
-            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('v2.pdf', 10)],
         ]);
 
         $response = $this->withHeaders($this->headers())
@@ -429,7 +430,7 @@ class ProjectDocumentTest extends TestCase
         $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',
             'new_version_of' => $v1->id,
-            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('v2.pdf', 10)],
         ]);
         $v2 = ProjectDocument::where('document_group_id', $v1->document_group_id)->where('version_number', 2)->first();
 
@@ -457,7 +458,7 @@ class ProjectDocumentTest extends TestCase
         $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',
             'new_version_of' => $v1->id,
-            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('v2.pdf', 10)],
         ]);
         $v2 = ProjectDocument::where('document_group_id', $v1->document_group_id)->where('version_number', 2)->first();
 
@@ -476,7 +477,7 @@ class ProjectDocumentTest extends TestCase
         $this->withHeaders($this->headers())->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',
             'new_version_of' => $v1->id,
-            'files' => [UploadedFile::fake()->create('v2.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('v2.pdf', 10)],
         ]);
 
         $project->refresh();
@@ -495,7 +496,7 @@ class ProjectDocumentTest extends TestCase
             'Accept' => 'application/json',
         ])->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'PLANO',
-            'files' => [UploadedFile::fake()->create('plano.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('plano.pdf', 10)],
         ]);
 
         $response->assertStatus(403);
@@ -525,7 +526,7 @@ class ProjectDocumentTest extends TestCase
             'Accept' => 'application/json',
         ])->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'FOTO',
-            'files' => [UploadedFile::fake()->create('foto.jpg', 10, 'image/jpeg')],
+            'files' => [FakeFiles::jpeg('foto.jpg', 10)],
         ]);
 
         $response->assertStatus(201);
@@ -543,7 +544,7 @@ class ProjectDocumentTest extends TestCase
             'Accept' => 'application/json',
         ])->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'COMPROBANTE_ANTICIPO',
-            'files' => [UploadedFile::fake()->create('voucher.pdf', 100, 'application/pdf')],
+            'files' => [FakeFiles::pdf('voucher.pdf', 100)],
         ]);
 
         $response->assertStatus(201);
@@ -565,8 +566,8 @@ class ProjectDocumentTest extends TestCase
         ])->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'COMPROBANTE_FINIQUITO',
             'files' => [
-                UploadedFile::fake()->create('voucher1.pdf', 10, 'application/pdf'),
-                UploadedFile::fake()->create('voucher2.pdf', 10, 'application/pdf'),
+                FakeFiles::pdf('voucher1.pdf', 10),
+                FakeFiles::pdf('voucher2.pdf', 10),
             ],
         ]);
 
@@ -599,7 +600,7 @@ class ProjectDocumentTest extends TestCase
             'Accept' => 'application/json',
         ])->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'FOTO',
-            'files' => [UploadedFile::fake()->create('foto.jpg', 10, 'image/jpeg')],
+            'files' => [FakeFiles::jpeg('foto.jpg', 10)],
         ]);
 
         $response->assertStatus(403);
@@ -615,7 +616,7 @@ class ProjectDocumentTest extends TestCase
             'Accept' => 'application/json',
         ])->post("/api/projects/{$project->id}/documents", [
             'document_type' => 'COMPROBANTE_ANTICIPO',
-            'files' => [UploadedFile::fake()->create('voucher.pdf', 10, 'application/pdf')],
+            'files' => [FakeFiles::pdf('voucher.pdf', 10)],
         ]);
 
         $response->assertStatus(403);

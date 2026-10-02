@@ -7,6 +7,20 @@ use App\Models\ProjectProposal;
 use App\Notifications\Channels\ExpoChannel;
 use App\Observers\PriceEstimationObserver;
 use App\Observers\ProjectProposalObserver;
+use App\Services\FileIngestion\Processors\ImageProcessor;
+use App\Services\FileIngestion\Processors\PdfProcessor;
+use App\Services\FileIngestion\Processors\SpreadsheetProcessor;
+use App\Services\FileIngestion\Processors\SvgProcessor;
+use App\Services\FileIngestion\Processors\TextProcessor;
+use App\Services\FileIngestion\Scanners\CadThreatScanner;
+use App\Services\FileIngestion\Scanners\ExecutableSignatureScanner;
+use App\Services\FileIngestion\Scanners\ImageThreatScanner;
+use App\Services\FileIngestion\Scanners\OfficeThreatScanner;
+use App\Services\FileIngestion\Scanners\PdfThreatScanner;
+use App\Services\FileIngestion\Scanners\SvgThreatScanner;
+use App\Services\FileIngestion\Scanners\TextThreatScanner;
+use App\Services\FileIngestionPipeline;
+use App\Services\FileSecurityScanner;
 use App\Services\NotificationRuleResolver;
 use App\Services\SettingsService;
 use App\Services\SystemKeyConfigService;
@@ -24,7 +38,36 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register()
     {
-        //
+        $this->registerFileIngestion();
+    }
+
+    /**
+     * Inspectores y procesadores del pipeline de archivos. En los
+     * procesadores gana el primero que soporte el tipo; para dar soporte a
+     * un tipo nuevo basta agregar su clase a la lista correspondiente.
+     */
+    private function registerFileIngestion(): void
+    {
+        $this->app->tag([
+            ExecutableSignatureScanner::class,
+            ImageThreatScanner::class,
+            PdfThreatScanner::class,
+            OfficeThreatScanner::class,
+            TextThreatScanner::class,
+            SvgThreatScanner::class,
+            CadThreatScanner::class,
+        ], 'file.threat_scanners');
+
+        $this->app->tag([
+            ImageProcessor::class,
+            SvgProcessor::class,
+            PdfProcessor::class,
+            SpreadsheetProcessor::class,
+            TextProcessor::class,
+        ], 'file.processors');
+
+        $this->app->when(FileSecurityScanner::class)->needs('$scanners')->giveTagged('file.threat_scanners');
+        $this->app->when(FileIngestionPipeline::class)->needs('$processors')->giveTagged('file.processors');
     }
 
     public function boot()

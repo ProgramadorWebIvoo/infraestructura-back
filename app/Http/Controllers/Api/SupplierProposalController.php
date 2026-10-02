@@ -12,10 +12,12 @@ use App\Models\SupplierMaterialProposal;
 use App\Services\CatalogSyncService;
 use App\Services\FileIngestionPipeline;
 use App\Services\ProposalLineNormalizer;
+use App\Services\StorageFolderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Support\StoragePaths;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -23,7 +25,11 @@ class SupplierProposalController extends Controller
 {
     use LogsPublicAccess;
 
+    /** Prefijo del path público de las imágenes de propuesta (no es la ruta física en disco). */
+    private const IMAGE_PATH_PREFIX = 'supplier-proposal-images/';
+
     public function __construct(
+        private readonly StorageFolderService $folders,
         private readonly ProposalLineNormalizer $lineNormalizer,
         private readonly CatalogSyncService $catalogSync,
     ) {
@@ -45,15 +51,16 @@ class SupplierProposalController extends Controller
      */
     public function uploadImage(StoreSupplierProposalImageRequest $request, string $token, FileIngestionPipeline $pipeline)
     {
-        $invitation = SupplierInvitation::find($token);
+        $invitation = SupplierInvitation::with('project')->find($token);
         if (!$invitation || !$invitation->isValid()) {
             return response()->json(['message' => 'Enlace no valido o expirado.'], 404);
         }
 
-        $directory = "supplier-proposal-images/{$token}";
-        $ingested = $pipeline->ingest($request->file('image'), $directory, 'supplier_proposal_image', $token);
+        $ingested = $pipeline->ingest($request->file('image'), $this->imageDirectory($invitation), 'supplier_proposal_image', $token);
 
-        return response()->json(['path' => $ingested->storedPath, 'optimized' => $ingested->optimized], 201);
+        // El path público conserva el formato "supplier-proposal-images/{token}/{archivo}"
+        // (contrato con el frontend); la ubicación física es la carpeta del proyecto.
+        return response()->json(['path' => self::IMAGE_PATH_PREFIX . "{$token}/" . basename($ingested->storedPath), 'optimized' => $ingested->optimized], 201);
     }
 
     /**
@@ -65,16 +72,16 @@ class SupplierProposalController extends Controller
      */
     public function image(Request $request, string $token, string $path): StreamedResponse
     {
-        $invitation = SupplierInvitation::find($token);
+        $invitation = SupplierInvitation::with('project')->find($token);
         abort_unless($invitation, 404);
 
-        $fullPath = "supplier-proposal-images/{$token}/{$path}";
-        abort_unless(Storage::disk('local')->exists($fullPath), 404);
+        $fullPath = $this->imageDirectory($invitation) . '/' . basename($path);
+        abort_unless(Storage::disk(StoragePaths::disk())->exists($fullPath), 404);
 
         return new StreamedResponse(function () use ($fullPath) {
-            echo Storage::disk('local')->get($fullPath);
+            echo Storage::disk(StoragePaths::disk())->get($fullPath);
         }, 200, [
-            'Content-Type' => Storage::disk('local')->mimeType($fullPath) ?: 'application/octet-stream',
+            'Content-Type' => Storage::disk(StoragePaths::disk())->mimeType($fullPath) ?: 'application/octet-stream',
         ]);
     }
 
@@ -90,14 +97,23 @@ class SupplierProposalController extends Controller
      */
     public function internalImage(string $token, string $path): StreamedResponse
     {
-        $fullPath = "supplier-proposal-images/{$token}/{$path}";
-        abort_unless(Storage::disk('local')->exists($fullPath), 404);
+        $invitation = SupplierInvitation::with('project')->find($token);
+        abort_unless($invitation, 404);
+
+        $fullPath = $this->imageDirectory($invitation) . '/' . basename($path);
+        abort_unless(Storage::disk(StoragePaths::disk())->exists($fullPath), 404);
 
         return new StreamedResponse(function () use ($fullPath) {
-            echo Storage::disk('local')->get($fullPath);
+            echo Storage::disk(StoragePaths::disk())->get($fullPath);
         }, 200, [
-            'Content-Type' => Storage::disk('local')->mimeType($fullPath) ?: 'application/octet-stream',
+            'Content-Type' => Storage::disk(StoragePaths::disk())->mimeType($fullPath) ?: 'application/octet-stream',
         ]);
+    }
+
+    /** Carpeta física de las imágenes de una invitación: dentro de la carpeta de su proyecto. */
+    private function imageDirectory(SupplierInvitation $invitation): string
+    {
+        return $this->folders->projectFolder($invitation->project) . '/' . StoragePaths::SUPPLIER_ATTACHMENTS . "/{$invitation->getKey()}";
     }
 
     public function store(Request $request, string $token)
@@ -158,7 +174,7 @@ class SupplierProposalController extends Controller
             'items.*.imagePath'          => [
                 'nullable', 'string', 'max:500',
                 function (string $attribute, mixed $value, \Closure $fail) use ($token) {
-                    if ($value !== null && !\Illuminate\Support\Str::startsWith($value, "supplier-proposal-images/{$token}/")) {
+                    if ($value !== null && !\Illuminate\Support\Str::startsWith($value, self::IMAGE_PATH_PREFIX . "{$token}/")) {
                         $fail('La imagen del material no corresponde a esta invitación.');
                     }
                 },

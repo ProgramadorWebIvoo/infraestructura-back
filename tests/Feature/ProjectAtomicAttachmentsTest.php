@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\FakeFiles;
 use Tests\TestCase;
 
 /**
@@ -49,7 +50,7 @@ class ProjectAtomicAttachmentsTest extends TestCase
 
     private function cleanPdf(string $name = 'correccion.pdf'): UploadedFile
     {
-        return UploadedFile::fake()->create($name, 10, 'application/pdf');
+        return FakeFiles::pdf($name, 10);
     }
 
     private function projectPayload(): array

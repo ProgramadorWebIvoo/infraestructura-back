@@ -56,7 +56,7 @@ class ContractorDocumentTest extends TestCase
             ->assertJsonCount(1, 'data.documents')
             ->assertJsonPath('data.documents.0.documentTypeKey', 'rif');
 
-        $this->assertCount(1, Storage::disk('local')->allFiles('contractor-documents/CON-1'));
+        $this->assertCount(1, Storage::disk('local')->allFiles('contratistas/CON-1/rif'));
     }
 
     public function test_replacing_keeps_history_and_lists_only_latest_by_default(): void

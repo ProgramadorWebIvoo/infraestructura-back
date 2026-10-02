@@ -6,6 +6,7 @@ use App\Exceptions\FileRejectedException;
 use App\Models\AuditLog;
 use App\Models\Project;
 use App\Models\ProjectDocument;
+use App\Support\StoragePaths;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -21,8 +22,10 @@ use Throwable;
  */
 class ProjectDocumentService
 {
-    public function __construct(private readonly FileIngestionPipeline $pipeline)
-    {
+    public function __construct(
+        private readonly FileIngestionPipeline $pipeline,
+        private readonly StorageFolderService $folders,
+    ) {
     }
 
     /**
@@ -70,7 +73,7 @@ class ProjectDocumentService
             });
         } catch (Throwable $e) {
             foreach ($storedPaths as $path) {
-                Storage::disk('local')->delete($path);
+                Storage::disk(StoragePaths::disk())->delete($path);
             }
             throw $e;
         }
@@ -113,11 +116,9 @@ class ProjectDocumentService
 
         $saved = [];
 
-        foreach ($group['files'] as $file) {
-            $directory = $groupId !== null
-                ? "project-documents/{$project->id}/{$type}/{$groupId}"
-                : "project-documents/{$project->id}/{$type}";
+        $directory = $this->folders->projectFolder($project) . '/' . StoragePaths::documentFolder($type);
 
+        foreach ($group['files'] as $file) {
             $ingested = $this->pipeline->ingest($file, $directory, 'project_document', $project->id);
             $storedPaths[] = $ingested->storedPath;
 
@@ -134,11 +135,6 @@ class ProjectDocumentService
 
             if ($groupId === null) {
                 $doc->update(['document_group_id' => $doc->id]);
-                // Reflejar en la carpeta física el group id recién asignado.
-                $finalPath = "project-documents/{$project->id}/{$type}/{$doc->id}/" . basename($ingested->storedPath);
-                Storage::disk('local')->move($ingested->storedPath, $finalPath);
-                $storedPaths[] = $finalPath;
-                $doc->update(['stored_path' => $finalPath]);
             }
 
             $saved[] = ['document' => $doc, 'optimized' => $ingested->optimized];

@@ -7,6 +7,7 @@ use App\Models\ContractorDocument;
 use App\Models\ContractorDocumentType;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use App\Support\StoragePaths;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -76,7 +77,7 @@ class ContractorDocumentService
 
     public function exists(ContractorDocument $document): bool
     {
-        return Storage::disk('local')->exists($document->stored_path);
+        return Storage::disk(StoragePaths::disk())->exists($document->stored_path);
     }
 
     private function storeVersion(Contractor $contractor, int $typeId, UploadedFile $file, string $source): ContractorDocument
@@ -92,7 +93,8 @@ class ContractorDocumentService
             ? ContractorDocument::withTrashed()->where('document_group_id', $groupId)->max('version_number') + 1
             : 1;
 
-        $directory = "contractor-documents/{$contractor->code}/{$typeId}";
+        $typeKey = ContractorDocumentType::whereKey($typeId)->value('key') ?? (string) $typeId;
+        $directory = StoragePaths::CONTRACTORS_ROOT . "/{$contractor->code}/{$typeKey}";
         $ingested = $this->pipeline->ingest($file, $directory, 'contractor_document', $contractor->code);
 
         $document = ContractorDocument::create([

@@ -9,6 +9,8 @@ use App\Models\ConfigAuditLog;
 use App\Models\MarketingProject;
 use App\Models\MarketingProjectAttachment;
 use App\Services\FileIngestionPipeline;
+use App\Services\StorageFolderService;
+use App\Support\StoragePaths;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -26,7 +28,7 @@ class MarketingProjectAttachmentController extends Controller
         );
     }
 
-    public function upload(StoreMarketingProjectAttachmentRequest $request, MarketingProject $marketingProject, FileIngestionPipeline $pipeline)
+    public function upload(StoreMarketingProjectAttachmentRequest $request, MarketingProject $marketingProject, FileIngestionPipeline $pipeline, StorageFolderService $folders)
     {
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['ADMIN', 'SUPERADMIN'], true);
@@ -37,7 +39,7 @@ class MarketingProjectAttachmentController extends Controller
             'Solo se pueden adjuntar archivos mientras la propuesta esta en borrador o rechazada.'
         );
 
-        $directory = "marketing-projects/{$marketingProject->id}";
+        $directory = $folders->marketingFolder($marketingProject);
         $saved = [];
 
         foreach ($request->file('files') as $file) {
@@ -77,8 +79,8 @@ class MarketingProjectAttachmentController extends Controller
         $isAdmin = in_array($user->role, ['ADMIN', 'SUPERADMIN'], true);
         abort_unless($isAdmin || $marketingProject->requested_by === $user->id, 403, 'No tiene permiso sobre esta propuesta.');
 
-        if (Storage::disk('local')->exists($attachment->stored_path)) {
-            Storage::disk('local')->delete($attachment->stored_path);
+        if (Storage::disk(StoragePaths::disk())->exists($attachment->stored_path)) {
+            Storage::disk(StoragePaths::disk())->delete($attachment->stored_path);
         }
 
         $name = $attachment->original_name;
@@ -98,9 +100,9 @@ class MarketingProjectAttachmentController extends Controller
     public function download(MarketingProject $marketingProject, MarketingProjectAttachment $attachment): StreamedResponse
     {
         abort_unless($attachment->marketing_project_id === $marketingProject->id, 404);
-        abort_unless(Storage::disk('local')->exists($attachment->stored_path), 404, 'El archivo ya no existe en el servidor.');
+        abort_unless(Storage::disk(StoragePaths::disk())->exists($attachment->stored_path), 404, 'El archivo ya no existe en el servidor.');
 
-        return Storage::disk('local')->download(
+        return Storage::disk(StoragePaths::disk())->download(
             $attachment->stored_path,
             $attachment->original_name,
             ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream']
@@ -111,10 +113,10 @@ class MarketingProjectAttachmentController extends Controller
     public function preview(MarketingProject $marketingProject, MarketingProjectAttachment $attachment): StreamedResponse
     {
         abort_unless($attachment->marketing_project_id === $marketingProject->id, 404);
-        abort_unless(Storage::disk('local')->exists($attachment->stored_path), 404, 'El archivo ya no existe en el servidor.');
+        abort_unless(Storage::disk(StoragePaths::disk())->exists($attachment->stored_path), 404, 'El archivo ya no existe en el servidor.');
 
         return new StreamedResponse(function () use ($attachment) {
-            echo Storage::disk('local')->get($attachment->stored_path);
+            echo Storage::disk(StoragePaths::disk())->get($attachment->stored_path);
         }, 200, [
             'Content-Type' => $attachment->mime_type ?? 'application/octet-stream',
             'Content-Disposition' => 'inline; filename="' . $attachment->original_name . '"',

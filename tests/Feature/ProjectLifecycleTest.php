@@ -12,6 +12,7 @@ use App\Models\ProjectProposal;
 use App\Models\User;
 use App\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\FakeFiles;
 use Tests\TestCase;
 
 class ProjectLifecycleTest extends TestCase
@@ -221,7 +222,7 @@ class ProjectLifecycleTest extends TestCase
             ->postJson("/api/projects/{$project->id}/reject-project", ['reason' => 'Motivo cualquiera'])
             ->assertStatus(200);
 
-        $file = \Illuminate\Http\UploadedFile::fake()->create('correccion.pdf', 100, 'application/pdf');
+        $file = FakeFiles::pdf('correccion.pdf', 100);
 
         $response = $this->actingAs($this->auditoria)
             ->postJson("/api/projects/{$project->id}/documents", [

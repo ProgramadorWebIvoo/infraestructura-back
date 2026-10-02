@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\FakeFiles;
 use Tests\TestCase;
 
 class SupplierProposalImageTest extends TestCase
@@ -36,19 +37,21 @@ class SupplierProposalImageTest extends TestCase
     public function test_uploads_a_valid_image(): void
     {
         $invitation = $this->makeInvitation();
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
 
         $response = $this->postJson("/api/public/invitations/{$invitation->id}/proposal-image", ['image' => $file]);
 
         $response->assertStatus(201);
         $path = $response->json('path');
         $this->assertStringStartsWith("supplier-proposal-images/{$invitation->id}/", $path);
-        Storage::disk('local')->assertExists($path);
+        // El path público es virtual; el archivo vive en la carpeta del proyecto.
+        $folder = app(\App\Services\StorageFolderService::class)->projectFolder($invitation->project);
+        Storage::disk('local')->assertExists("{$folder}/adjuntos_proveedor/{$invitation->id}/" . basename($path));
     }
 
     public function test_rejects_invalid_invitation_token(): void
     {
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
 
         $this->postJson('/api/public/invitations/non-existent/proposal-image', ['image' => $file])
             ->assertStatus(404);
@@ -57,7 +60,7 @@ class SupplierProposalImageTest extends TestCase
     public function test_rejects_used_invitation_token(): void
     {
         $invitation = SupplierInvitation::factory()->used()->create();
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
 
         $this->postJson("/api/public/invitations/{$invitation->id}/proposal-image", ['image' => $file])
             ->assertStatus(404);
@@ -75,7 +78,7 @@ class SupplierProposalImageTest extends TestCase
     public function test_rejects_oversized_image(): void
     {
         $invitation = $this->makeInvitation();
-        $file = UploadedFile::fake()->create('producto.jpg', 6 * 1024, 'image/jpeg'); // 6 MB
+        $file = FakeFiles::jpeg('producto.jpg', 6 * 1024); // 6 MB
 
         $this->postJson("/api/public/invitations/{$invitation->id}/proposal-image", ['image' => $file])
             ->assertStatus(422);
@@ -84,7 +87,7 @@ class SupplierProposalImageTest extends TestCase
     public function test_serves_uploaded_image(): void
     {
         $invitation = $this->makeInvitation();
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
 
         $path = $this->postJson("/api/public/invitations/{$invitation->id}/proposal-image", ['image' => $file])
             ->json('path');
@@ -98,7 +101,7 @@ class SupplierProposalImageTest extends TestCase
     {
         $ownerInvitation = $this->makeInvitation();
         $otherInvitation = $this->makeInvitation();
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
 
         $path = $this->postJson("/api/public/invitations/{$ownerInvitation->id}/proposal-image", ['image' => $file])
             ->json('path');
@@ -112,7 +115,7 @@ class SupplierProposalImageTest extends TestCase
     {
         $ownerInvitation = $this->makeInvitation();
         $otherInvitation = $this->makeInvitation();
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
 
         $path = $this->postJson("/api/public/invitations/{$ownerInvitation->id}/proposal-image", ['image' => $file])
             ->json('path');
@@ -137,7 +140,7 @@ class SupplierProposalImageTest extends TestCase
     public function test_submission_accepts_image_path_belonging_to_the_same_invitation(): void
     {
         $invitation = $this->makeInvitation();
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
 
         $path = $this->postJson("/api/public/invitations/{$invitation->id}/proposal-image", ['image' => $file])
             ->json('path');
@@ -163,7 +166,7 @@ class SupplierProposalImageTest extends TestCase
     public function test_authenticated_staff_can_serve_a_proposal_image_regardless_of_token(): void
     {
         $invitation = $this->makeInvitation();
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
         $path = $this->postJson("/api/public/invitations/{$invitation->id}/proposal-image", ['image' => $file])
             ->json('path');
 
@@ -181,7 +184,7 @@ class SupplierProposalImageTest extends TestCase
     public function test_internal_image_endpoint_requires_authentication(): void
     {
         $invitation = $this->makeInvitation();
-        $file = UploadedFile::fake()->create('producto.jpg', 500, 'image/jpeg');
+        $file = FakeFiles::jpeg('producto.jpg', 500);
         $path = $this->postJson("/api/public/invitations/{$invitation->id}/proposal-image", ['image' => $file])
             ->json('path');
         $relativePath = str_replace('supplier-proposal-images/', '', $path);

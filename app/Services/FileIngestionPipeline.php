@@ -4,34 +4,37 @@ namespace App\Services;
 
 use App\Exceptions\FileRejectedException;
 use App\Models\FileSecurityEvent;
+use App\Services\FileIngestion\DetectedFile;
+use App\Services\FileIngestion\Processors\FileProcessor;
 use App\Support\IngestedFile;
+use App\Support\StoragePaths;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 /**
  * Puente único entre "el front mandó un archivo" y "el archivo quedó en
- * disco" — todo upload de este sistema (ProjectDocumentController,
- * SupplierProposalController, MarketingProjectAttachmentController) pasa
- * por acá en vez de llamar $file->storeAs() directo. Compone:
+ * disco" — todo upload de este sistema pasa por acá en vez de llamar
+ * $file->storeAs() directo, sin excepción de tipo ni de contexto:
  *
- * 1. FileSecurityScanner  → pared de seguridad (rechaza antes de tocar disco)
- * 2. SvgSanitizer         → limpia SVG (XSS embebido)
- * 3. ImageOptimizerService → resize/recompresión/strip-EXIF de imágenes
- * 4. DocumentStorageService → sanitiza y desduplica el nombre de archivo
- * 5. FileSecurityEvent    → auditoría (aceptado/optimizado/rechazado)
+ * 1. FileSecurityScanner → tipo real por contenido + inspectores de amenazas
+ *                          (rechaza antes de tocar disco)
+ * 2. FileProcessor       → sanitiza, normaliza y comprime según el tipo
+ *                          (imagen, SVG, PDF, hoja de cálculo, texto)
+ * 3. DocumentStorageService → nombre y extensión canónicos, sin colisiones
+ * 4. FileSecurityEvent   → auditoría (aceptado/optimizado/rechazado)
  *
  * La validación de qué tipos/mimes están PERMITIDOS para cada tipo de
  * documento sigue en los FormRequest de cada contexto — este pipeline no
- * decide reglas de negocio, solo garantiza que lo que entra es seguro y
- * está optimizado.
+ * decide reglas de negocio, solo garantiza que lo que entra es seguro,
+ * está normalizado y pesa lo mínimo sin perder calidad.
  */
 class FileIngestionPipeline
 {
+    /** @param iterable<FileProcessor> $processors */
     public function __construct(
         private readonly FileSecurityScanner $scanner,
-        private readonly SvgSanitizer $svgSanitizer,
-        private readonly ImageOptimizerService $optimizer,
         private readonly DocumentStorageService $storage,
+        private readonly iterable $processors,
     ) {
     }
 
@@ -44,22 +47,12 @@ class FileIngestionPipeline
      *
      * @throws FileRejectedException si el archivo no pasa la pared de seguridad
      */
-    public function scan(UploadedFile $file, string $context, ?string $contextId = null): void
+    public function scan(UploadedFile $file, string $context, ?string $contextId = null): DetectedFile
     {
         try {
-            $this->scanner->scan($file);
+            return $this->scanner->scan($file);
         } catch (FileRejectedException $e) {
-            $this->logEvent(
-                'rejected',
-                $context,
-                $contextId,
-                $file->getClientOriginalName(),
-                $file->getMimeType() ?? $file->getClientMimeType(),
-                strtolower($file->getClientOriginalExtension()),
-                $file->getSize(),
-                null,
-                $e->getMessage(),
-            );
+            $this->logRejection($file, $context, $contextId, $e);
             throw $e;
         }
     }
@@ -72,54 +65,95 @@ class FileIngestionPipeline
         string $directory,
         string $context,
         ?string $contextId = null,
-        string $disk = 'local',
+        ?string $disk = null,
     ): IngestedFile {
-        $originalName = $file->getClientOriginalName();
-        $ext = strtolower($file->getClientOriginalExtension());
-        $mime = $file->getMimeType() ?? $file->getClientMimeType();
+        $disk ??= StoragePaths::disk();
+        $detected = $this->scan($file, $context, $contextId);
+        $original = (string) file_get_contents($file->getRealPath());
 
-        $this->scan($file, $context, $contextId);
-
-        $contents = file_get_contents($file->getRealPath());
-        $optimized = false;
-
-        if ($mime === 'image/svg+xml') {
-            $contents = $this->svgSanitizer->sanitize($contents);
-        } elseif ($this->optimizer->isOptimizable($mime)) {
-            // Si el re-encode falla (imagen corrupta que igual pasó finfo,
-            // formato exótico que GD no soporta), se guarda el original sin
-            // optimizar en vez de bloquear el upload completo — la pared de
-            // seguridad ya corrió arriba, esto es best-effort de calidad.
-            try {
-                $contents = $this->optimizer->optimize($contents, $mime);
-                $optimized = true;
-            } catch (\Throwable $e) {
-                report($e);
-            }
+        try {
+            $contents = $this->process($detected, $original);
+        } catch (FileRejectedException $e) {
+            $this->logRejection($file, $context, $contextId, $e);
+            throw $e;
         }
 
-        $safeName = $this->storage->sanitizeFilename($originalName);
-        $uniqueName = $this->storage->uniqueFilename($directory, $safeName);
+        $name = $this->storage->normalizedFilename($file->getClientOriginalName(), $detected->extension);
+        $uniqueName = $this->storage->uniqueFilename($directory, $name, $disk);
         $storedPath = $directory . '/' . $uniqueName;
 
         Storage::disk($disk)->put($storedPath, $contents);
 
-        $sizeBytes = strlen($contents);
+        $changed = $contents !== $original;
         $sha256 = hash('sha256', $contents);
 
         $this->logEvent(
-            $optimized ? 'optimized' : 'accepted',
+            $changed ? 'optimized' : 'accepted',
             $context,
             $contextId,
             $uniqueName,
-            $mime,
-            $ext,
-            $sizeBytes,
+            $detected->mime,
+            $detected->extension,
+            strlen($contents),
             $sha256,
-            null,
+            $changed ? $this->describeChange(strlen($original), strlen($contents)) : null,
         );
 
-        return new IngestedFile($uniqueName, $storedPath, $mime, $sizeBytes, $sha256, $optimized);
+        return new IngestedFile($uniqueName, $storedPath, $detected->mime, strlen($contents), $sha256, $changed, strlen($original));
+    }
+
+    /**
+     * Aplica el primer procesador del tipo. Una falla inesperada de un
+     * procesador de COMPRESIÓN no bloquea la subida (el archivo ya pasó la
+     * pared de seguridad): se guarda el original y se reporta; en cambio la
+     * sanitización de SVG es obligatoria porque sin ella el archivo no es
+     * seguro de servir.
+     */
+    private function process(DetectedFile $detected, string $original): string
+    {
+        foreach ($this->processors as $processor) {
+            if (!$processor->supports($detected)) {
+                continue;
+            }
+
+            try {
+                return $processor->process($detected, $original);
+            } catch (FileRejectedException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                report($e);
+
+                if ($detected->isKind('svg')) {
+                    throw new FileRejectedException("No se pudo procesar el archivo «{$detected->originalName}» de forma segura.");
+                }
+
+                return $original;
+            }
+        }
+
+        return $original;
+    }
+
+    private function describeChange(int $before, int $after): string
+    {
+        $percent = $before > 0 ? round((1 - $after / $before) * 100) : 0;
+
+        return "{$before} → {$after} bytes ({$percent}%)";
+    }
+
+    private function logRejection(UploadedFile $file, string $context, ?string $contextId, FileRejectedException $e): void
+    {
+        $this->logEvent(
+            'rejected',
+            $context,
+            $contextId,
+            $file->getClientOriginalName(),
+            $file->getClientMimeType(),
+            strtolower($file->getClientOriginalExtension()),
+            $file->getSize(),
+            null,
+            $e->getMessage(),
+        );
     }
 
     private function logEvent(
@@ -136,13 +170,13 @@ class FileIngestionPipeline
         FileSecurityEvent::create([
             'context' => $context,
             'context_id' => $contextId,
-            'original_name' => $name,
+            'original_name' => mb_substr($name, 0, 255),
             'detected_mime' => $mime,
             'extension' => $ext,
             'size_bytes' => $size,
             'sha256' => $sha256,
             'status' => $status,
-            'reason' => $reason,
+            'reason' => $reason === null ? null : mb_substr($reason, 0, 255),
             'uploaded_by' => auth()->id(),
             'ip_address' => request()?->ip(),
         ]);

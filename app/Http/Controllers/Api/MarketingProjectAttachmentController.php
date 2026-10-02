@@ -11,6 +11,7 @@ use App\Models\MarketingProjectAttachment;
 use App\Services\FileIngestionPipeline;
 use App\Services\StorageFolderService;
 use App\Support\StoragePaths;
+use App\Support\StoredFileResponse;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -100,26 +101,15 @@ class MarketingProjectAttachmentController extends Controller
     public function download(MarketingProject $marketingProject, MarketingProjectAttachment $attachment): StreamedResponse
     {
         abort_unless($attachment->marketing_project_id === $marketingProject->id, 404);
-        abort_unless(Storage::disk(StoragePaths::disk())->exists($attachment->stored_path), 404, 'El archivo ya no existe en el servidor.');
 
-        return Storage::disk(StoragePaths::disk())->download(
-            $attachment->stored_path,
-            $attachment->original_name,
-            ['Content-Type' => $attachment->mime_type ?? 'application/octet-stream']
-        );
+        return StoredFileResponse::attachment($attachment->stored_path, $attachment->original_name, $attachment->mime_type);
     }
 
     /** Igual que download(), pero sin forzar descarga — para el previsualizador. */
     public function preview(MarketingProject $marketingProject, MarketingProjectAttachment $attachment): StreamedResponse
     {
         abort_unless($attachment->marketing_project_id === $marketingProject->id, 404);
-        abort_unless(Storage::disk(StoragePaths::disk())->exists($attachment->stored_path), 404, 'El archivo ya no existe en el servidor.');
 
-        return new StreamedResponse(function () use ($attachment) {
-            echo Storage::disk(StoragePaths::disk())->get($attachment->stored_path);
-        }, 200, [
-            'Content-Type' => $attachment->mime_type ?? 'application/octet-stream',
-            'Content-Disposition' => 'inline; filename="' . $attachment->original_name . '"',
-        ]);
+        return StoredFileResponse::inline($attachment->stored_path, $attachment->original_name, $attachment->mime_type);
     }
 }

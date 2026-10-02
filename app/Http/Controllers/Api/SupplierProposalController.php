@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Support\StoragePaths;
-use Illuminate\Support\Facades\Storage;
+use App\Support\StoredFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupplierProposalController extends Controller
@@ -76,13 +76,8 @@ class SupplierProposalController extends Controller
         abort_unless($invitation, 404);
 
         $fullPath = $this->imageDirectory($invitation) . '/' . basename($path);
-        abort_unless(Storage::disk(StoragePaths::disk())->exists($fullPath), 404);
 
-        return new StreamedResponse(function () use ($fullPath) {
-            echo Storage::disk(StoragePaths::disk())->get($fullPath);
-        }, 200, [
-            'Content-Type' => Storage::disk(StoragePaths::disk())->mimeType($fullPath) ?: 'application/octet-stream',
-        ]);
+        return StoredFileResponse::inline($fullPath, basename($fullPath));
     }
 
     /**
@@ -101,13 +96,8 @@ class SupplierProposalController extends Controller
         abort_unless($invitation, 404);
 
         $fullPath = $this->imageDirectory($invitation) . '/' . basename($path);
-        abort_unless(Storage::disk(StoragePaths::disk())->exists($fullPath), 404);
 
-        return new StreamedResponse(function () use ($fullPath) {
-            echo Storage::disk(StoragePaths::disk())->get($fullPath);
-        }, 200, [
-            'Content-Type' => Storage::disk(StoragePaths::disk())->mimeType($fullPath) ?: 'application/octet-stream',
-        ]);
+        return StoredFileResponse::inline($fullPath, basename($fullPath));
     }
 
     /** Carpeta física de las imágenes de una invitación: dentro de la carpeta de su proyecto. */

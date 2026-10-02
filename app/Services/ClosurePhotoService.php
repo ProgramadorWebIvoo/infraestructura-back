@@ -7,6 +7,7 @@ use App\Models\ProjectClosurePhoto;
 use App\Models\ProjectClosureReport;
 use Illuminate\Http\UploadedFile;
 use App\Support\StoragePaths;
+use App\Support\StoredFileResponse;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -54,8 +55,6 @@ class ClosurePhotoService
 
     public function stream(ProjectClosurePhoto $photo): StreamedResponse
     {
-        abort_unless(Storage::disk(StoragePaths::disk())->exists($photo->stored_path), 404);
-
-        return Storage::disk(StoragePaths::disk())->response($photo->stored_path, $photo->original_name, ['Content-Type' => $photo->mime_type]);
+        return StoredFileResponse::inline($photo->stored_path, $photo->original_name, $photo->mime_type);
     }
 }

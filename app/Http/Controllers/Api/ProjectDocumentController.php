@@ -11,6 +11,7 @@ use App\Models\ProjectDocument;
 use App\Services\ProjectDocumentService;
 use Illuminate\Http\Request;
 use App\Support\StoragePaths;
+use App\Support\StoredFileResponse;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -133,26 +134,15 @@ class ProjectDocumentController extends Controller
     public function download(Project $project, ProjectDocument $document): StreamedResponse
     {
         abort_unless($document->project_id === $project->id, 404);
-        abort_unless(Storage::disk(StoragePaths::disk())->exists($document->stored_path), 404, 'El archivo ya no existe en el servidor.');
 
-        return Storage::disk(StoragePaths::disk())->download(
-            $document->stored_path,
-            $document->original_name,
-            ['Content-Type' => $document->mime_type ?? 'application/octet-stream']
-        );
+        return StoredFileResponse::attachment($document->stored_path, $document->original_name, $document->mime_type);
     }
 
     /** Igual que download(), pero sin forzar descarga — para el previsualizador. */
     public function preview(Project $project, ProjectDocument $document): StreamedResponse
     {
         abort_unless($document->project_id === $project->id, 404);
-        abort_unless(Storage::disk(StoragePaths::disk())->exists($document->stored_path), 404, 'El archivo ya no existe en el servidor.');
 
-        return new StreamedResponse(function () use ($document) {
-            echo Storage::disk(StoragePaths::disk())->get($document->stored_path);
-        }, 200, [
-            'Content-Type' => $document->mime_type ?? 'application/octet-stream',
-            'Content-Disposition' => 'inline; filename="' . $document->original_name . '"',
-        ]);
+        return StoredFileResponse::inline($document->stored_path, $document->original_name, $document->mime_type);
     }
 }

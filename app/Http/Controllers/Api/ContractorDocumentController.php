@@ -9,9 +9,8 @@ use App\Models\AuditLog;
 use App\Models\Contractor;
 use App\Models\ContractorDocument;
 use App\Services\ContractorDocumentService;
-use App\Support\StoragePaths;
+use App\Support\StoredFileResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContractorDocumentController extends Controller
@@ -71,9 +70,6 @@ class ContractorDocumentController extends Controller
 
         AuditLog::record(null, auth()->user()->role, 'Descarga de documento de proveedor', "Proveedor: {$contractor->code} / {$document->original_name}");
 
-        return Storage::disk(StoragePaths::disk())->download($document->stored_path, $document->original_name, [
-            'Content-Type' => $document->mime_type ?? 'application/octet-stream',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+        return StoredFileResponse::attachment($document->stored_path, $document->original_name, $document->mime_type);
     }
 }
